@@ -13,8 +13,13 @@
    *                  hosts the close button inside the grip.
    */
   import { theme } from "../stores/theme";
-  import { sidebarVisible, canSidebarDrag } from "../stores/ui";
+  import {
+    sidebarVisible,
+    canSidebarDrag,
+    pointerInsideWindow,
+  } from "../stores/ui";
   import DragGrip from "./DragGrip.svelte";
+  import { botHatColor } from "../utils/bot-hat-color";
 
   export let mode: "row" | "container" = "row";
 
@@ -77,9 +82,22 @@
 
   let railHovered = false;
 
+  // Force-clear hover when the cursor leaves the window. The rail sits
+  // at the leftmost viewport pixel — fast exits through that edge can
+  // skip its own `mouseleave`. `pointerInsideWindow` is the app-wide
+  // signal that the cursor is no longer over the window.
+  $: if (!$pointerInsideWindow && railHovered) railHovered = false;
+
   $: effectiveCanDrag = canDrag && $canSidebarDrag;
   $: visible = isDragging || (effectiveCanDrag && railHovered && !locked);
   $: railBorderColor = $theme.border ?? "transparent";
+  // Top-border color matches the bot-hat's color when the rail is
+  // hatted, so the segment of the workspace border at the hat's
+  // section reads as part of the hat rather than the rail's accent.
+  // Falls back to the active-rail accent or the neutral border color
+  // otherwise, preserving the existing look for hat-less rows.
+  $: hatColor = botHatColor(botStatus);
+  $: topBorderColor = hatColor ?? (isActive ? color : railBorderColor);
   // Collapsed mode rail-width policy: thin (4px) when inactive and the
   // row isn't being dragged or showing a popover. Hovering the rail no
   // longer widens the painted color — the 8px wrapper still catches the
@@ -89,13 +107,6 @@
   $: narrowRail =
     !$sidebarVisible && !isActive && !isDragging && !popoverActive;
 </script>
-
-<!-- The rail occupies the leftmost 8px of the row, flush with the
-     viewport edge. A cursor exit through that edge can skip the rail's
-     own `mouseleave`, leaving the grip's expanded "hover pattern" stuck
-     visible. Body-level mouseleave is the authoritative "cursor left
-     the app" signal and resets the rail-hover state. -->
-<svelte:body on:mouseleave={() => (railHovered = false)} />
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
@@ -114,8 +125,7 @@
     position: relative;
     {mode === 'container'
     ? `flex-shrink: 0; align-self: stretch; box-sizing: border-box;
-         ${$sidebarVisible ? `border-left: 1px solid ${railBorderColor};` : ''}
-         border-top: 1px solid ${isActive ? color : railBorderColor};
+         border-top: 1px solid ${topBorderColor};
          border-bottom: 1px solid ${isActive ? color : railBorderColor};`
     : ''}
   "
@@ -134,11 +144,16 @@
     primaryClickable={!$sidebarVisible && !!onClick}
   />
   {#if mode === "container" && hasActiveStripe}
+    <!-- Active-descendant stripe. When a hat is painted, the stripe
+         starts below the hat so it never reads as "1px of workspace
+         accent framing the hat" — the hat owns the top 12px and the
+         stripe owns everything below it. -->
     <div
       aria-hidden="true"
       style="
         position: absolute;
-        top: 0; left: 0; bottom: 0;
+        top: {hatColor ? '12px' : '0'};
+        left: 0; bottom: 0;
         width: 1px;
         background: {color};
         pointer-events: none;

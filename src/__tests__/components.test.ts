@@ -137,6 +137,10 @@ import {
   unregisterBySource,
 } from "../lib/services/command-registry";
 import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
+import {
+  _testHelpers as branchLifecycleTestHelpers,
+  destroyBranchLifecycle,
+} from "../lib/services/branch-lifecycle";
 import { rootRowOrder } from "../lib/stores/root-row-order";
 import { registerRootRowRenderer } from "../lib/services/root-row-renderer-registry";
 import WorkspaceRowBody from "../lib/components/WorkspaceRowBody.svelte";
@@ -1455,6 +1459,210 @@ describe("WorkspaceItem", () => {
     expect(hintOnClick).toHaveBeenCalledTimes(1);
     expect(onSelect).not.toHaveBeenCalled();
   });
+
+  // ---------------------------------------------------------------------------
+  // Branch lifecycle subtitle (Cycle 3 — UI consumer for branchLifecycleStore)
+  // ---------------------------------------------------------------------------
+
+  describe("branch lifecycle subtitle", () => {
+    beforeEach(() => {
+      destroyBranchLifecycle();
+    });
+
+    function makeBranchedWorkspace(
+      id: string,
+      branch: string,
+      rootId: string,
+      opts: { controlled?: boolean } = {},
+    ): Workspace {
+      const ws = makeChildWorkspace(id, branch);
+      Object.assign(ws, {
+        rootWorkspaceId: rootId,
+        worktreePath: `/tmp/gnar-${id}`,
+        branch,
+        repoPath: "/tmp/gnar",
+        // Tests in this block exercise the lifecycle-pill path, which
+        // is gated to Controlled Workspaces. Default to controlled so
+        // existing assertions keep their meaning; the manual-branch
+        // regression test below overrides to `false`.
+        controlled: opts.controlled ?? true,
+      });
+      return ws;
+    }
+
+    it("renders a lifecycle row for branched workspaces with a seeded entry", async () => {
+      const ws = makeBranchedWorkspace("br1", "feat/x", "root");
+      await branchLifecycleTestHelpers.seedBranch("feat/x", {
+        repoPath: "/tmp/gnar",
+        branch: "feat/x",
+        hasCommits: false,
+        wipOnly: false,
+        prState: null,
+        lastActivityAt: Date.now(),
+        paneId: null,
+        workspaceId: ws.id,
+      });
+      const { container } = render(WorkspaceItem, {
+        props: {
+          workspace: ws,
+          index: 0,
+          isActive: false,
+          onSelect: noop,
+          onClose: noop,
+          onRename: noop,
+          onContextMenu: noop,
+        },
+      });
+      await tick();
+      const row = container.querySelector(
+        "[data-workspace-branch-lifecycle]",
+      ) as HTMLElement | null;
+      expect(row).not.toBeNull();
+      expect(row?.getAttribute("data-workspace-branch-lifecycle")).toBe(
+        "draft",
+      );
+      expect(row?.textContent).toContain("draft");
+    });
+
+    it("does not render a lifecycle row for non-branched workspaces", () => {
+      const ws = makeChildWorkspace("plain", "Plain WS");
+      const { container } = render(WorkspaceItem, {
+        props: {
+          workspace: ws,
+          index: 0,
+          isActive: false,
+          onSelect: noop,
+          onClose: noop,
+          onRename: noop,
+          onContextMenu: noop,
+        },
+      });
+      expect(
+        container.querySelector("[data-workspace-branch-lifecycle]"),
+      ).toBeNull();
+    });
+
+    it("does not render a lifecycle row when no entry exists for the branch", () => {
+      const ws = makeBranchedWorkspace("br2", "feat/missing", "root");
+      // No seed — store is empty for this branch.
+      const { container } = render(WorkspaceItem, {
+        props: {
+          workspace: ws,
+          index: 0,
+          isActive: false,
+          onSelect: noop,
+          onClose: noop,
+          onRename: noop,
+          onContextMenu: noop,
+        },
+      });
+      expect(
+        container.querySelector("[data-workspace-branch-lifecycle]"),
+      ).toBeNull();
+    });
+
+    it("reflects the seeded lifecycle state via the data attribute", async () => {
+      const ws = makeBranchedWorkspace("br3", "feat/y", "root");
+      // Force `active` by overriding the pane agent state.
+      const paneId = "br3-p1";
+      await branchLifecycleTestHelpers.seedBranch("feat/y", {
+        repoPath: "/tmp/gnar",
+        branch: "feat/y",
+        hasCommits: true,
+        wipOnly: false,
+        prState: null,
+        lastActivityAt: Date.now(),
+        paneId,
+        workspaceId: ws.id,
+      });
+      await branchLifecycleTestHelpers.setPaneAgentState(paneId, "running");
+      const { container } = render(WorkspaceItem, {
+        props: {
+          workspace: ws,
+          index: 0,
+          isActive: false,
+          onSelect: noop,
+          onClose: noop,
+          onRename: noop,
+          onContextMenu: noop,
+        },
+      });
+      await tick();
+      const row = container.querySelector(
+        "[data-workspace-branch-lifecycle]",
+      ) as HTMLElement | null;
+      expect(row).not.toBeNull();
+      expect(row?.getAttribute("data-workspace-branch-lifecycle")).toBe(
+        "active",
+      );
+      expect(row?.textContent).toContain("active");
+    });
+
+    it("does not render a lifecycle row for a manually-spawned (uncontrolled) branched workspace", async () => {
+      // Manual "New Branch" path leaves `controlled` unset. The
+      // lifecycle pill must stay hidden even when the store has a
+      // matching entry — gh-derived states like "awaiting review"
+      // shouldn't surface on a hand-rolled branch.
+      const ws = makeBranchedWorkspace("br-manual", "feat/manual", "root", {
+        controlled: false,
+      });
+      await branchLifecycleTestHelpers.seedBranch("feat/manual", {
+        repoPath: "/tmp/gnar",
+        branch: "feat/manual",
+        hasCommits: false,
+        wipOnly: false,
+        prState: null,
+        lastActivityAt: Date.now(),
+        paneId: null,
+        workspaceId: ws.id,
+      });
+      const { container } = render(WorkspaceItem, {
+        props: {
+          workspace: ws,
+          index: 0,
+          isActive: false,
+          onSelect: noop,
+          onClose: noop,
+          onRename: noop,
+          onContextMenu: noop,
+        },
+      });
+      await tick();
+      expect(
+        container.querySelector("[data-workspace-branch-lifecycle]"),
+      ).toBeNull();
+    });
+
+    it("hides the lifecycle row when hideStatusBadges is true", async () => {
+      const ws = makeBranchedWorkspace("br4", "feat/z", "root");
+      await branchLifecycleTestHelpers.seedBranch("feat/z", {
+        repoPath: "/tmp/gnar",
+        branch: "feat/z",
+        hasCommits: false,
+        wipOnly: false,
+        prState: null,
+        lastActivityAt: Date.now(),
+        paneId: null,
+        workspaceId: ws.id,
+      });
+      const { container } = render(WorkspaceItem, {
+        props: {
+          workspace: ws,
+          index: 0,
+          isActive: false,
+          hideStatusBadges: true,
+          onSelect: noop,
+          onClose: noop,
+          onRename: noop,
+          onContextMenu: noop,
+        },
+      });
+      await tick();
+      expect(
+        container.querySelector("[data-workspace-branch-lifecycle]"),
+      ).toBeNull();
+    });
+  });
 });
 
 // ===========================================================================
@@ -2111,20 +2319,25 @@ describe("TerminalSurface", () => {
 
 describe("WorkspaceItem — harness sub-row", () => {
   it("paints a green 'thinking' rail hat for a running agent", async () => {
-    const { setStatusItem, clearAllStatusForWorkspace } =
-      await import("../lib/services/status-registry");
+    const { setAgentsForTests } =
+      await import("../lib/services/agent-detection-service");
 
     const surface = makeSurface("s1", { title: "claude > fixing bug" });
     const pane = makePane("p1", [surface]);
     const ws = makeChildWorkspace("ws-harness", "Harness WS", pane);
 
-    setStatusItem("_agent", ws.id, "surface:s1", {
-      category: "process",
-      priority: 0,
-      label: "running",
-      variant: "success",
-      metadata: { surfaceId: "s1" },
-    });
+    setAgentsForTests([
+      {
+        agentId: "a1",
+        agentName: "Claude Code",
+        agentType: "claude",
+        surfaceId: "s1",
+        workspaceId: ws.id,
+        status: "running",
+        createdAt: new Date().toISOString(),
+        lastStatusChange: new Date().toISOString(),
+      },
+    ]);
 
     const { container } = render(WorkspaceItem, {
       props: {
@@ -2142,15 +2355,15 @@ describe("WorkspaceItem — harness sub-row", () => {
     expect(hat).not.toBeNull();
     // "thinking" hat is static, not pulsing.
     expect(hat!.classList.contains("pulses")).toBe(false);
-    clearAllStatusForWorkspace(ws.id);
+    setAgentsForTests([]);
   });
 
   it("paints a muted 'idle' rail hat when an agent is attached but idle", async () => {
     // Idle agents still warrant a hat — it's the "currently
     // thinking" presence indicator that survives the BotIcon
     // removal. Color is muted-grey, no pulse.
-    const { setStatusItem, clearAllStatusForWorkspace } =
-      await import("../lib/services/status-registry");
+    const { setAgentsForTests } =
+      await import("../lib/services/agent-detection-service");
 
     const active = makeSurface("s-active", { title: "Shell" });
     const other = makeSurface("s-agent", { title: "claude" });
@@ -2166,13 +2379,18 @@ describe("WorkspaceItem — harness sub-row", () => {
       activePaneId: "p1",
     };
 
-    setStatusItem("_agent", ws.id, "surface:s-agent", {
-      category: "process",
-      priority: 0,
-      label: "idle",
-      variant: "muted",
-      metadata: { surfaceId: "s-agent" },
-    });
+    setAgentsForTests([
+      {
+        agentId: "a1",
+        agentName: "Claude Code",
+        agentType: "claude",
+        surfaceId: "s-agent",
+        workspaceId: ws.id,
+        status: "idle",
+        createdAt: new Date().toISOString(),
+        lastStatusChange: new Date().toISOString(),
+      },
+    ]);
 
     const { container } = render(WorkspaceItem, {
       props: {
@@ -2189,7 +2407,7 @@ describe("WorkspaceItem — harness sub-row", () => {
     const hat = container.querySelector(".rail-bot-hat") as HTMLElement | null;
     expect(hat).not.toBeNull();
     expect(hat!.classList.contains("pulses")).toBe(false);
-    clearAllStatusForWorkspace(ws.id);
+    setAgentsForTests([]);
   });
 
   it("hides the rail hat when hideStatusBadges is true", async () => {
@@ -2228,8 +2446,8 @@ describe("WorkspaceItem — harness sub-row", () => {
   it("paints a single 'thinking' hat regardless of how many agents are running", async () => {
     // Multiple agents collapse to one hat — the hat is a per-row
     // signal, not a per-agent one. Color stays the running-green.
-    const { setStatusItem, clearAllStatusForWorkspace } =
-      await import("../lib/services/status-registry");
+    const { setAgentsForTests } =
+      await import("../lib/services/agent-detection-service");
 
     const a = makeSurface("s-a", { title: "Strategic plan A" });
     const b = makeSurface("s-b", { title: "Strategic plan B" });
@@ -2245,20 +2463,29 @@ describe("WorkspaceItem — harness sub-row", () => {
       activePaneId: "p1",
     };
 
-    setStatusItem("_agent", ws.id, "surface:s-a", {
-      category: "process",
-      priority: 0,
-      label: "running",
-      variant: "success",
-      metadata: { surfaceId: "s-a" },
-    });
-    setStatusItem("_agent", ws.id, "surface:s-b", {
-      category: "process",
-      priority: 0,
-      label: "running",
-      variant: "success",
-      metadata: { surfaceId: "s-b" },
-    });
+    const now = new Date().toISOString();
+    setAgentsForTests([
+      {
+        agentId: "a1",
+        agentName: "Claude Code",
+        agentType: "claude",
+        surfaceId: "s-a",
+        workspaceId: ws.id,
+        status: "running",
+        createdAt: now,
+        lastStatusChange: now,
+      },
+      {
+        agentId: "a2",
+        agentName: "Claude Code",
+        agentType: "claude",
+        surfaceId: "s-b",
+        workspaceId: ws.id,
+        status: "running",
+        createdAt: now,
+        lastStatusChange: now,
+      },
+    ]);
 
     const { container } = render(WorkspaceItem, {
       props: {
@@ -2274,24 +2501,29 @@ describe("WorkspaceItem — harness sub-row", () => {
 
     const hats = container.querySelectorAll(".rail-bot-hat");
     expect(hats.length).toBe(1);
-    clearAllStatusForWorkspace(ws.id);
+    setAgentsForTests([]);
   });
 
   it("paints a pulsing 'attention' hat for a waiting agent", async () => {
-    const { setStatusItem, clearAllStatusForWorkspace } =
-      await import("../lib/services/status-registry");
+    const { setAgentsForTests } =
+      await import("../lib/services/agent-detection-service");
 
     const surface = makeSurface("s1", { title: "claude" });
     const pane = makePane("p1", [surface]);
     const ws = makeChildWorkspace("ws-attn", "Attention WS", pane);
 
-    setStatusItem("_agent", ws.id, "surface:s1", {
-      category: "process",
-      priority: 0,
-      label: "waiting",
-      variant: "warning",
-      metadata: { surfaceId: "s1" },
-    });
+    setAgentsForTests([
+      {
+        agentId: "a1",
+        agentName: "Claude Code",
+        agentType: "claude",
+        surfaceId: "s1",
+        workspaceId: ws.id,
+        status: "waiting",
+        createdAt: new Date().toISOString(),
+        lastStatusChange: new Date().toISOString(),
+      },
+    ]);
 
     const { container } = render(WorkspaceItem, {
       props: {
@@ -2308,7 +2540,7 @@ describe("WorkspaceItem — harness sub-row", () => {
     const hat = container.querySelector(".rail-bot-hat") as HTMLElement | null;
     expect(hat).not.toBeNull();
     expect(hat!.classList.contains("pulses")).toBe(true);
-    clearAllStatusForWorkspace(ws.id);
+    setAgentsForTests([]);
   });
 });
 

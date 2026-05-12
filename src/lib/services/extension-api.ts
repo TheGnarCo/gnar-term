@@ -79,6 +79,16 @@ import { getActiveCwd, lookupSurfaceWorkspaceId } from "./service-helpers";
 import { workspaces } from "../stores/workspace";
 import { getAllSurfaces, isTerminalSurface } from "../types";
 import { createWorkspaceFromDef as coreCreateWorkspaceFromDef } from "./workspace-runtime-service";
+import {
+  listBranchDescriptors,
+  markAbandoned as coreMarkBranchAbandoned,
+} from "./branch-lifecycle";
+import {
+  dismissAttention as coreDismissAttention,
+  pushExternalAttention as corePushExternalAttention,
+} from "./attention-api";
+import { agentsStore } from "./agent-detection-service";
+import { deriveWorktreePath as coreDeriveWorktreePath } from "./spawn-helper";
 import { waitRestored } from "../bootstrap/restore-workspaces";
 import type { WorkspaceTemplate } from "../config";
 import type { WorkspaceDefInput } from "../../extensions/api";
@@ -341,6 +351,28 @@ export function createExtensionAPI(
     },
     reportError(message: string): void {
       reportExtensionError(extId, message);
+    },
+    listBranches() {
+      return listBranchDescriptors();
+    },
+    markBranchAbandoned(branchId: string) {
+      return coreMarkBranchAbandoned(branchId);
+    },
+    dismissAttention(paneId: string) {
+      coreDismissAttention(paneId);
+    },
+    pushExternalAttention(event) {
+      corePushExternalAttention(
+        event as Parameters<typeof corePushExternalAttention>[0],
+      );
+    },
+    getAgentByPane(paneId: string) {
+      const all = get(agentsStore);
+      const hit = all.find((a) => a.paneId === paneId);
+      return (hit ?? null) as ReturnType<ExtensionAPI["getAgentByPane"]>;
+    },
+    deriveWorktreePath(repoPath: string, branch: string): string {
+      return coreDeriveWorktreePath(repoPath, branch);
     },
     getAllTerminalSurfaces() {
       const out: Array<{ id: string; workspaceId: string; title: string }> = [];

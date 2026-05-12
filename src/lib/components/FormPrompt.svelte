@@ -82,6 +82,38 @@
     }
   }
 
+  type SelectOption = { label: string; value: string; group?: string };
+  type SelectSection = {
+    key: string;
+    label: string | null;
+    options: SelectOption[];
+  };
+  /**
+   * Walk options once preserving caller-supplied order. Ungrouped options
+   * collapse into a single leading section (label=null, rendered without
+   * an optgroup wrapper); each named group becomes its own optgroup in
+   * first-appearance order.
+   */
+  function groupSelectOptions(options: SelectOption[]): SelectSection[] {
+    const sections: SelectSection[] = [];
+    const byKey = new Map<string, SelectSection>();
+    for (const opt of options) {
+      const key = opt.group ?? "__ungrouped__";
+      let section = byKey.get(key);
+      if (!section) {
+        section = {
+          key,
+          label: opt.group ?? null,
+          options: [],
+        };
+        byKey.set(key, section);
+        sections.push(section);
+      }
+      section.options.push(opt);
+    }
+    return sections;
+  }
+
   // Intentionally not using a `$:` block here. A reactive statement that
   // iterates $formPrompt.fields mutating `values[f.key]` triggers
   // Svelte 5's auto-dependency tracker to spuriously pull in the `field`
@@ -164,8 +196,18 @@
                 box-sizing: border-box;
               "
             >
-              {#each field.options as opt (opt.value)}
-                <option value={opt.value}>{opt.label}</option>
+              {#each groupSelectOptions(field.options) as section (section.key)}
+                {#if section.label === null}
+                  {#each section.options as opt (opt.value)}
+                    <option value={opt.value}>{opt.label}</option>
+                  {/each}
+                {:else}
+                  <optgroup label={section.label}>
+                    {#each section.options as opt (opt.value)}
+                      <option value={opt.value}>{opt.label}</option>
+                    {/each}
+                  </optgroup>
+                {/if}
               {/each}
             </select>
           {:else if field.type === "color"}

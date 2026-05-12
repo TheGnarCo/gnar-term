@@ -44,6 +44,16 @@ export default defineConfig({
     host: "127.0.0.1",
     port: 1420,
     strictPort: true,
+    watch: {
+      // Worktrees created by gnar-term live under `.gnar-term/worktrees/`
+      // and each carries its own copy of this repo (their own
+      // `tsconfig.json`, `src/`, etc.). Without this ignore, creating a
+      // branched workspace at runtime trips Vite's tsconfig-change
+      // detector and forces a full page reload, which collapses the
+      // active workspace. The worktree contents are user state, not
+      // dev-server inputs — keep them out of the watch graph entirely.
+      ignored: ["**/.gnar-term/**"],
+    },
   },
   envPrefix: ["VITE_", "TAURI_"],
   build: {

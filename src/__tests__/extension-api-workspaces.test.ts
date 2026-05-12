@@ -4,10 +4,9 @@
  *
  * These methods exist so extensions can read or mutate the workspace
  * store without importing core internals (`waitRestored`,
- * `createWorkspaceFromDef`). The agentic-orchestrator and
- * claude-settings extensions are the primary consumers — both gate
- * back-fill loops on the restored signal and materialize dashboard
- * children via the from-def factory.
+ * `createWorkspaceFromDef`). The claude-settings extension is the
+ * primary consumer — its back-fill loop gates on the restored signal
+ * and materializes dashboard children via the from-def factory.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 

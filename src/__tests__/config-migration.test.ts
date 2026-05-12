@@ -9,8 +9,16 @@
  *     field, so the rest of the def survives.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn(),
+}));
+
+import { invoke } from "@tauri-apps/api/core";
 import {
+  loadConfig,
+  saveConfig,
   migrateLoadedConfig,
   type GnarTermConfig,
   type LayoutNode,
@@ -140,5 +148,84 @@ describe("migrateLoadedConfig", () => {
     const cfg = { theme: "light" };
     const migrated = migrateLoadedConfig(cfg);
     expect(migrated.theme).toBe("light");
+  });
+});
+
+describe("loadConfig — gnar-term.json one-shot migration", () => {
+  const HOME = "/home/test";
+  const CONFIG_DIR = `${HOME}/.config/gnar-term`;
+
+  beforeEach(async () => {
+    vi.mocked(invoke).mockReset();
+    const { resetConfigDirForTests } =
+      await import("../lib/services/service-helpers");
+    resetConfigDirForTests();
+  });
+
+  function mockFileSystem(files: Record<string, string>) {
+    vi.mocked(invoke).mockImplementation(
+      // @ts-expect-error — vitest mock signature is permissive
+      async (cmd: string, args?: unknown) => {
+        if (cmd === "get_home") return HOME;
+        if (cmd === "get_global_config_dir") return CONFIG_DIR;
+        if (cmd === "ensure_dir") return null;
+        if (cmd === "read_file") {
+          const path = (args as { path: string }).path;
+          if (files[path] !== undefined) return files[path];
+          throw new Error(`ENOENT: ${path}`);
+        }
+        if (cmd === "write_file") return null;
+        return null;
+      },
+    );
+  }
+
+  it("reads from global gnar-term.json when settings.json is absent", async () => {
+    mockFileSystem({
+      [`${CONFIG_DIR}/gnar-term.json`]: JSON.stringify({ theme: "old-theme" }),
+    });
+    const cfg = await loadConfig();
+    expect(cfg.theme).toBe("old-theme");
+  });
+
+  it("redirects next save to settings.json after loading from gnar-term.json", async () => {
+    mockFileSystem({
+      [`${CONFIG_DIR}/gnar-term.json`]: JSON.stringify({ theme: "old-theme" }),
+    });
+    await loadConfig();
+    await saveConfig({ theme: "old-theme" });
+
+    const writes = vi
+      .mocked(invoke)
+      .mock.calls.filter(([cmd]) => cmd === "write_file")
+      .map(([, args]) => (args as { path: string }).path);
+
+    expect(writes).toContain(`${CONFIG_DIR}/settings.json`);
+    expect(writes).not.toContain(`${CONFIG_DIR}/gnar-term.json`);
+  });
+
+  it("prefers settings.json over gnar-term.json when both exist", async () => {
+    mockFileSystem({
+      [`${CONFIG_DIR}/settings.json`]: JSON.stringify({ theme: "new-theme" }),
+      [`${CONFIG_DIR}/gnar-term.json`]: JSON.stringify({ theme: "old-theme" }),
+    });
+    const cfg = await loadConfig();
+    expect(cfg.theme).toBe("new-theme");
+  });
+
+  it("reads from per-project gnar-term.json and forwards to per-project settings.json", async () => {
+    mockFileSystem({
+      "gnar-term.json": JSON.stringify({ theme: "project-old" }),
+    });
+    const cfg = await loadConfig();
+    expect(cfg.theme).toBe("project-old");
+
+    await saveConfig({ theme: "project-old" });
+    const writes = vi
+      .mocked(invoke)
+      .mock.calls.filter(([cmd]) => cmd === "write_file")
+      .map(([, args]) => (args as { path: string }).path);
+    expect(writes).toContain("settings.json");
+    expect(writes).not.toContain("gnar-term.json");
   });
 });

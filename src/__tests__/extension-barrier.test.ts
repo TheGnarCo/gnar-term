@@ -44,8 +44,7 @@ describe("Extension barrier enforcement", () => {
     // Keep this list small — each entry is a deliberate departure.
     const FILE_EXCEPTIONS: Record<string, string[]> = {
       // The Diff Dashboard contribution's `create(workspace)` materializes
-      // a dashboard workspace via createWorkspaceFromDef — mirrors the
-      // agentic-orchestrator piercing below. global-surface-service
+      // a dashboard workspace via createWorkspaceFromDef. global-surface-service
       // is the core registry for extension-contributed dashboard
       // components (parallel to api.registerSurfaceType, but components
       // bind to a workspace rather than a surface).
@@ -67,100 +66,6 @@ describe("Extension barrier enforcement", () => {
       // store so it can scan `{cwd}/{syncDir}` for local .md files.
       // Same piercing shape as DiffDashboardBody.
       "spacebase/SpacebaseWorkspaceDashboard.svelte": [
-        "../../lib/stores/workspace",
-      ],
-      // The Agentic Dashboard contribution's `create(workspace)` must
-      // materialize a dashboard workspace; reaching for
-      // createWorkspaceFromDef keeps the contribution on the same code
-      // path as core's built-in Workspace Dashboard.
-      "agentic-orchestrator/index.ts": [
-        "../../lib/services/workspace-runtime-service",
-        // Auto-provision: on activate, back-fill the Agentic Dashboard
-        // for every existing workspace; on deactivate, close the
-        // provisioned dashboards. No public ExtensionAPI surface exposes
-        // the workspace list / dashboard tear-down, so the extension pierces
-        // core — same shape as the existing `createWorkspaceFromDef`
-        // piercing above.
-        "../../lib/services/workspace-service",
-        "../../lib/stores/workspace",
-        // The back-fill provision loop must wait for workspaces to be
-        // restored before running (races the restore loop on startup).
-        // waitRestored() resolves immediately on runtime-enable, defers
-        // during startup — no ExtensionAPI hook exposes this signal.
-        "../../lib/bootstrap/restore-workspaces",
-        // Issues + PRs are also published as dashboard sections so core
-        // dashboard bodies (Workspace Overview) can compose them
-        // directly. No public ExtensionAPI surface exposes the registry.
-        "../../lib/services/dashboard-section-registry",
-        // The Agentic Dashboard component is registered as a hidden
-        // surface type via registerGlobalSurface so PaneView's
-        // normal extension-surface render path mounts it. Same piercing
-        // as diff-viewer/index.ts.
-        "../../lib/services/global-surface-service",
-      ],
-      // Issues + TaskSpawner widgets call the shared spawn-helper
-      // (core service that composes worktree-service + agent command
-      // construction). The MCP `spawn_agent` tool calls the same helper
-      // when its worktree flag is set — keeping the widgets and MCP on
-      // the same code path is the whole point of the helper.
-      "agentic-orchestrator/components/Issues.svelte": [
-        "../../../lib/services/spawn-helper",
-        // Shared gh-availability probe — cached across widgets so a user
-        // with many dashboards doesn't fan out a dozen redundant
-        // `gh --version` calls on mount.
-        "../../../lib/services/gh-availability",
-        // Dashboard widgets derive scope from DashboardHostContext +
-        // workspace.path (spec §5.3). Same piercing as Kanban / AgentList.
-        "../../../lib/contexts/dashboard-host",
-        "../../../lib/stores/workspace",
-      ],
-      // Prs is the read-only sibling of Issues — same gh-availability
-      // probe + DashboardHostContext piercings, but no spawn-helper
-      // since the widget never spawns workspaces.
-      "agentic-orchestrator/components/Prs.svelte": [
-        "../../../lib/services/gh-availability",
-        "../../../lib/contexts/dashboard-host",
-      ],
-      "agentic-orchestrator/components/TaskSpawner.svelte": [
-        "../../../lib/services/spawn-helper",
-        "../../../lib/contexts/dashboard-host",
-        "../../../lib/stores/workspace",
-      ],
-      "agentic-orchestrator/components/AgentList.svelte": [
-        "../../../lib/contexts/dashboard-host",
-      ],
-      "agentic-orchestrator/components/Kanban.svelte": [
-        "../../../lib/contexts/dashboard-host",
-      ],
-      // AgenticDashboardBody is the per-workspace Agentic Dashboard's
-      // body — registered as a hidden surface type and mounted via
-      // PaneView's normal extension surface render path. Reads
-      // workspace via the workspaces store, projects rootWorkspaceId
-      // into a DashboardHostContext for nested widgets, and resolves
-      // theme tokens for chrome (header bar). Same piercing shape as
-      // ClaudeSettingsWidget and the other dashboard bodies.
-      "agentic-orchestrator/components/AgenticDashboardBody.svelte": [
-        "../../../lib/stores/workspace",
-        "../../../lib/contexts/dashboard-host",
-        "../../../lib/stores/theme",
-      ],
-      // GlobalAgenticDashboardBody installs a DashboardHostContext (global
-      // scope) and composes Kanban + AgentList directly — no markdown
-      // intermediary. The piercing covers the host-context / theme /
-      // config touchpoints the body needs from core.
-      "agentic-orchestrator/components/GlobalAgenticDashboardBody.svelte": [
-        "../../../lib/contexts/dashboard-host",
-        // Reads `pseudoWorkspaceColors` from the live config store and
-        // saves color picks back from the Settings tab.
-        "../../../lib/config",
-        // Settings tab renders the color picker against the shared
-        // theme + WORKSPACE_COLOR_SLOTS palette.
-        "../../../lib/stores/theme",
-        "../../../lib/theme-data",
-      ],
-      "agentic-orchestrator/widget-helpers.ts": [
-        "../../lib/contexts/dashboard-host",
-        "../../lib/stores/workspace",
         "../../lib/stores/workspace",
       ],
       // claude-settings/index.ts registers the dashboard component as a
@@ -198,7 +103,7 @@ describe("Extension barrier enforcement", () => {
       // these services live in core so existing branches stay operable
       // when the extension is disabled (the service and lifecycle events
       // remain in core). The extension pierces core the same way
-      // diff-viewer and agentic-orchestrator do.
+      // diff-viewer does.
       "branched-workspaces/index.ts": [
         "../../lib/services/worktree-service",
         "../../lib/services/workspace-runtime-service",

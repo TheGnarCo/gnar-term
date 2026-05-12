@@ -14,6 +14,7 @@
    * forwards context-menu events.
    */
   import { theme } from "../stores/theme";
+  import { pointerInsideWindow } from "../stores/ui";
   import SidebarRail from "./SidebarRail.svelte";
   import SidebarChipButton from "./SidebarChipButton.svelte";
   import { shortcutHint } from "../actions/shortcut-hint";
@@ -107,6 +108,12 @@
 
   let isHovered = false;
 
+  // Force-clear hover when the cursor leaves the window. Rail-flush
+  // rows can skip their own `mouseleave` on fast viewport-edge exits,
+  // leaving them painted in hover state until manually re-entered.
+  // `pointerInsideWindow` is the app-wide signal for that condition.
+  $: if (!$pointerInsideWindow && isHovered) isHovered = false;
+
   $: effectiveColor = color || $theme.accent;
   $: isParent = kind === "parent";
   $: isDashboard = kind === "dashboard";
@@ -116,13 +123,6 @@
   $: minHeight = isDashboard ? "30px" : "32px";
   $: innerXPadding = isDashboard ? "8px" : "6px";
 </script>
-
-<!-- Sidebar rows sit flush with the viewport edge. Fast cursor exits
-     through the window edge can skip the row's own `mouseleave` (more
-     consistently observed on WebKitGTK), leaving `isHovered` stuck.
-     Body-level mouseleave is the authoritative "cursor left the app"
-     signal and clears the residual hover. -->
-<svelte:body on:mouseleave={() => (isHovered = false)} />
 
 <div
   use:shortcutHint={shortcutLabel}
@@ -137,7 +137,7 @@
     min-height: {minHeight};
     margin: 0 4px 0 0;
     border-radius: 0 6px 6px 0;
-    overflow: hidden;
+    overflow: visible;
     cursor: pointer;
     background: {isActive
     ? $theme.bgActive

@@ -11,6 +11,7 @@ import { get } from "svelte/store";
 import { registerCommand } from "../services/command-registry";
 import { registerRootRowRenderer } from "../services/root-row-renderer-registry";
 import { registerSurfaceType } from "../services/surface-type-registry";
+import { registerSshSurfaceType } from "../surfaces/ssh-surface-registration";
 import { openWorkspaceSettingsTab } from "../services/surface-service";
 import WorkspaceDashboardSettings from "../components/WorkspaceDashboardSettings.svelte";
 import { registerDashboardContribution } from "../services/dashboard-contribution-registry";
@@ -285,6 +286,10 @@ export async function initWorkspaces(): Promise<void> {
     source: "core",
     hideFromNewSurface: true,
   });
+
+  // Core SSH surface type — a normal PTY running the system `ssh` binary.
+  // The config is persisted per-surface so sessions reconnect on reload.
+  registerSshSurfaceType();
 
   eventBus.on("workspace:created", onWorkspaceCreated);
   eventBus.on("workspace:closed", onWorkspaceClosed);

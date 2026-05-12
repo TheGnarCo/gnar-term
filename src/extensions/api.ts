@@ -135,7 +135,9 @@ export type AppEventType =
   | "worktree:merged"
   | "agent:statusChanged"
   | "agent:interrupted"
-  | "agent:killed";
+  | "agent:killed"
+  | "branch:lifecycleChanged"
+  | "attention:event";
 
 /** Base shape for all events delivered to extension handlers. */
 export interface AppEvent {
@@ -609,7 +611,7 @@ export interface ExtensionAPI {
           label: string;
           defaultValue?: string;
           type: "select";
-          options: Array<{ label: string; value: string }>;
+          options: Array<{ label: string; value: string; group?: string }>;
         }
       | {
           key: string;
@@ -817,6 +819,86 @@ export interface ExtensionAPI {
    * store in place and emit `agent:statusChanged` on the event bus.
    */
   agents: Readable<AgentRef[]>;
+  /**
+   * Reactive list of agent spawn presets defined in `settings.json` under
+   * `agents[]`. The store reflects the canonical config; mutations go
+   * through the Settings UI or direct config edits. Use this to power
+   * preset pickers, kanban "spawn agent" affordances, and similar UI.
+   */
+  agentPresets: Readable<AgentPresetRef[]>;
+  /**
+   * Reactive map of branch-id → derived lifecycle entry. The map is
+   * recomputed by core whenever any canonical input (git state, PR
+   * state, agent state, activity) moves. Subscribe here to render
+   * kanban-style swimlanes; pair with the `branch:lifecycleChanged`
+   * event for transition-only handlers.
+   */
+  branchLifecycle: Readable<Map<string, BranchLifecycleEntry>>;
+  /**
+   * Reactive list of attention events derived by core from agent state
+   * transitions (awaiting_input / errored) and OSC notifications. The
+   * list is newest-first with a per-pane cap of 50 and total cap of 500.
+   * Pair with the `attention:event` event for transition-only handlers.
+   */
+  attention: Readable<AttentionEventRef[]>;
+  /**
+   * Clear all attention events for a pane — typically called when the
+   * user acknowledges the pane (focuses it, dismisses a card, etc.).
+   * Routes through core's attention store so all subscribers update.
+   */
+  dismissAttention(paneId: string): void;
+  /**
+   * Inject an externally-sourced attention event (e.g. from a CI
+   * webhook, a long-running CLI agent, or a remote system). Core forces
+   * `source: "external"` and stamps `createdAt`, so callers omit both.
+   */
+  pushExternalAttention(
+    event: Omit<AttentionEventRef, "createdAt" | "source">,
+  ): void;
+  /**
+   * O(n) lookup over the live agents store: returns the agent currently
+   * hosted in `paneId`, or null if the pane has no detected agent.
+   * Convenience for UI that renders per-pane agent chrome on every
+   * render; for batch reads, subscribe to `agents` directly.
+   */
+  getAgentByPane(paneId: string): AgentRef | null;
+  /**
+   * Derive the canonical worktree path for a `<repoPath, branch>` pair:
+   * `<parent-of-repo>/<repo-basename>-<branch-hyphenated>`. Shared with
+   * core's spawn-helper and the `spawn_branch` MCP tool so extension-
+   * driven spawn flows and MCP-driven flows produce identical paths.
+   * Cross-platform — accepts `/` or `\` separators.
+   */
+  deriveWorktreePath(repoPath: string, branch: string): string;
+  /**
+   * Reactive log of MCP tool dispatches (most-recent-last, cap 500). Each
+   * entry captures the tool name, args, optional resolved target, and
+   * outcome. Subscribe to this to render an "agent activity" timeline or
+   * to derive secondary indicators (last successful spawn, error rate).
+   */
+  mcpEvents: Readable<McpEventRef[]>;
+  /**
+   * Reactive flat list of recorded terminal sessions across all
+   * workspaces, derived from the per-workspace session-log store.
+   * Each entry carries the owning `workspaceId`, surface name, log path,
+   * and recording timestamp. Useful for building cross-workspace session
+   * browsers, replays, or audit views.
+   */
+  sessions: Readable<SessionRef[]>;
+  /**
+   * Read-only snapshot of every branch core is currently tracking.
+   * Returns the same set of branchIds keyed by the `branchLifecycle`
+   * store, with their repo/pane context attached.
+   */
+  listBranches(): ReadonlyArray<BranchDescriptorRef>;
+  /**
+   * Mark a branch as abandoned by closing its owning workspace through
+   * the standard confirmAndCloseWorkspace path. No-op when the branch
+   * is unknown. The store transitions to `abandoned` as a side effect
+   * of the workspace disappearing — extensions never mutate lifecycle
+   * directly.
+   */
+  markBranchAbandoned(branchId: string): Promise<void>;
   theme: Readable<ExtensionTheme>;
   /** The sidebar drag-reorder currently in progress, or null when idle. */
   reorderContext: Readable<ReorderContext | null>;
@@ -1234,6 +1316,21 @@ export interface WorkspaceDefInput {
   rootWorkspaceId?: string;
   isDashboard?: boolean;
   dashboardContributionId?: string;
+  /**
+   * Worktree-backed branched workspace fields. Set together when the
+   * caller is materializing an agentic Controlled Workspace from an
+   * extension (e.g. the agentic dashboard's spawn flow). `worktreePath`
+   * + `branch` are what `isBranchedWorkspace` checks for.
+   */
+  worktreePath?: string;
+  branch?: string;
+  baseBranch?: string;
+  repoPath?: string;
+  /**
+   * Marks the resulting workspace as agentic-Controlled. Drives
+   * lifecycle-pill visibility and agentic-dashboard participation.
+   */
+  controlled?: boolean;
   extensionData?: Record<string, unknown>;
 }
 
@@ -1262,6 +1359,28 @@ export interface PaneRef {
 }
 
 /**
+ * Public projection of a `GnarTermConfig.agents[]` preset entry. Mirrors
+ * the canonical `AgentPreset` shape in `src/lib/agents-config.ts` so the
+ * public API surface stays decoupled from core internals.
+ */
+export interface AgentPresetRef {
+  /** Human-readable label shown in spawn pickers. */
+  name: string;
+  /** Shell command used to start the agent, e.g. `"claude"`. */
+  command: string;
+  /** Extra environment variables injected into the spawned pane. */
+  env?: Record<string, string>;
+  /** Which detection entry this preset maps to (e.g. `"claude-code"`). */
+  intendedAgent?: string;
+  /** Override working directory for the spawned pane. */
+  defaultCwd?: string;
+  /** When true, automatically spawn this preset in matching workspaces. */
+  autoSpawn?: boolean;
+  /** Text sent to the agent pane immediately after spawn. */
+  initialPrompt?: string;
+}
+
+/**
  * Public projection of a detected agent. Matches the core
  * DetectedAgent type but keeps the extension-visible shape narrow so
  * the public API can evolve without breaking downstream extensions.
@@ -1270,10 +1389,123 @@ export interface AgentRef {
   agentId: string;
   agentName: string;
   surfaceId: string;
+  /** Pane hosting the agent's surface. May be null briefly during startup
+   *  before the surface→pane mapping resolves. */
+  paneId: string | null;
   workspaceId: string;
   status: string;
   createdAt: string;
   lastStatusChange: string;
+}
+
+// --- Branch lifecycle projections ---
+//
+// Lifecycle is DERIVED in core by branch-lifecycle.ts from canonical
+// inputs (git state, PR state, paneAgentStateStore, activity timestamp).
+// Extensions consume the derived store read-only; the only state-
+// mutating action surfaced here is `markBranchAbandoned`, which routes
+// through the workspace-close path.
+
+/**
+ * Lifecycle states a Branch can occupy. See `branch-lifecycle.ts` for
+ * the derivation table. When `gh` is unavailable, `in_review` / `merged`
+ * collapse to `awaiting_review` and `prStateKnown` is set to `false`.
+ */
+export type BranchLifecycle =
+  | "draft"
+  | "active"
+  | "awaiting_review"
+  | "in_review"
+  | "merged"
+  | "abandoned";
+
+/** Entry stored per-branch in the `branchLifecycle` store. */
+export interface BranchLifecycleEntry {
+  lifecycle: BranchLifecycle;
+  /** False when `gh` is unavailable, so UI can show an appropriate hint. */
+  prStateKnown: boolean;
+  /** Unix millisecond timestamp of the most recent detected activity. */
+  lastActivityAt: number;
+  /** Optional human-readable explanation of why this lifecycle was computed. */
+  reason?: string;
+}
+
+/**
+ * Read-only descriptor returned by `listBranches`. Pairs each branchId
+ * with its repo/pane context so extensions can resolve a branch back to
+ * its worktree or active pane without re-deriving from the workspaces
+ * store.
+ */
+export interface BranchDescriptorRef {
+  branchId: string;
+  repoPath: string;
+  branch: string;
+  baseBranch: string;
+  paneId: string | null;
+}
+
+// --- Attention projections ---
+//
+// Attention events are DERIVED in core by attention-api.ts from
+// paneAgentStateStore (state transitions into awaiting_input/errored)
+// and oscNotificationStore (notify/error/progress/complete kinds).
+// Extensions consume the derived store read-only; mutations go through
+// `dismissAttention` (per-pane clear) or `pushExternalAttention` (out
+// of band injection from MCP / extensions).
+
+export type AttentionEventKind =
+  | "awaiting_input"
+  | "errored"
+  | "completed"
+  | "notify"
+  | "progress";
+
+export type AttentionEventSource = "agent-state" | "osc" | "external";
+
+/** Entry stored in the `attention` store, newest first. */
+export interface AttentionEventRef {
+  paneId: string;
+  surfaceId?: string;
+  agentType?: string;
+  kind: AttentionEventKind;
+  title?: string;
+  body?: string;
+  level?: string;
+  source: AttentionEventSource;
+  createdAt: number;
+}
+
+/**
+ * MCP dispatch log entry projected to the public extension surface. Backs the
+ * `mcpEvents` readable; the store is newest-last with a rolling cap of 500.
+ * `resolved` is populated for tools that take a workspace/pane target.
+ */
+export interface McpEventRef {
+  /** ISO timestamp when the tool dispatch completed. */
+  ts: string;
+  connectionId: number;
+  tool: string;
+  args: unknown;
+  resolved?: {
+    workspaceId: string;
+    paneId: string | null;
+    source: string;
+  };
+  result?: { kind: "ok"; summary: string } | { kind: "error"; message: string };
+}
+
+/**
+ * Per-workspace recorded session entry projected to the public extension
+ * surface. Backs the `sessions` readable as a flat newest-last list across
+ * all workspaces.
+ */
+export interface SessionRef {
+  workspaceId: string;
+  surfaceName: string;
+  /** Absolute path to the recorded session log file. */
+  logPath: string;
+  /** Epoch milliseconds when the session was recorded. */
+  timestamp: number;
 }
 
 /** Shape of a registry-backed surface, as delivered to surface components. */

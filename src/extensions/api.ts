@@ -611,7 +611,7 @@ export interface ExtensionAPI {
           label: string;
           defaultValue?: string;
           type: "select";
-          options: Array<{ label: string; value: string }>;
+          options: Array<{ label: string; value: string; group?: string }>;
         }
       | {
           key: string;

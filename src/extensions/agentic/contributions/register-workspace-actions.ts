@@ -22,20 +22,16 @@ export function registerWorkspaceActions(api: ExtensionAPI): void {
   api.registerWorkspaceAction("spawn-agentic-branch", {
     label: "+ branch + agent",
     zone: "workspace-tile",
-    handler: () => {
-      void openSpawnBranchFlow(api);
-    },
+    handler: () => openSpawnBranchFlow(api),
   });
 
   api.registerWorkspaceAction("boot-agent-here", {
     label: "Boot agent here",
     zone: "workspace",
-    handler: () => {
-      // Degraded: no "spawn into active pane" API exists on the extension
-      // surface. Reuse the full spawn-branch flow so the action is always
-      // wired. Tracked as a follow-up (see cycle-6.md deviation note).
-      void openSpawnBranchFlow(api);
-    },
+    // Degraded: no "spawn into active pane" API exists on the extension
+    // surface. Reuse the full spawn-branch flow so the action is always
+    // wired. Tracked as a follow-up (see cycle-6.md deviation note).
+    handler: () => openSpawnBranchFlow(api),
     when: (ctx) => {
       const ctxPaneId =
         typeof ctx.activePaneId === "string"

@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { writable } from "svelte/store";
 import type { ExtensionAPI, AgentPresetRef, WorkspaceRef } from "../../api";
 
-// Import after defining mocks (hoisted by vitest)
 import { openSpawnBranchFlow } from "../header/spawn-branch-flow";
 
 function makePreset(overrides: Partial<AgentPresetRef> = {}): AgentPresetRef {
@@ -97,13 +96,16 @@ describe("openSpawnBranchFlow", () => {
     expect(createWorkspaceFromDef).not.toHaveBeenCalled();
   });
 
-  it("returns early without invoke/createWorkspaceFromDef when user cancels the form", async () => {
+  it("returns early without create_worktree/createWorkspaceFromDef when user cancels the form", async () => {
     const { api, showFormPrompt, invoke, createWorkspaceFromDef } = makeFakeApi(
       [makePreset()],
     );
     showFormPrompt.mockResolvedValue(null);
     await openSpawnBranchFlow(api);
-    expect(invoke).not.toHaveBeenCalled();
+    expect(invoke).not.toHaveBeenCalledWith(
+      "create_worktree",
+      expect.anything(),
+    );
     expect(createWorkspaceFromDef).not.toHaveBeenCalled();
   });
 
@@ -192,7 +194,10 @@ describe("openSpawnBranchFlow", () => {
     });
     await openSpawnBranchFlow(api);
     expect(reportError).toHaveBeenCalled();
-    expect(invoke).not.toHaveBeenCalled();
+    expect(invoke).not.toHaveBeenCalledWith(
+      "create_worktree",
+      expect.anything(),
+    );
     expect(createWorkspaceFromDef).not.toHaveBeenCalled();
   });
 
@@ -228,6 +233,86 @@ describe("openSpawnBranchFlow", () => {
       unknown
     >;
     expect(call).not.toHaveProperty("rootWorkspaceId");
+  });
+
+  it("renders the source branch as a grouped select defaulting to the current branch", async () => {
+    const { api, showFormPrompt, invoke } = makeFakeApi([makePreset()]);
+    invoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "list_branches") {
+        return [
+          { name: "fix/race-in-pty-spawn", is_current: true, is_remote: false },
+          { name: "chore/bump-tauri-2-7", is_current: false, is_remote: false },
+          { name: "release/v0.5.0", is_current: false, is_remote: false },
+          {
+            name: "feat/dark-mode-toggle",
+            is_current: false,
+            is_remote: false,
+          },
+          {
+            name: "origin/feat/agent-detection",
+            is_current: false,
+            is_remote: true,
+          },
+        ];
+      }
+      if (cmd === "list_worktrees") {
+        return [
+          {
+            path: "/repos/example-wt-toggle",
+            head: "0x4d2",
+            branch: "feat/dark-mode-toggle",
+            is_bare: false,
+          },
+        ];
+      }
+      return undefined;
+    });
+    showFormPrompt.mockResolvedValue(null);
+
+    await openSpawnBranchFlow(api);
+
+    const fields = showFormPrompt.mock.calls[0][1] as Array<{
+      key: string;
+      type?: string;
+      label?: string;
+      defaultValue?: string;
+      options?: Array<{ value: string; group?: string }>;
+    }>;
+    const baseField = fields.find((f) => f.key === "base")!;
+    expect(baseField.type).toBe("select");
+    expect(baseField.label).toBe("Source branch");
+    expect(baseField.defaultValue).toBe("fix/race-in-pty-spawn");
+
+    const groups = (baseField.options ?? []).map((o) => o.group);
+    // Worktrees group sits after the non-worktree sections.
+    expect(groups.lastIndexOf("Worktrees")).toBeGreaterThan(
+      groups.lastIndexOf("Local"),
+    );
+    expect(groups.lastIndexOf("Worktrees")).toBeGreaterThan(
+      groups.lastIndexOf("Remote"),
+    );
+  });
+
+  it("falls back to a text input defaulting to current branch when list_branches returns no options", async () => {
+    const { api, showFormPrompt, invoke } = makeFakeApi([makePreset()]);
+    invoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "list_branches") return [];
+      if (cmd === "list_worktrees") return [];
+      return undefined;
+    });
+    showFormPrompt.mockResolvedValue(null);
+
+    await openSpawnBranchFlow(api);
+
+    const fields = showFormPrompt.mock.calls[0][1] as Array<{
+      key: string;
+      type?: string;
+      defaultValue?: string;
+    }>;
+    const baseField = fields.find((f) => f.key === "base")!;
+    expect(baseField.type).toBe("text");
+    // No branches and no current branch detected → falls back to "main".
+    expect(baseField.defaultValue).toBe("main");
   });
 
   it("calls reportError and skips createWorkspaceFromDef when invoke throws", async () => {

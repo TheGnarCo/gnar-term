@@ -256,7 +256,11 @@ export type FormField =
       label: string;
       defaultValue?: string;
       type: "select";
-      options: Array<{ label: string; value: string }>;
+      /** Optional `group` tags each option as belonging to a named
+       *  `<optgroup>`. Groups render in the order they first appear in
+       *  the options list, with ungrouped options rendering before any
+       *  group. Pass options pre-sorted; the renderer preserves order. */
+      options: Array<{ label: string; value: string; group?: string }>;
     }
   | {
       key: string;

@@ -5,6 +5,7 @@ import type {
   AgentRef,
   PaneRef,
   WorkspaceActionContext,
+  WorkspaceRef,
 } from "../../api";
 import { registerWorkspaceActions } from "../contributions/register-workspace-actions";
 
@@ -43,6 +44,7 @@ function makeFakeApi(
   const actions: RegisteredAction[] = [];
   const agentPresets = writable([]);
   const activePane = writable<PaneRef | null>(activePaneValue);
+  const activeWorkspace = writable<WorkspaceRef | null>(null);
   const getActiveCwd = vi.fn().mockResolvedValue("/home/user/repo");
   const showFormPrompt = vi.fn().mockResolvedValue(null);
   const invoke = vi.fn().mockResolvedValue(undefined);
@@ -52,6 +54,7 @@ function makeFakeApi(
   const api = {
     agentPresets,
     activePane,
+    activeWorkspace,
     getActiveCwd,
     showFormPrompt,
     invoke,

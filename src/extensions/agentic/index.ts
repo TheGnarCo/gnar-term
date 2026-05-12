@@ -3,6 +3,7 @@ import AgenticIcon from "./AgenticIcon.svelte";
 import AgenticDashboardBody from "./AgenticDashboardBody.svelte";
 import { attentionPulseStore } from "./stores/attention-pulse";
 import { registerWorkspaceContributions } from "./contributions/register-workspace-contributions";
+import { registerWorkspaceActions } from "./contributions/register-workspace-actions";
 
 export { agenticManifest } from "./manifest";
 
@@ -25,10 +26,16 @@ export function registerAgenticExtension(api: ExtensionAPI): void {
     });
 
     registerWorkspaceContributions(api);
+    registerWorkspaceActions(api);
   });
 
   api.onDeactivate(() => {
-    // api.registerGlobalSurface lifecycle is owned by extension-loader;
-    // it auto-cleans on deactivate. No manual teardown needed for cycle-2.
+    // api.registerGlobalSurface, registerChildRowContributor, registerRootRowRenderer,
+    // registerWorkspaceSubtitle, and registerTitleBarButton are all cleaned up by
+    // the extension loader's source-cleanup pass (see extension-constants.ts).
+    // registerWorkspaceAction is NOT documented as auto-cleaned in api.ts, so
+    // we unregister explicitly here.
+    api.unregisterWorkspaceAction("spawn-agentic-branch");
+    api.unregisterWorkspaceAction("boot-agent-here");
   });
 }

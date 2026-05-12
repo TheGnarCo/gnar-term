@@ -27,6 +27,9 @@ function makeFakeApi(): {
     registerWorkspaceSubtitle: vi.fn(),
     registerChildRowContributor: vi.fn(),
     registerRootRowRenderer: vi.fn(),
+    registerWorkspaceAction: vi.fn(),
+    unregisterWorkspaceAction: vi.fn(),
+    getAgentByPane: vi.fn().mockReturnValue(null),
     attention,
     agents,
   } as unknown as ExtensionAPI;

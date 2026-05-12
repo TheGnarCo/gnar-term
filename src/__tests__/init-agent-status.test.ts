@@ -1,8 +1,9 @@
 /**
  * init-agent-status — verifies the per-Workspace agent visibility that
- * ships with core (subtitle + child rows + row renderer). These were
- * previously contributed by the agentic extension; this test pins them
- * to core so the visibility survives even when the extension is absent.
+ * ships with core. The bootstrap registers a single workspace subtitle
+ * that renders the count badge, the branch-lifecycle pill, and one
+ * inline row per active agent. Active agents no longer appear as
+ * child rows in the sector below the banner.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { get } from "svelte/store";
@@ -28,26 +29,12 @@ vi.mock("../lib/services/surface-service", async () => {
 });
 
 import { initAgentStatus } from "../lib/bootstrap/init-agent-status";
-import {
-  AGENT_STATUS_SOURCE,
-  AGENT_ROW_KIND,
-} from "../lib/services/agent-status-service";
+import { AGENT_STATUS_SOURCE } from "../lib/services/agent-status-service";
 import {
   workspaceSubtitleStore,
   resetWorkspaceSubtitles,
   unregisterWorkspaceSubtitlesBySource,
 } from "../lib/services/workspace-subtitle-registry";
-import {
-  childRowContributorStore,
-  getChildRowsFor,
-  resetChildRowContributors,
-  unregisterChildRowContributorsBySource,
-} from "../lib/services/child-row-contributor-registry";
-import {
-  rootRowRendererStore,
-  getRootRowRenderer,
-  unregisterRootRowRenderersBySource,
-} from "../lib/services/root-row-renderer-registry";
 import {
   setAgentsForTests,
   type DetectedAgent,
@@ -57,7 +44,6 @@ import {
   resetBranchLifecycleForTests,
 } from "../lib/services/branch-lifecycle";
 import WorkspaceAgentSubtitle from "../lib/components/WorkspaceAgentSubtitle.svelte";
-import WorkspaceAgentRow from "../lib/components/WorkspaceAgentRow.svelte";
 
 function makeAgent(overrides: Partial<DetectedAgent> = {}): DetectedAgent {
   return {
@@ -76,8 +62,6 @@ function makeAgent(overrides: Partial<DetectedAgent> = {}): DetectedAgent {
 
 function resetRegistries() {
   resetWorkspaceSubtitles();
-  resetChildRowContributors();
-  unregisterRootRowRenderersBySource(AGENT_STATUS_SOURCE);
   setAgentsForTests([]);
   resetBranchLifecycleForTests();
 }
@@ -97,78 +81,12 @@ describe("initAgentStatus() registration", () => {
     expect(subtitle).toBeTruthy();
     expect(subtitle!.source).toBe(AGENT_STATUS_SOURCE);
   });
-
-  it("registers a child-row contributor for parentType 'workspace'", () => {
-    initAgentStatus();
-    const contributors = get(childRowContributorStore).filter(
-      (c) => c.source === AGENT_STATUS_SOURCE,
-    );
-    expect(contributors).toHaveLength(1);
-    expect(contributors[0]!.parentType).toBe("workspace");
-  });
-
-  it("registers the agent-row root-row renderer", () => {
-    initAgentStatus();
-    expect(getRootRowRenderer(AGENT_ROW_KIND)).toBeTruthy();
-    expect(
-      get(rootRowRendererStore).some(
-        (r) => r.id === AGENT_ROW_KIND && r.source === AGENT_STATUS_SOURCE,
-      ),
-    ).toBe(true);
-  });
-
-  it("child-row contributor emits one agent-row per active agent in the workspace", () => {
-    initAgentStatus();
-    setAgentsForTests([
-      makeAgent({ agentId: "a1", workspaceId: "ws-1", status: "active" }),
-      makeAgent({
-        agentId: "a2",
-        workspaceId: "ws-1",
-        status: "waiting",
-        surfaceId: "surf-2",
-        paneId: "pane-2",
-      }),
-      makeAgent({
-        agentId: "a3",
-        workspaceId: "ws-other",
-        status: "active",
-        surfaceId: "surf-3",
-        paneId: "pane-3",
-      }),
-    ]);
-    const rows = getChildRowsFor("workspace", "ws-1");
-    expect(rows).toHaveLength(2);
-    expect(rows.map((r) => r.id).sort()).toEqual(["a1", "a2"]);
-    expect(rows.every((r) => r.kind === AGENT_ROW_KIND)).toBe(true);
-  });
-
-  it("child-row contributor excludes terminal-status agents (errored, completed)", () => {
-    initAgentStatus();
-    setAgentsForTests([
-      makeAgent({ agentId: "a1", workspaceId: "ws-1", status: "errored" }),
-      makeAgent({
-        agentId: "a2",
-        workspaceId: "ws-1",
-        status: "completed",
-        surfaceId: "surf-2",
-        paneId: "pane-2",
-      }),
-      makeAgent({
-        agentId: "a3",
-        workspaceId: "ws-1",
-        status: "active",
-        surfaceId: "surf-3",
-        paneId: "pane-3",
-      }),
-    ]);
-    const rows = getChildRowsFor("workspace", "ws-1");
-    expect(rows.map((r) => r.id)).toEqual(["a3"]);
-  });
 });
 
 describe("WorkspaceAgentSubtitle", () => {
   beforeEach(() => {
     cleanup();
+    focusSurfaceByIdMock.mockClear();
     resetRegistries();
   });
 
@@ -219,6 +137,83 @@ describe("WorkspaceAgentSubtitle", () => {
     const badge = container.querySelector("[data-agent-count]");
     expect(badge!.getAttribute("data-agent-count")).toBe("1");
     expect(badge!.textContent).toMatch(/1\s+agent/);
+  });
+
+  it("renders one inline agent row per active agent (name + status pill)", () => {
+    setAgentsForTests([
+      makeAgent({
+        agentId: "a1",
+        agentName: "claude",
+        workspaceId: "ws-1",
+        status: "active",
+      }),
+      makeAgent({
+        agentId: "a2",
+        agentName: "gemini",
+        workspaceId: "ws-1",
+        status: "waiting",
+        surfaceId: "surf-2",
+        paneId: "pane-2",
+      }),
+    ]);
+    const { container } = render(WorkspaceAgentSubtitle, {
+      props: { workspaceId: "ws-1" },
+    });
+    const rows = container.querySelectorAll("[data-agent-row]");
+    expect(rows).toHaveLength(2);
+    const ids = Array.from(rows).map((r) => r.getAttribute("data-agent-row"));
+    expect(ids.sort()).toEqual(["a1", "a2"]);
+    const claudeRow = container.querySelector("[data-agent-row='a1']");
+    expect(claudeRow!.textContent).toContain("claude");
+    expect(
+      claudeRow!.querySelector("[data-status]")!.getAttribute("data-status"),
+    ).toBe("active");
+  });
+
+  it("excludes terminal-status agents from the inline rows", () => {
+    setAgentsForTests([
+      makeAgent({ agentId: "a1", workspaceId: "ws-1", status: "errored" }),
+      makeAgent({
+        agentId: "a2",
+        workspaceId: "ws-1",
+        status: "completed",
+        surfaceId: "surf-2",
+        paneId: "pane-2",
+      }),
+      makeAgent({
+        agentId: "a3",
+        workspaceId: "ws-1",
+        status: "active",
+        surfaceId: "surf-3",
+        paneId: "pane-3",
+      }),
+    ]);
+    const { container } = render(WorkspaceAgentSubtitle, {
+      props: { workspaceId: "ws-1" },
+    });
+    const rows = container.querySelectorAll("[data-agent-row]");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.getAttribute("data-agent-row")).toBe("a3");
+  });
+
+  it("clicking an agent row focuses that agent's surface", async () => {
+    setAgentsForTests([
+      makeAgent({
+        agentId: "a1",
+        agentName: "claude",
+        workspaceId: "ws-1",
+        surfaceId: "surf-42",
+        status: "active",
+      }),
+    ]);
+    const { container } = render(WorkspaceAgentSubtitle, {
+      props: { workspaceId: "ws-1" },
+    });
+    const row = container.querySelector(
+      "[data-agent-row='a1']",
+    ) as HTMLButtonElement;
+    await fireEvent.click(row);
+    expect(focusSurfaceByIdMock).toHaveBeenCalledWith("surf-42");
   });
 
   it("renders the lifecycle pill when exactly one workspace branch matches a pane", async () => {
@@ -288,57 +283,6 @@ describe("WorkspaceAgentSubtitle", () => {
   });
 });
 
-describe("WorkspaceAgentRow", () => {
-  beforeEach(() => {
-    cleanup();
-    focusSurfaceByIdMock.mockClear();
-    resetRegistries();
-  });
-
-  it("renders nothing when the agent has exited", () => {
-    setAgentsForTests([]);
-    const { container } = render(WorkspaceAgentRow, {
-      props: { id: "missing-agent" },
-    });
-    expect(container.querySelector("[data-agent-row]")).toBeNull();
-  });
-
-  it("renders agent name and status pill for an active agent", () => {
-    setAgentsForTests([
-      makeAgent({
-        agentId: "a1",
-        agentName: "claude",
-        workspaceId: "ws-1",
-        status: "active",
-      }),
-    ]);
-    const { container } = render(WorkspaceAgentRow, { props: { id: "a1" } });
-    const row = container.querySelector("[data-agent-row='a1']");
-    expect(row).toBeTruthy();
-    expect(row!.textContent).toContain("claude");
-    const pill = container.querySelector("[data-status]");
-    expect(pill!.getAttribute("data-status")).toBe("active");
-  });
-
-  it("clicking the row focuses the agent's surface", async () => {
-    setAgentsForTests([
-      makeAgent({
-        agentId: "a1",
-        agentName: "claude",
-        workspaceId: "ws-1",
-        surfaceId: "surf-42",
-        status: "active",
-      }),
-    ]);
-    const { container } = render(WorkspaceAgentRow, { props: { id: "a1" } });
-    const row = container.querySelector(
-      "[data-agent-row='a1']",
-    ) as HTMLButtonElement;
-    await fireEvent.click(row);
-    expect(focusSurfaceByIdMock).toHaveBeenCalledWith("surf-42");
-  });
-});
-
 describe("init-agent-status integration with workspace-subtitle-registry", () => {
   beforeEach(() => {
     cleanup();
@@ -352,17 +296,9 @@ describe("init-agent-status integration with workspace-subtitle-registry", () =>
     ).toBe(true);
 
     unregisterWorkspaceSubtitlesBySource(AGENT_STATUS_SOURCE);
-    unregisterChildRowContributorsBySource(AGENT_STATUS_SOURCE);
-    unregisterRootRowRenderersBySource(AGENT_STATUS_SOURCE);
 
     expect(
       get(workspaceSubtitleStore).some((s) => s.source === AGENT_STATUS_SOURCE),
     ).toBe(false);
-    expect(
-      get(childRowContributorStore).some(
-        (c) => c.source === AGENT_STATUS_SOURCE,
-      ),
-    ).toBe(false);
-    expect(getRootRowRenderer(AGENT_ROW_KIND)).toBeUndefined();
   });
 });

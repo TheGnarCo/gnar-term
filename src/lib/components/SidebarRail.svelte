@@ -15,6 +15,7 @@
   import { theme } from "../stores/theme";
   import { sidebarVisible, canSidebarDrag } from "../stores/ui";
   import DragGrip from "./DragGrip.svelte";
+  import { botHatColor } from "../utils/bot-hat-color";
 
   export let mode: "row" | "container" = "row";
 
@@ -80,6 +81,13 @@
   $: effectiveCanDrag = canDrag && $canSidebarDrag;
   $: visible = isDragging || (effectiveCanDrag && railHovered && !locked);
   $: railBorderColor = $theme.border ?? "transparent";
+  // Top-border color matches the bot-hat's color when the rail is
+  // hatted, so the segment of the workspace border at the hat's
+  // section reads as part of the hat rather than the rail's accent.
+  // Falls back to the active-rail accent or the neutral border color
+  // otherwise, preserving the existing look for hat-less rows.
+  $: hatColor = botHatColor(botStatus);
+  $: topBorderColor = hatColor ?? (isActive ? color : railBorderColor);
   // Collapsed mode rail-width policy: thin (4px) when inactive and the
   // row isn't being dragged or showing a popover. Hovering the rail no
   // longer widens the painted color — the 8px wrapper still catches the
@@ -115,7 +123,7 @@
     {mode === 'container'
     ? `flex-shrink: 0; align-self: stretch; box-sizing: border-box;
          ${$sidebarVisible ? `border-left: 1px solid ${railBorderColor};` : ''}
-         border-top: 1px solid ${isActive ? color : railBorderColor};
+         border-top: 1px solid ${topBorderColor};
          border-bottom: 1px solid ${isActive ? color : railBorderColor};`
     : ''}
   "

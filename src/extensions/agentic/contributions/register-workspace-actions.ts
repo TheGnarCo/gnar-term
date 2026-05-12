@@ -1,3 +1,4 @@
+import { get } from "svelte/store";
 import type { ExtensionAPI } from "../../api";
 import { openSpawnBranchFlow } from "../header/spawn-branch-flow";
 
@@ -12,11 +13,10 @@ import { openSpawnBranchFlow } from "../header/spawn-branch-flow";
  *   a lightweight "spawn agent into this pane" API does not exist in the current
  *   extension surface. Deviation documented in cycle-6.md.
  *
- * Note: WorkspaceActionContext carries workspace-level fields
- * (rootWorkspaceId, isGit, etc.) but NOT a per-pane identifier — the context
- * shape is `Record<string, unknown>` per api.ts:1048. The `when` predicate
- * reads `ctx.activePaneId ?? ctx.paneId` defensively; if neither is present the
- * predicate returns true (permissive fallback so the button remains visible).
+ * The `when` predicate honors `ctx.activePaneId` / `ctx.paneId` if core ever
+ * supplies them; when the context is empty (the current shape for the
+ * workspace zone), it falls back to `get(api.activePane)` so the action is
+ * only visible when the current pane has no detected agent.
  */
 export function registerWorkspaceActions(api: ExtensionAPI): void {
   api.registerWorkspaceAction("spawn-agentic-branch", {
@@ -37,17 +37,18 @@ export function registerWorkspaceActions(api: ExtensionAPI): void {
       void openSpawnBranchFlow(api);
     },
     when: (ctx) => {
-      const paneId =
+      const ctxPaneId =
         typeof ctx.activePaneId === "string"
           ? ctx.activePaneId
           : typeof ctx.paneId === "string"
             ? ctx.paneId
             : null;
 
-      if (paneId === null) {
-        // No pane context — show the action (permissive fallback).
-        return true;
-      }
+      const paneId = ctxPaneId ?? get(api.activePane)?.id ?? null;
+
+      // No pane in context AND no globally-active pane — hide the action.
+      // A "boot agent here" button with no "here" to target is misleading.
+      if (paneId === null) return false;
 
       return api.getAgentByPane(paneId) === null;
     },

@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { writable } from "svelte/store";
-import type { ExtensionAPI, AgentRef, WorkspaceActionContext } from "../../api";
+import type {
+  ExtensionAPI,
+  AgentRef,
+  PaneRef,
+  WorkspaceActionContext,
+} from "../../api";
 import { registerWorkspaceActions } from "../contributions/register-workspace-actions";
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -31,9 +36,13 @@ interface RegisteredAction {
   when?: (ctx: WorkspaceActionContext) => boolean;
 }
 
-function makeFakeApi(agentByPane: Map<string, AgentRef | null> = new Map()) {
+function makeFakeApi(
+  agentByPane: Map<string, AgentRef | null> = new Map(),
+  activePaneValue: PaneRef | null = null,
+) {
   const actions: RegisteredAction[] = [];
   const agentPresets = writable([]);
+  const activePane = writable<PaneRef | null>(activePaneValue);
   const getActiveCwd = vi.fn().mockResolvedValue("/home/user/repo");
   const showFormPrompt = vi.fn().mockResolvedValue(null);
   const invoke = vi.fn().mockResolvedValue(undefined);
@@ -42,6 +51,7 @@ function makeFakeApi(agentByPane: Map<string, AgentRef | null> = new Map()) {
 
   const api = {
     agentPresets,
+    activePane,
     getActiveCwd,
     showFormPrompt,
     invoke,
@@ -64,7 +74,17 @@ function makeFakeApi(agentByPane: Map<string, AgentRef | null> = new Map()) {
     getAgentByPane: vi.fn((paneId: string) => agentByPane.get(paneId) ?? null),
   } as unknown as ExtensionAPI;
 
-  return { api, actions, showFormPrompt, getAgentByPane: api.getAgentByPane };
+  return {
+    api,
+    actions,
+    showFormPrompt,
+    getAgentByPane: api.getAgentByPane,
+    activePane,
+  };
+}
+
+function makePane(id: string): PaneRef {
+  return { id, surfaces: [], activeSurfaceId: null };
 }
 
 describe("registerWorkspaceActions", () => {
@@ -129,12 +149,35 @@ describe("registerWorkspaceActions", () => {
       expect(action.when!({ activePaneId: paneId })).toBe(false);
     });
 
-    it("returns true (permissive) when no pane context is present", () => {
+    it("falls back to api.activePane when ctx has no pane id", () => {
+      const paneId = "global-active-pane";
+      const { api, actions } = makeFakeApi(
+        new Map([[paneId, null]]),
+        makePane(paneId),
+      );
+      registerWorkspaceActions(api);
+      const action = actions.find((a) => a.id === "boot-agent-here")!;
+      // ctx empty, but globally-active pane has no agent → action visible
+      expect(action.when!({})).toBe(true);
+    });
+
+    it("falls back to api.activePane and hides when that pane has an agent", () => {
+      const paneId = "global-active-pane";
+      const { api, actions } = makeFakeApi(
+        new Map([[paneId, makeAgent(paneId)]]),
+        makePane(paneId),
+      );
+      registerWorkspaceActions(api);
+      const action = actions.find((a) => a.id === "boot-agent-here")!;
+      expect(action.when!({})).toBe(false);
+    });
+
+    it("hides when no pane context AND no globally-active pane", () => {
       const { api, actions } = makeFakeApi();
       registerWorkspaceActions(api);
       const action = actions.find((a) => a.id === "boot-agent-here")!;
-      // No paneId or activePaneId — should fall back to true
-      expect(action.when!({})).toBe(true);
+      // No ctx pane, no api.activePane — hide the action (nothing to boot into)
+      expect(action.when!({})).toBe(false);
     });
   });
 

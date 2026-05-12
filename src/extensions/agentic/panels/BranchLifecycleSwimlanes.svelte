@@ -3,7 +3,7 @@
   // Subscribes to api.branchLifecycle (Map<branchId, BranchLifecycleEntry>).
   // API is provided via Svelte context (EXTENSION_API_KEY), set by ExtensionWrapper.
   import { getContext } from "svelte";
-  import { derived } from "svelte/store";
+  import { derived, get } from "svelte/store";
   import {
     EXTENSION_API_KEY,
     type ExtensionAPI,
@@ -66,6 +66,22 @@
         return "Merged";
     }
   }
+
+  // Resolve the surfaceId to focus when a branch card is clicked.
+  // Chain: branchId → BranchDescriptor.paneId → matching agent → agent.surfaceId.
+  // Returns null when no agent currently occupies the branch's pane (e.g.,
+  // branch tracked by core but its agent has exited). Click becomes a no-op.
+  function resolveSurfaceForBranch(branchId: string): string | null {
+    const branch = api.listBranches().find((b) => b.branchId === branchId);
+    if (!branch?.paneId) return null;
+    const agent = get(api.agents).find((a) => a.paneId === branch.paneId);
+    return agent?.surfaceId ?? null;
+  }
+
+  function handleCardClick(branchId: string) {
+    const surfaceId = resolveSurfaceForBranch(branchId);
+    if (surfaceId) api.focusSurface(surfaceId);
+  }
 </script>
 
 {#if $branchLifecycle.size === 0}
@@ -83,13 +99,18 @@
         <h3 class="column-header">{columnLabel(col)}</h3>
         <div class="column-cards">
           {#each $bucketed.get(col) ?? [] as [branchId, entry] (branchId)}
-            <div class="branch-card">
+            <button
+              type="button"
+              class="branch-card"
+              data-branch-card={branchId}
+              onclick={() => handleCardClick(branchId)}
+            >
               <span class="branch-id">{branchId}</span>
               <span class="lifecycle-pill pill-{col}">{entry.lifecycle}</span>
               {#if entry.reason}
                 <span class="branch-reason">{entry.reason}</span>
               {/if}
-            </div>
+            </button>
           {/each}
         </div>
       </div>
@@ -152,6 +173,16 @@
     border-radius: 4px;
     background: rgba(255, 255, 255, 0.05);
     font-size: 0.75rem;
+    width: 100%;
+    border: 0;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+    font: inherit;
+  }
+
+  .branch-card:hover {
+    background: rgba(255, 255, 255, 0.09);
   }
 
   .branch-id {

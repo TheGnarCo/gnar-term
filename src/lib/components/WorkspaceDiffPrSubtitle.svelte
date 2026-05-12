@@ -266,7 +266,7 @@
             {/each}
           {:else}
             <span
-              style="font-size: 10px; color: #e8b73a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
+              style="font-size: 10px; color: #e8b73a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1 1 auto;"
               >{diffLabel}</span
             >
           {/if}

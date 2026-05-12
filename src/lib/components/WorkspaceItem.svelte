@@ -373,7 +373,7 @@
           <WorktreeIcon size={10} />
         </span>
         <span
-          style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+          style="min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
         >
           {worktreeDirName}
         </span>
@@ -388,7 +388,7 @@
           `Branch lifecycle: ${lifecycleDisplay}`}
       >
         <span
-          style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+          style="min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
         >
           {lifecycleDisplay}{#if !branchLifecycleEntry.prStateKnown}
             <span style="opacity: 0.7;"> · gh offline</span>
@@ -403,9 +403,9 @@
         color={$theme.danger}
         title="Workspace root path no longer exists on disk"
       >
-        <span aria-hidden="true">⚠</span>
+        <span aria-hidden="true" style="flex-shrink: 0;">⚠</span>
         <span
-          style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+          style="min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
           >path missing</span
         >
       </SidebarSubtitleRow>

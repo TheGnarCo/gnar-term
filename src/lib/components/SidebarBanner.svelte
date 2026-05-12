@@ -30,6 +30,7 @@
     bannerCollapsedState,
     setBannerCollapsed,
     sidebarVisible,
+    pointerInsideWindow,
   } from "../stores/ui";
   import SidebarElement from "./SidebarElement.svelte";
   import SidebarRail from "./SidebarRail.svelte";
@@ -131,6 +132,12 @@
 
   let bannerHovered = false;
 
+  // Force-clear hover when the cursor leaves the window. The banner
+  // sits flush with the viewport's left edge — fast exits via that
+  // edge can skip the row's own `mouseleave`. `pointerInsideWindow`
+  // is the app-wide signal for that condition.
+  $: if (!$pointerInsideWindow && bannerHovered) bannerHovered = false;
+
   // Wrapper-level click for the banner body. The visible bar, the
   // banner-subtitle slots, and any empty space in the row should all
   // count as activating the workspace — especially in collapsed mode,
@@ -184,14 +191,6 @@
   $: WorkspaceListViewResolved = (workspaceListViewComponent ??
     DefaultWorkspaceListView) as Component;
 </script>
-
-<!-- The banner sits flush with the viewport's left edge. When the
-     cursor exits through that edge fast (or out the top into the title
-     bar on Linux/WebKitGTK), the row's own `mouseleave` can be skipped,
-     leaving the bar stuck in its hovered state. A body-level
-     mouseleave is the authoritative "cursor left the app" signal —
-     when it fires we know no DOM element should be considered hovered. -->
-<svelte:body on:mouseleave={() => (bannerHovered = false)} />
 
 {#if parentColor}
   <!-- Nested variant — bar only, with left-edge colored accent. Uses

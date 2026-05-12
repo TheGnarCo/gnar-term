@@ -4,6 +4,53 @@ import type { MenuItem } from "../context-menu-types";
 export const isFullscreen = writable<boolean>(false);
 
 /**
+ * True while the pointer is inside the application window. Flips to
+ * false when the cursor leaves the window edge OR the window loses
+ * focus. Sidebar rows watch this to force-clear stuck hover state —
+ * native `mouseleave` on a row can be skipped when the cursor exits
+ * via the leftmost viewport pixel (rail-flush rows), leaving the row
+ * painted in its hover variant. Subscribers reactively zero their
+ * local hover when this flips false.
+ *
+ * Wired once at app startup via `installPointerWindowListeners`.
+ */
+export const pointerInsideWindow = writable<boolean>(true);
+
+let _pointerListenersInstalled = false;
+export function installPointerWindowListeners(): () => void {
+  if (_pointerListenersInstalled || typeof document === "undefined") {
+    return () => {};
+  }
+  _pointerListenersInstalled = true;
+
+  const drop = () => pointerInsideWindow.set(false);
+  const claim = () => pointerInsideWindow.set(true);
+  // mouseout with no relatedTarget = cursor left the window.
+  const onMouseOut = (e: MouseEvent) => {
+    if (!e.relatedTarget) pointerInsideWindow.set(false);
+  };
+
+  document.addEventListener("mouseleave", drop);
+  document.addEventListener("pointerleave", drop);
+  document.addEventListener("mouseenter", claim);
+  document.addEventListener("pointerenter", claim);
+  window.addEventListener("blur", drop);
+  window.addEventListener("focus", claim);
+  document.addEventListener("mouseout", onMouseOut);
+
+  return () => {
+    document.removeEventListener("mouseleave", drop);
+    document.removeEventListener("pointerleave", drop);
+    document.removeEventListener("mouseenter", claim);
+    document.removeEventListener("pointerenter", claim);
+    window.removeEventListener("blur", drop);
+    window.removeEventListener("focus", claim);
+    document.removeEventListener("mouseout", onMouseOut);
+    _pointerListenersInstalled = false;
+  };
+}
+
+/**
  * Primary sidebar expanded/collapsed state. Persisted in AppState as
  * `sidebarVisible` (boolean) by `sidebar-persistence-service` so the
  * user's choice survives across launches.

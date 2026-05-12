@@ -10,6 +10,7 @@
     commandPaletteOpen,
     findBarVisible,
     pendingAction,
+    installPointerWindowListeners,
   } from "./lib/stores/ui";
   import {
     workspaces,
@@ -588,6 +589,7 @@
 
   // ---- Initialization ----
   let _cleanupShortcutHints: (() => void) | null = null;
+  let _cleanupPointerWindow: (() => void) | null = null;
   let _cleanupVisibilityRecover: (() => void) | null = null;
   let _cleanupDragDropRouter: (() => void) | null = null;
   let _rootPathSweepInterval: number | null = null;
@@ -600,6 +602,7 @@
     _cleanupDragDropRouter?.();
     _cleanupPrPoller?.();
     _cleanupCommitsPoller?.();
+    _cleanupPointerWindow?.();
     if (_rootPathSweepInterval !== null)
       window.clearInterval(_rootPathSweepInterval);
     if (_gitRecheckInterval !== null) clearInterval(_gitRecheckInterval);
@@ -607,6 +610,7 @@
 
   onMount(async () => {
     _cleanupShortcutHints = initShortcutHints();
+    _cleanupPointerWindow = installPointerWindowListeners();
     initDragDropPaneRouter()
       .then((dispose) => {
         _cleanupDragDropRouter = dispose;

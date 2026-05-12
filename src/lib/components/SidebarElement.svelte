@@ -14,6 +14,7 @@
    * forwards context-menu events.
    */
   import { theme } from "../stores/theme";
+  import { pointerInsideWindow } from "../stores/ui";
   import SidebarRail from "./SidebarRail.svelte";
   import SidebarChipButton from "./SidebarChipButton.svelte";
   import { shortcutHint } from "../actions/shortcut-hint";
@@ -107,6 +108,12 @@
 
   let isHovered = false;
 
+  // Force-clear hover when the cursor leaves the window. Rail-flush
+  // rows can skip their own `mouseleave` on fast viewport-edge exits,
+  // leaving them painted in hover state until manually re-entered.
+  // `pointerInsideWindow` is the app-wide signal for that condition.
+  $: if (!$pointerInsideWindow && isHovered) isHovered = false;
+
   $: effectiveColor = color || $theme.accent;
   $: isParent = kind === "parent";
   $: isDashboard = kind === "dashboard";
@@ -115,29 +122,7 @@
   $: verticalPadding = isDashboard || compact ? "0px" : "4px";
   $: minHeight = isDashboard ? "30px" : "32px";
   $: innerXPadding = isDashboard ? "8px" : "6px";
-
-  // Child rows nested inside a parent banner render a frosted-glass
-  // background — translucent fill + backdrop-blur — so the terminal
-  // behind shows through rather than being masked by a solid dark
-  // chip. Active rows stay fully opaque so the selected branch reads
-  // crisply against its accent border. Root rows (compact=false) keep
-  // the legacy solid theme bg.
-  $: glass = compact && !isParent;
-  $: idleBg = glass
-    ? `${$theme.bgSurface ?? "#000000"}66`
-    : ($theme.bgSurface ?? "transparent");
-  $: hoverBg = glass
-    ? `${$theme.bgHighlight ?? "#000000"}99`
-    : ($theme.bgHighlight ?? "transparent");
-  $: bg = isActive ? $theme.bgActive : isHovered ? hoverBg : idleBg;
 </script>
-
-<!-- Sidebar rows sit flush with the viewport edge. Fast cursor exits
-     through the window edge can skip the row's own `mouseleave` (more
-     consistently observed on WebKitGTK), leaving `isHovered` stuck.
-     Body-level mouseleave is the authoritative "cursor left the app"
-     signal and clears the residual hover. -->
-<svelte:body on:mouseleave={() => (isHovered = false)} />
 
 <div
   use:shortcutHint={shortcutLabel}
@@ -154,10 +139,11 @@
     border-radius: 0 6px 6px 0;
     overflow: visible;
     cursor: pointer;
-    background: {bg};
-    {glass && !isActive
-    ? 'backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);'
-    : ''}
+    background: {isActive
+    ? $theme.bgActive
+    : isHovered
+      ? $theme.bgHighlight
+      : ($theme.bgSurface ?? 'transparent')};
     border: 1px solid {isActive
     ? effectiveColor
     : ($theme.border ?? 'transparent')};

@@ -13,7 +13,11 @@
    *                  hosts the close button inside the grip.
    */
   import { theme } from "../stores/theme";
-  import { sidebarVisible, canSidebarDrag } from "../stores/ui";
+  import {
+    sidebarVisible,
+    canSidebarDrag,
+    pointerInsideWindow,
+  } from "../stores/ui";
   import DragGrip from "./DragGrip.svelte";
   import { botHatColor } from "../utils/bot-hat-color";
 
@@ -78,6 +82,12 @@
 
   let railHovered = false;
 
+  // Force-clear hover when the cursor leaves the window. The rail sits
+  // at the leftmost viewport pixel — fast exits through that edge can
+  // skip its own `mouseleave`. `pointerInsideWindow` is the app-wide
+  // signal that the cursor is no longer over the window.
+  $: if (!$pointerInsideWindow && railHovered) railHovered = false;
+
   $: effectiveCanDrag = canDrag && $canSidebarDrag;
   $: visible = isDragging || (effectiveCanDrag && railHovered && !locked);
   $: railBorderColor = $theme.border ?? "transparent";
@@ -97,13 +107,6 @@
   $: narrowRail =
     !$sidebarVisible && !isActive && !isDragging && !popoverActive;
 </script>
-
-<!-- The rail occupies the leftmost 8px of the row, flush with the
-     viewport edge. A cursor exit through that edge can skip the rail's
-     own `mouseleave`, leaving the grip's expanded "hover pattern" stuck
-     visible. Body-level mouseleave is the authoritative "cursor left
-     the app" signal and resets the rail-hover state. -->
-<svelte:body on:mouseleave={() => (railHovered = false)} />
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div

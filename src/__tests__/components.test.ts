@@ -1176,11 +1176,18 @@ describe("WorkspaceItem", () => {
         onGripMouseDown: noop,
       },
     });
-    // Hover the row — this makes the grip visible, which shows the close button
+    // The close button is always in the DOM whenever `onClose` is wired
+    // and the grip isn't locked. CSS toggles its `display` between
+    // `none` (rest) and `flex` (`.drag-grip:hover` or `.force-hover`).
+    // jsdom doesn't fire CSS `:hover` from synthetic mouseenter events,
+    // so we assert presence with `hidden: true` rather than trying to
+    // drive the pseudo-class.
     const row = container.firstElementChild as HTMLElement;
     await fireEvent.mouseEnter(row);
     await tick();
-    expect(screen.getByLabelText("Close My Workspace")).toBeTruthy();
+    expect(
+      screen.getByLabelText("Close My Workspace", { selector: "button" }),
+    ).toBeTruthy();
   });
 
   it("shows unread badge when surfaces have unread data", () => {

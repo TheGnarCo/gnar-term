@@ -1,9 +1,19 @@
 <script lang="ts">
   /**
-   * SidebarRail — shared drag rail (DragGrip + hover scoping + lock /
-   * close handling) used by both SidebarElement (single-row rail)
-   * and SidebarBanner's root variant (multi-row rail that stretches the
-   * full banner height).
+   * SidebarRail — shared drag rail (DragGrip + lock / close handling)
+   * used by both SidebarElement (single-row rail) and SidebarBanner's
+   * root variant (multi-row rail that stretches the full banner height).
+   *
+   * Hover state for the rail is CSS-driven inside DragGrip itself
+   * (`:hover` on `.drag-grip`). Previously this component tracked
+   * `mouseenter`/`mouseleave` in JS and synced state via a
+   * `pointerInsideWindow` watcher — necessary because the rail sits at
+   * the leftmost viewport edge and a fast cursor exit could skip its
+   * `mouseleave`, leaving the rail stuck in its hovered look. Letting
+   * CSS own the hover signal removes that whole class of dropped-event
+   * bug; we only forward `isDragging` (force flag) and a `canHover`
+   * gate so locked rails and globally-disabled drag still suppress
+   * hover effects.
    *
    * Modes:
    *   - "row":       1-row rail. No external border. Close button is
@@ -13,11 +23,7 @@
    *                  hosts the close button inside the grip.
    */
   import { theme } from "../stores/theme";
-  import {
-    sidebarVisible,
-    canSidebarDrag,
-    pointerInsideWindow,
-  } from "../stores/ui";
+  import { sidebarVisible, canSidebarDrag } from "../stores/ui";
   import DragGrip from "./DragGrip.svelte";
   import { botHatColor } from "../utils/bot-hat-color";
 
@@ -80,16 +86,7 @@
   /** Tooltip for the rail-mounted close button. */
   export let closeTooltip: string | undefined = undefined;
 
-  let railHovered = false;
-
-  // Force-clear hover when the cursor leaves the window. The rail sits
-  // at the leftmost viewport pixel — fast exits through that edge can
-  // skip its own `mouseleave`. `pointerInsideWindow` is the app-wide
-  // signal that the cursor is no longer over the window.
-  $: if (!$pointerInsideWindow && railHovered) railHovered = false;
-
   $: effectiveCanDrag = canDrag && $canSidebarDrag;
-  $: visible = isDragging || (effectiveCanDrag && railHovered && !locked);
   $: railBorderColor = $theme.border ?? "transparent";
   // Top-border color matches the bot-hat's color when the rail is
   // hatted, so the segment of the workspace border at the hat's
@@ -99,11 +96,10 @@
   $: hatColor = botHatColor(botStatus);
   $: topBorderColor = hatColor ?? (isActive ? color : railBorderColor);
   // Collapsed mode rail-width policy: thin (4px) when inactive and the
-  // row isn't being dragged or showing a popover. Hovering the rail no
-  // longer widens the painted color — the 8px wrapper still catches the
-  // hover for popover triggering, but the rendered stripe stays at 4px
-  // so hover doesn't visually overlap the active-rail width. Expanded
-  // mode keeps the historical 8px rail regardless of state.
+  // row isn't being dragged or showing a popover. Hover no longer
+  // factors in — DragGrip's CSS owns the hover look, and the 4px stripe
+  // is intentionally preserved through hover anyway (see narrowRail
+  // notes on DragGrip).
   $: narrowRail =
     !$sidebarVisible && !isActive && !isDragging && !popoverActive;
 </script>
@@ -111,13 +107,11 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
   data-sidebar-rail={mode}
+  class:rail-container={mode === "container"}
+  class:collapsed-borderless={mode === "container" && narrowRail}
   role="presentation"
-  on:mouseenter={() => (railHovered = true)}
-  on:mouseleave={() => (railHovered = false)}
   on:mousedown={(e) => {
-    if (railHovered && effectiveCanDrag && onGripMouseDown) {
-      onGripMouseDown(e);
-    }
+    if (effectiveCanDrag && onGripMouseDown) onGripMouseDown(e);
   }}
   on:click={() => onClick?.()}
   style="
@@ -125,14 +119,15 @@
     position: relative;
     {mode === 'container'
     ? `flex-shrink: 0; align-self: stretch; box-sizing: border-box;
-         border-top: 1px solid ${topBorderColor};
-         border-bottom: 1px solid ${isActive ? color : railBorderColor};`
+         --rail-border-top-color: ${topBorderColor};
+         --rail-border-bottom-color: ${isActive ? color : railBorderColor};`
     : ''}
   "
 >
   <DragGrip
     theme={$theme}
-    {visible}
+    canHover={effectiveCanDrag && !locked}
+    forceHover={isDragging}
     railColor={color}
     railOpacity={1}
     alwaysShowDots={!locked}
@@ -162,3 +157,31 @@
     ></div>
   {/if}
 </div>
+
+<style>
+  /* Container-mode borders are CSS-driven so the collapsed-borderless
+     :hover rule below can override the color without fighting inline
+     styles. Colors come in as CSS custom properties set inline by the
+     component template (`--rail-border-top-color` / `--rail-border-bottom-color`),
+     so the existing reactive logic for hat/active/theme.border colors
+     still drives the rendered values. */
+  .rail-container {
+    border-top: 1px solid var(--rail-border-top-color);
+    border-bottom: 1px solid var(--rail-border-bottom-color);
+  }
+  /* Collapsed-mode banner rails: when the row is in narrow-rail state
+     (sidebar collapsed AND inactive/idle/no popover/no drag), the
+     small top + bottom 1px caps that frame the rail read as dark
+     tick marks above and below each workspace banner. Hide them by
+     default and let CSS `:hover` reveal them on demand — a deliberate
+     hover still surfaces the frame, but the resting collapsed state
+     is a clean colored stripe with nothing capping it. */
+  .rail-container.collapsed-borderless {
+    border-top-color: transparent;
+    border-bottom-color: transparent;
+  }
+  .rail-container.collapsed-borderless:hover {
+    border-top-color: var(--rail-border-top-color);
+    border-bottom-color: var(--rail-border-bottom-color);
+  }
+</style>

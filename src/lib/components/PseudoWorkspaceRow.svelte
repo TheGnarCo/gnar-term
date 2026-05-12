@@ -114,7 +114,8 @@
   {#if onGripMouseDown}
     <DragGrip
       theme={$theme}
-      visible={gripVisible}
+      canHover={$canSidebarDrag}
+      forceHover={gripVisible}
       railColor={bannerBackground}
       railOpacity={1}
       alwaysShowDots={true}

@@ -129,25 +129,19 @@
     _trackedRoot = null;
   });
 
-  // Derive `prs` and `prInitialResolved` from the shared store. Tying the
-  // displayed list to the row identity by construction rules out the
-  // prior "floating PR" race where the previous row's PRs briefly
-  // painted after `repoRoot` changed but before the new fetch resolved.
+  // Derive `prs` from the shared store. Tying the displayed list to the
+  // row identity by construction rules out the prior "floating PR" race
+  // where the previous row's PRs briefly painted after `repoRoot`
+  // changed but before the new fetch resolved.
   $: prs = repoRoot
     ? (($repoOpenPrsStore.get(repoRoot) as OpenPrListItem[] | undefined) ??
       null)
     : null;
-  $: prInitialResolved = repoRoot ? $repoOpenPrsStore.has(repoRoot) : true;
 
   $: showPrs = isRootWorkspace && prs !== null && prs.length > 0;
-  // True for root workspaces whose PR fetch hasn't returned yet.
-  // Drives a hidden-but-spaced placeholder so the popover paints at
-  // its final height from the start instead of jumping when the PR
-  // row appears.
-  $: prsLoading = isRootWorkspace && !!repoRoot && !prInitialResolved;
 </script>
 
-{#if showDiff || showPrs || showRemote || prsLoading}
+{#if showDiff || showPrs || showRemote}
   <div
     style="display: flex; flex-direction: column; gap: 0; padding: 0 0 0 6px; flex: 1 1 auto; min-width: 0; overflow: hidden;"
   >
@@ -280,28 +274,6 @@
             {/if}
           {/each}
         </span>
-      </div>
-    {:else if prsLoading}
-      <!-- Skeleton placeholder: same structure and dimensions as the
-           real PR row but invisible. Reserves vertical space so the
-           hover popover paints at its loaded height even on the very
-           first hover, before the poller resolves. -->
-      <div
-        data-pr-row-placeholder
-        aria-hidden="true"
-        style="display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; visibility: hidden;"
-      >
-        <svg
-          width="10"
-          height="10"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="transparent"
-          aria-hidden="true"
-        >
-          <circle cx="18" cy="18" r="3" />
-        </svg>
-        <span style="font-size: 10px;">#0</span>
       </div>
     {/if}
   </div>

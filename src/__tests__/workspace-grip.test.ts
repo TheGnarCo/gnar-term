@@ -63,7 +63,7 @@ describe("WorkspaceItem drag grip", () => {
     expect(onGripMouseDown).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps grip at fixed 14px on row-level hover (no expansion)", async () => {
+  it("keeps grip at fixed 8px on row-level hover (no expansion)", async () => {
     const { container } = render(WorkspaceItem, {
       props: {
         workspace: makeChildWorkspace(),
@@ -78,12 +78,17 @@ describe("WorkspaceItem drag grip", () => {
     });
     const row = container.querySelector("[data-drag-idx]") as HTMLElement;
     const grip = container.querySelector(".drag-grip") as HTMLElement;
-    // Grip is a fixed 8px — no expansion on hover to avoid content shift.
-    expect(grip.style.width).toBe("8px");
+    // Grip width is now CSS-only (.drag-grip { width: 8px }) so there's
+    // no inline style attribute to assert. What this test really
+    // protects is "no JS reactivity ever changes the grip wrapper's
+    // width on row-level hover" — assert that no inline width is set at
+    // rest, after mouseenter, or after mouseleave. The fixed CSS width
+    // is exercised by the DragGrip suite.
+    expect(grip.style.width).toBe("");
     await fireEvent.mouseEnter(row);
-    expect(grip.style.width).toBe("8px");
+    expect(grip.style.width).toBe("");
     await fireEvent.mouseLeave(row);
-    expect(grip.style.width).toBe("8px");
+    expect(grip.style.width).toBe("");
   });
 
   it("rounds only the right corners so the rail renders as a straight vertical bar on the left", () => {

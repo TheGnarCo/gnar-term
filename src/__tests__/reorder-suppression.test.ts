@@ -23,18 +23,29 @@ const EXTENSION_API = readFileSync(
 
 describe("grip visibility suppression", () => {
   it("WorkspaceItem keeps its own grip collapsed when any reorder is active unless the item is the drag source", () => {
-    // SidebarRail owns the grip visibility logic for both row and
-    // container modes. The gate now uses the canSidebarDrag derived store
-    // (sidebarVisible && !anyReorderActive) via effectiveCanDrag, and
-    // suppresses expansion unless the row is the drag source (isDragging).
+    // SidebarRail owns the grip hover gating for both row and container
+    // modes. Hover-expansion is now CSS-driven (`.drag-grip:hover`); the
+    // component forwards two flags to DragGrip:
+    //   - `canHover={effectiveCanDrag && !locked}` — when false, :hover
+    //     becomes a no-op, so locked rows and globally-suspended drag
+    //     never expand on hover.
+    //   - `forceHover={isDragging}` — forces the expanded look while a
+    //     drag is in progress (the only row that should look hovered
+    //     when reorder is active is the drag source).
+    // effectiveCanDrag is itself `canDrag && $canSidebarDrag`, so this
+    // chain still gates expansion through canSidebarDrag.
     const RAIL = readFileSync(
       "src/lib/components/SidebarRail.svelte",
       "utf-8",
     ).replace(/\s+/g, " ");
     expect(RAIL).toContain("canSidebarDrag");
     expect(RAIL).toMatch(
-      /isDragging\s*\|\|\s*\(\s*effectiveCanDrag\s*&&\s*railHovered\s*&&\s*!\s*locked\s*\)/,
+      /effectiveCanDrag\s*=\s*canDrag\s*&&\s*\$canSidebarDrag/,
     );
+    expect(RAIL).toMatch(
+      /canHover=\{\s*effectiveCanDrag\s*&&\s*!\s*locked\s*\}/,
+    );
+    expect(RAIL).toMatch(/forceHover=\{\s*isDragging\s*\}/);
   });
 
   it("WorkspaceListBlock owns the root-row drag via createDragReorder", () => {

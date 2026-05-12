@@ -29,7 +29,6 @@
   import {
     bannerCollapsedState,
     setBannerCollapsed,
-    sidebarVisible,
     pointerInsideWindow,
   } from "../stores/ui";
   import SidebarElement from "./SidebarElement.svelte";
@@ -379,13 +378,15 @@
           data-dashboard-count={dashboardCount}
           style="
             display: flex; flex-direction: column;
-            {!$sidebarVisible
-            ? `margin-right: 4px;
-                 background: ${$theme.sidebarBg ?? $theme.bg ?? '#000'}cc;
-                 backdrop-filter: blur(10px);
-                 -webkit-backdrop-filter: blur(10px);
-                 border-radius: 0 0 6px 0;`
-            : 'margin-left: -2px; margin-top: -2px;'}
+            margin: 0 4px 0 0;
+            padding: 2px 0;
+            background: {$theme.bgSurface ?? '#000000'}55;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: 6px;
+            box-shadow: 0 0 10px 0 {$theme.bgSurface ?? '#000000'}40;
+            -webkit-mask-image: radial-gradient(120% 130% at 50% 0%, rgba(0,0,0,1) 70%, rgba(0,0,0,0.85) 100%);
+            mask-image: radial-gradient(120% 130% at 50% 0%, rgba(0,0,0,1) 70%, rgba(0,0,0,0.85) 100%);
           "
           transition:slide={{ duration: 200 }}
         >

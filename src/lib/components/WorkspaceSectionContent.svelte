@@ -744,14 +744,9 @@
   .dashboard-chip-grid {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     gap: 4px;
-    /* Visible gap above/below the chip strip is 8px on each side.
-       Top: chip-grid padding-top (10px) minus the children container's
-       margin-top: -2px collapse against the banner border = 8px.
-       Bottom: chip-grid padding-bottom (0) plus WorkspaceListView's
-       margin-top: 8px = 8px. Keep these in sync if either neighbor
-       changes its margin contribution. */
-    padding: 10px 8px 0 8px;
+    padding: 6px 8px;
   }
   /* Inside the grid the chip button is absolutely positioned to fill
      its fluid wrapper. The class default `width: 28px` would pin it

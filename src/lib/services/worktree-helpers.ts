@@ -65,31 +65,58 @@ interface WorktreeRef {
   is_bare: boolean;
 }
 
-async function fetchBaseOptions(
+export interface BaseOption {
+  label: string;
+  value: string;
+  group?: string;
+}
+
+export interface BaseOptionsResult {
+  options: BaseOption[];
+  currentBranch: string | null;
+}
+
+/**
+ * Build the Source Branch picker payload: locally-checked-out branches,
+ * remote tracking branches, and branches currently checked out in a
+ * worktree — each tagged with a group label for `<optgroup>` rendering,
+ * sorted alphabetically within its group. Worktree branches always
+ * follow the local + remote sections.
+ *
+ * Exported for unit testing.
+ */
+export async function fetchBaseOptions(
   repoPath: string,
-): Promise<Array<{ label: string; value: string }>> {
-  const seen = new Set<string>();
-  const out: Array<{ label: string; value: string }> = [];
+): Promise<BaseOptionsResult> {
+  const locals = new Map<string, BaseOption>();
+  const remotes = new Map<string, BaseOption>();
+  const worktreeNames = new Set<string>();
+  let currentBranch: string | null = null;
 
   try {
     const branches = await invoke<BranchInfo[]>("list_branches", {
       repoPath,
       includeRemote: true,
     });
-    const locals = branches.filter((b) => !b.is_remote);
-    const remotes = branches.filter((b) => b.is_remote);
-    for (const b of locals) {
-      if (seen.has(b.name)) continue;
-      seen.add(b.name);
-      out.push({
-        label: b.is_current ? `${b.name} (current)` : b.name,
-        value: b.name,
-      });
-    }
-    for (const b of remotes) {
-      if (seen.has(b.name)) continue;
-      seen.add(b.name);
-      out.push({ label: `remote: ${b.name}`, value: b.name });
+    for (const b of branches) {
+      if (b.is_remote) {
+        if (!remotes.has(b.name)) {
+          remotes.set(b.name, {
+            label: b.name,
+            value: b.name,
+            group: "Remote",
+          });
+        }
+      } else {
+        if (b.is_current) currentBranch = b.name;
+        if (!locals.has(b.name)) {
+          locals.set(b.name, {
+            label: b.is_current ? `${b.name} (current)` : b.name,
+            value: b.name,
+            group: "Local",
+          });
+        }
+      }
     }
   } catch {
     // list_branches unavailable — caller falls back to text input.
@@ -100,18 +127,43 @@ async function fetchBaseOptions(
       repoPath,
     });
     for (const wt of worktrees) {
-      if (!wt.branch || seen.has(wt.branch)) continue;
-      seen.add(wt.branch);
-      out.push({
-        label: `worktree: ${wt.branch}`,
-        value: wt.branch,
-      });
+      if (!wt.branch) continue;
+      worktreeNames.add(wt.branch);
     }
   } catch {
     // list_worktrees unavailable — ignore, local/remote branches are enough.
   }
 
-  return out;
+  const byName = (a: BaseOption, b: BaseOption) =>
+    a.value.localeCompare(b.value);
+
+  // Worktree-occupied branches are removed from their original section
+  // and re-emitted in a trailing "Worktrees" group so the user can see
+  // at a glance which branches are already checked out elsewhere.
+  const localOpts: BaseOption[] = [];
+  const remoteOpts: BaseOption[] = [];
+  const worktreeOpts: BaseOption[] = [];
+
+  for (const opt of locals.values()) {
+    if (worktreeNames.has(opt.value)) {
+      worktreeOpts.push({ ...opt, group: "Worktrees" });
+    } else {
+      localOpts.push(opt);
+    }
+  }
+  for (const opt of remotes.values()) {
+    if (worktreeNames.has(opt.value)) continue;
+    remoteOpts.push(opt);
+  }
+
+  localOpts.sort(byName);
+  remoteOpts.sort(byName);
+  worktreeOpts.sort(byName);
+
+  return {
+    options: [...localOpts, ...remoteOpts, ...worktreeOpts],
+    currentBranch,
+  };
 }
 
 /**
@@ -122,8 +174,11 @@ export async function promptWorktreeConfig(
   repoPath: string,
   options?: { title?: string; branchPrefix?: string },
 ): Promise<WorktreeConfig | null> {
-  const baseOptions = await fetchBaseOptions(repoPath);
+  const { options: baseOptions, currentBranch } =
+    await fetchBaseOptions(repoPath);
   const defaultBase =
+    (currentBranch &&
+      baseOptions.find((o) => o.value === currentBranch)?.value) ||
     baseOptions.find((o) => o.value === "main")?.value ||
     baseOptions.find((o) => o.value === "master")?.value ||
     baseOptions[0]?.value ||
@@ -141,7 +196,7 @@ export async function promptWorktreeConfig(
       : ({
           key: "base",
           label: "Source Branch",
-          defaultValue: "main",
+          defaultValue: currentBranch ?? "main",
         } as const);
 
   const result = await showFormPrompt(

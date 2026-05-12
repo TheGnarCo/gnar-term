@@ -151,12 +151,80 @@ root via its `dashboardWorkspaceId`.
 **Aliases:** none.
 **Do NOT use:** "Orchestrator", "Agent Orchestrator", "Workspace
 Orchestrator".
-**Definition:** The Dashboard Contribution registered by the
-`agentic-orchestrator` extension. The dashboard body
-(`AgenticDashboardBody`) composes the Kanban, AgentList, and
-TaskSpawner components directly. Cap of 1 per Workspace. The
-components read scope from the enclosing `DashboardHostContext`, not
-from props.
+**Definition:** A global surface registered by the `agentic`
+extension and opened from a TitleBar button (mirrors the Settings /
+Claude Settings pattern). The dashboard body
+(`AgenticDashboardBody`) composes three live panels —
+**Agent Board**, **Branch Lifecycle Swimlanes**, and
+**Attention Inbox** — each subscribing to its respective core readable
+(`api.agents`, `api.branchLifecycle`, `api.attention`). The dashboard
+owns no parallel state.
+
+---
+
+### Global Agentic Dashboard
+
+**Aliases:** none.
+**Do NOT use:** "Agentic pseudo-workspace" (legacy — the dashboard is
+no longer a pseudo-workspace).
+**Definition:** The Agentic Dashboard surface itself, promoted to a
+global surface (via `api.registerGlobalSurface("dashboard", ...)`) so
+it opens like Settings and Claude Settings rather than living as a
+pinned sidebar row. Summoned by the TitleBar Agentic button, whose
+`isActive` store pulses when `api.attention` is non-empty.
+
+---
+
+### Agent Board
+
+**Aliases:** none.
+**Do NOT use:** "agent list", "agent kanban", "AgentList".
+**Definition:** The Agentic Dashboard panel that lists every
+currently-detected agent (live `api.agents`), grouped by owning
+Workspace. Each card shows agent name, status pill, and a click
+action that calls `api.focusSurface(surfaceId)`.
+
+---
+
+### Branch Lifecycle Swimlanes
+
+**Aliases:** none.
+**Do NOT use:** "lifecycle kanban", "branch board".
+**Definition:** The Agentic Dashboard panel that renders
+`BranchLifecycleEntry` values as kanban columns (draft / active /
+awaiting_review / in_review / merged). Read-only — cards move
+themselves as `api.branchLifecycle` updates. Surfaces a hint banner
+when any entry has `prStateKnown: false` so the user knows `gh` data
+is missing.
+
+---
+
+### Attention Inbox
+
+**Aliases:** none.
+**Do NOT use:** "notifications", "alerts", "events feed".
+**Definition:** The Agentic Dashboard panel that renders
+`api.attention` newest-first. Clicking a row calls
+`api.focusSurface(surfaceId)` and then `api.dismissAttention(paneId)`.
+Safe no-op when the target surface is no longer present.
+
+---
+
+### "+ New agentic branch" flow
+
+**Aliases:** none.
+**Do NOT use:** "spawn_branch UI" (the MCP tool is a peer, not the
+UI's owner).
+**Definition:** The Agentic Dashboard's primary header action. A
+form prompt collects branch name, base branch, and AgentPreset; the
+flow then materializes a worktree via
+`api.invoke("create_worktree", ...)` and creates the Branch workspace
+via `api.createWorkspaceFromDef(...)` with `rootWorkspaceId` set to
+the active workspace's id, so the spawned worktree appears nested
+under its triggering Workspace banner. The chosen AgentPreset's
+command runs in the new workspace's terminal surface. Reaches the
+same end state as the `spawn_branch` MCP tool without introducing a
+new Tauri command.
 
 ---
 

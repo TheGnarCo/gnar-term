@@ -85,7 +85,14 @@ import {
 import { surfaceTypeStore } from "./surface-type-registry";
 import { getWorkspaceStatus } from "./status-registry";
 import { getMcpSetting } from "../config";
-import { spawnAgentInWorktree } from "./spawn-helper";
+import {
+  spawnAgentInWorktree,
+  resolveAgentPresetForSpawn,
+  buildStartupCommand,
+  SPAWN_AGENT_TYPES,
+  type ResolvedAgentPreset,
+  type SpawnAgentType,
+} from "./spawn-helper";
 import {
   type ConnectionBinding,
   type ConnectionContext,
@@ -95,6 +102,7 @@ export type { ConnectionBinding, ConnectionContext, ToolDef };
 import { filesystemTools } from "./mcp-tools/filesystem";
 import { registryMirrorTools } from "./mcp-tools/registry-mirrors";
 import { introspectionTools } from "./mcp-tools/introspection";
+import { agenticCoreTools } from "./mcp-tools/agentic-core";
 
 // ---- Types ----
 
@@ -102,13 +110,15 @@ export type McpStatus = "live" | "error" | "disabled" | "pending";
 const _mcpStatus = writable<McpStatus>("pending");
 export const mcpStatus = { subscribe: _mcpStatus.subscribe };
 
-type AgentType = "claude-code" | "codex" | "aider" | "custom";
+// Spawn-side taxonomy lives in `spawn-helper.ts` (the single source of
+// truth). McpSession.agent uses it directly so a new launcher there
+// automatically propagates to MCP session records.
 type SessionStatus = "starting" | "running" | "exited";
 
 interface McpSession {
   session_id: string;
   name: string;
-  agent: AgentType;
+  agent: SpawnAgentType;
   pid: number | undefined;
   status: SessionStatus;
   cwd: string;
@@ -153,7 +163,7 @@ const ANONYMOUS_CONTEXT: ConnectionContext = {
 
 // ---- Agent command map ----
 
-const AGENT_COMMANDS: Record<AgentType, string | null> = {
+const AGENT_COMMANDS: Record<SpawnAgentType, string | null> = {
   "claude-code": "claude",
   codex: "codex",
   aider: "aider",
@@ -398,12 +408,23 @@ interface DispatchLogEntry {
 
 const DISPATCH_LOG_MAX = 500;
 const dispatchLog: DispatchLogEntry[] = [];
+const dispatchLogStore = writable<readonly DispatchLogEntry[]>(dispatchLog);
+
+/**
+ * Public read-only view of the MCP dispatch log. Backs
+ * `ExtensionAPI.mcpEvents` via a projection in extension-api-stores.ts.
+ * Newest-last with a rolling cap of {@link DISPATCH_LOG_MAX}.
+ */
+export const mcpDispatchLogStore: {
+  subscribe: typeof dispatchLogStore.subscribe;
+} = { subscribe: dispatchLogStore.subscribe };
 
 function logDispatch(entry: DispatchLogEntry): void {
   dispatchLog.push(entry);
   if (dispatchLog.length > DISPATCH_LOG_MAX) {
     dispatchLog.shift();
   }
+  dispatchLogStore.set(dispatchLog.slice());
   // Echo to console in a structured single line so devtools can grep.
   const resolved = entry.resolved
     ? `resolved={ws=${entry.resolved.workspaceId},pane=${entry.resolved.paneId ?? "-"},src=${entry.resolved.source}}`
@@ -472,14 +493,14 @@ export function unregisterMcpToolsBySource(source: string): void {
 registerTool({
   name: "spawn_agent",
   description:
-    "Spawn a new gnar-term pane running an AI coding agent (claude-code, codex, aider) or a custom command. Targets the agent's host workspace by default (per connection binding); pass workspace_id/pane_id to override. Pass `worktree` to instead create a fresh branched workspace and spawn the agent there (auto-resolves branch / worktree path; optionally tags the workspace under a dashboard).",
+    "Spawn a new gnar-term pane running an AI coding agent (claude-code, codex, aider) or a custom command. Targets the agent's host workspace by default (per connection binding); pass workspace_id/pane_id to override. Pass `worktree` to instead create a fresh branched workspace and spawn the agent there (auto-resolves branch / worktree path; optionally tags the workspace under a dashboard). Pass `agent_preset_name` to resolve agent/command/task/cwd/env from a settings.json `agents[]` entry; explicit args override the preset.",
   inputSchema: {
     type: "object",
     properties: {
       name: { type: "string" },
       agent: {
         type: "string",
-        enum: ["claude-code", "codex", "aider", "custom"],
+        enum: [...SPAWN_AGENT_TYPES],
       },
       task: { type: "string" },
       cwd: { type: "string" },
@@ -489,6 +510,11 @@ registerTool({
       rows: { type: "number" },
       workspace_id: { type: "string" },
       pane_id: { type: "string" },
+      agent_preset_name: {
+        type: "string",
+        description:
+          "Name of an AgentPreset from settings.json `agents[]`. Resolves to agent type + command + initialPrompt + defaultCwd + env. Explicit args (agent/command/task/cwd/env) override the preset when both are provided. When set, `agent` is no longer required.",
+      },
       worktree: {
         type: "object",
         description:
@@ -516,17 +542,19 @@ registerTool({
         },
       },
     },
-    required: ["name", "agent"],
+    required: ["name"],
   },
   handler: async (args, ctx) => {
     const p = args as {
       name: string;
-      agent: AgentType;
+      agent?: SpawnAgentType;
       task?: string;
       cwd?: string;
       command?: string;
+      env?: Record<string, string>;
       workspace_id?: string;
       pane_id?: string;
+      agent_preset_name?: string;
       worktree?: {
         branch?: string;
         base?: string;
@@ -534,6 +562,29 @@ registerTool({
         taskContext?: string;
       };
     };
+
+    // Resolve preset once; both worktree and non-worktree paths overlay it
+    // beneath explicit args (explicit always wins).
+    const preset: ResolvedAgentPreset | null = p.agent_preset_name
+      ? resolveAgentPresetForSpawn(p.agent_preset_name)
+      : null;
+
+    const effectiveAgent: SpawnAgentType | undefined = p.agent ?? preset?.type;
+    if (!effectiveAgent) {
+      throw new Error(
+        "spawn_agent: either `agent` or `agent_preset_name` is required",
+      );
+    }
+    const effectiveCommand = p.command ?? preset?.command;
+    // Preset `initialPrompt` becomes a CLI arg (same semantics as
+    // spawn_branch / spawnAgentInWorktree). `p.task` keeps its existing
+    // post-launch PTY-typed semantics — they intentionally do not merge.
+    const presetTaskContext = preset?.taskContext;
+    const effectiveCwd = p.cwd ?? preset?.cwd;
+    const effectiveEnv =
+      preset?.env || p.env
+        ? { ...(preset?.env ?? {}), ...(p.env ?? {}) }
+        : undefined;
 
     // --- Worktree path: spawn into a brand-new branched workspace.
     if (p.worktree) {
@@ -563,9 +614,16 @@ registerTool({
       }
       const result = await spawnAgentInWorktree({
         name: p.name,
-        agent: p.agent,
-        command: p.command,
-        taskContext: p.worktree.taskContext,
+        agent: effectiveAgent,
+        ...(effectiveCommand !== undefined
+          ? { command: effectiveCommand }
+          : {}),
+        ...(p.worktree.taskContext !== undefined
+          ? { taskContext: p.worktree.taskContext }
+          : presetTaskContext !== undefined
+            ? { taskContext: presetTaskContext }
+            : {}),
+        ...(effectiveEnv ? { env: effectiveEnv } : {}),
         repoPath,
         ...(p.worktree.branch ? { branch: p.worktree.branch } : {}),
         ...(p.worktree.base ? { base: p.worktree.base } : {}),
@@ -574,15 +632,28 @@ registerTool({
       return result;
     }
 
+    // Non-worktree path: split the host pane.
+    // Use buildStartupCommand so preset taskContext is ANSI-C quoted
+    // consistently with the worktree path. `p.task` is not threaded here —
+    // it is typed into the PTY post-launch (interactive prompt semantics).
     let startupCommand: string | undefined;
-    if (p.agent === "custom") {
-      if (!p.command)
+    if (effectiveAgent === "custom") {
+      if (!effectiveCommand)
         throw new Error('agent "custom" requires a command parameter');
-      startupCommand = p.command;
+      startupCommand = buildStartupCommand(
+        "custom",
+        presetTaskContext,
+        effectiveCommand,
+      );
     } else {
-      const agentCmd = AGENT_COMMANDS[p.agent];
-      if (!agentCmd) throw new Error(`unknown agent: ${p.agent}`);
-      startupCommand = agentCmd;
+      const agentCmd = AGENT_COMMANDS[effectiveAgent];
+      if (!agentCmd && !effectiveCommand)
+        throw new Error(`unknown agent: ${effectiveAgent}`);
+      startupCommand = buildStartupCommand(
+        effectiveAgent,
+        presetTaskContext,
+        effectiveCommand,
+      );
     }
 
     const target = resolveTarget(p, ctx);
@@ -599,9 +670,10 @@ registerTool({
     );
     ctx.lastSpawnedPaneId = newPane.id;
 
-    const surface = await createTerminalSurface(newPane, p.cwd);
+    const surface = await createTerminalSurface(newPane, effectiveCwd);
     surface.title = p.name;
     surface.startupCommand = startupCommand;
+    if (effectiveEnv) surface.env = { ...(surface.env ?? {}), ...effectiveEnv };
     newPane.activeSurfaceId = surface.id;
     workspaces.update((l) => [...l]);
     void safeFocus(surface);
@@ -609,7 +681,7 @@ registerTool({
     const ptyId = await waitForPtyId(surface);
     registerMcpPty(ptyId);
 
-    const cwd = p.cwd || (await getPtyCwd(ptyId));
+    const cwd = effectiveCwd || (await getPtyCwd(ptyId));
     let pid: number | undefined;
     try {
       pid = await invoke<number>("get_pty_pid", { ptyId });
@@ -620,7 +692,7 @@ registerTool({
     const session: McpSession = {
       session_id: newSessionId(),
       name: p.name,
-      agent: p.agent,
+      agent: effectiveAgent,
       pid,
       status: "starting",
       cwd,
@@ -855,26 +927,54 @@ registerTool({
 registerTool({
   name: "send_prompt",
   description:
-    "Send text to an MCP session's PTY. Appends Enter unless press_enter is false.",
+    "Send text to a terminal. Target by `session_id` (MCP-spawned session) " +
+    "or `pane_id` (any pane's active terminal surface). " +
+    "Appends Enter unless press_enter is false.",
   inputSchema: {
     type: "object",
     properties: {
       session_id: { type: "string" },
+      pane_id: { type: "string" },
       text: { type: "string" },
       press_enter: { type: "boolean" },
     },
-    required: ["session_id", "text"],
+    required: ["text"],
   },
   handler: async (args) => {
     const p = args as {
-      session_id: string;
+      session_id?: string;
+      pane_id?: string;
       text: string;
       press_enter?: boolean;
     };
-    const session = sessions.get(p.session_id);
-    if (!session) throw new Error(`session ${p.session_id} not found`);
+    if (!p.session_id && !p.pane_id) {
+      throw new Error("send_prompt requires either session_id or pane_id");
+    }
     const data = p.text + (p.press_enter === false ? "" : "\r");
-    await invoke("write_pty", { ptyId: session.ptyId, data });
+    let ptyId: number;
+    if (p.session_id) {
+      const session = sessions.get(p.session_id);
+      if (!session) throw new Error(`session ${p.session_id} not found`);
+      ptyId = session.ptyId;
+    } else {
+      const found = findPaneById(p.pane_id!);
+      if (!found) {
+        throw new Error(
+          `pane_id "${p.pane_id}" not found (it may have been closed)`,
+        );
+      }
+      const { pane } = found;
+      const active = pane.surfaces.find((s) => s.id === pane.activeSurfaceId);
+      const terminal =
+        active && active.kind === "terminal"
+          ? active
+          : pane.surfaces.find((s) => s.kind === "terminal");
+      if (!terminal || terminal.kind !== "terminal") {
+        throw new Error(`pane "${p.pane_id}" has no terminal surface`);
+      }
+      ptyId = terminal.ptyId;
+    }
+    await invoke("write_pty", { ptyId, data });
     return { ok: true };
   },
 });
@@ -979,7 +1079,7 @@ registerTool({
     const { tasks } = args as {
       tasks: Array<{
         name: string;
-        agent: AgentType;
+        agent: SpawnAgentType;
         task: string;
         cwd?: string;
         command?: string;
@@ -990,7 +1090,7 @@ registerTool({
     const results: Array<{
       session_id: string;
       name: string;
-      agent: AgentType;
+      agent: SpawnAgentType;
       pid: number | undefined;
       pane_id?: string;
       workspace_id?: string;
@@ -1013,7 +1113,7 @@ registerTool({
         )) as {
           session_id: string;
           name: string;
-          agent: AgentType;
+          agent: SpawnAgentType;
           pid: number | undefined;
           pane_id: string;
           workspace_id: string;
@@ -1373,6 +1473,7 @@ for (const t of [
   ...filesystemTools,
   ...registryMirrorTools,
   ...introspectionTools,
+  ...agenticCoreTools,
 ]) {
   TOOLS.push(t);
 }

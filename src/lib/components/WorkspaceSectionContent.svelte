@@ -1,8 +1,10 @@
 <script lang="ts">
   import { onDestroy, type Component } from "svelte";
   import SidebarBanner from "./SidebarBanner.svelte";
-  import PathStatusLine from "./PathStatusLine.svelte";
-  import WorkspaceDiffPrSubtitle from "./WorkspaceDiffPrSubtitle.svelte";
+  import SidebarSubtitleRow from "./SidebarSubtitleRow.svelte";
+  import ExtensionWrapper from "./ExtensionWrapper.svelte";
+  import { workspaceSubtitleStore } from "../services/workspace-subtitle-registry";
+  import { getExtensionApiById } from "../services/extension-loader";
   import WorkspaceListView from "./WorkspaceListView.svelte";
   import { resolveWorkspaceColor } from "../theme-data";
   import { theme } from "../stores/theme";
@@ -58,7 +60,12 @@
   } from "../stores/ui";
   import { contrastColor } from "../utils/contrast";
   import { agentsStore } from "../services/agent-detection-service";
-  import { rootRailBotStatus } from "../services/rail-attention";
+  import {
+    rootRailBotStatus,
+    workspaceRailBotStatus,
+  } from "../services/rail-attention";
+  import { attentionStore } from "../services/attention-api";
+  import { getAllPanes } from "../types";
   import { variantColor } from "../status-colors";
   import { shortcutHintsActive } from "../stores/shortcut-hints";
   import { modLabel } from "../terminal-service";
@@ -145,34 +152,87 @@
       )
     : new Set<string>();
 
-  // Most-active bot status across all workspaces in this workspace.
+  // Most-active bot status across the Root workspace's own surfaces.
+  // Precedence is derived from the same rail-attention pipeline that
+  // drives the rail hat (attention → thinking → idle), so the banner
+  // badge and the rail can't disagree.  Counts are scoped to the root
+  // workspace only — branch banners roll up their own status separately.
   $: workspaceAgents = $agentsStore.filter((a) => filterIds.has(a.workspaceId));
-  $: workspaceBotStatus = (() => {
-    if (workspaceAgents.length === 0) return null;
-    const running = workspaceAgents.filter(
-      (a) => a.status === "running" || a.status === "active",
-    ).length;
-    const waiting = workspaceAgents.filter(
-      (a) => a.status === "waiting",
-    ).length;
-    const idle = workspaceAgents.filter((a) => a.status === "idle").length;
-    if (running > 0)
-      return { label: `${running} running`, color: variantColor("success") };
-    if (waiting > 0)
-      return { label: `${waiting} waiting`, color: variantColor("warning") };
-    if (idle > 0)
-      return { label: `${idle} idle`, color: variantColor("muted") };
-    return null;
-  })();
 
   // Rail bot status — collapsed-mode signal for the rail. Scope is
   // intentionally Root + all branches (worktree AND dashboard branches,
   // both live in branchedWorkspaceIds). This is the only bot-status
   // surface in collapsed mode; banner-level workspaceBotStatus above
   // stays root-only by design.
+  $: paneIdsByWorkspaceId = (() => {
+    if (!workspace) return new Map<string, string[]>();
+    const scopeIds = [workspace.id, ...workspace.branchedWorkspaceIds];
+    const map = new Map<string, string[]>();
+    for (const wsId of scopeIds) {
+      const ws = $workspaces.find((w) => w.id === wsId);
+      if (!ws || !ws.paneLayout) continue;
+      map.set(
+        wsId,
+        getAllPanes(ws.paneLayout).map((p) => p.id),
+      );
+    }
+    return map;
+  })();
   $: railBotStatus = workspace
-    ? rootRailBotStatus(workspace, $agentsStore)
+    ? rootRailBotStatus(
+        workspace,
+        $agentsStore,
+        $attentionStore,
+        paneIdsByWorkspaceId,
+      )
     : ("none" as const);
+
+  // Banner badge precedence — root-only scope. Reuses the same
+  // rail-attention helper so badge + rail can't disagree on state.
+  // Label counts come from the canonical agentsStore for thinking/idle
+  // and from a union of (waiting agents ∪ panes with attention events)
+  // for the attention state, so OSC-driven attention counts even when
+  // DetectedAgent.status hasn't flipped to "waiting" yet.
+  $: rootPaneIds = workspace
+    ? (paneIdsByWorkspaceId.get(workspace.id) ?? [])
+    : [];
+  $: bannerRailBotStatus = workspace
+    ? workspaceRailBotStatus(
+        workspace.id,
+        rootPaneIds,
+        $agentsStore,
+        $attentionStore,
+      )
+    : ("none" as const);
+  $: workspaceBotStatus = (() => {
+    if (!workspace) return null;
+    if (bannerRailBotStatus === "attention") {
+      const rootPaneSet = new Set(rootPaneIds);
+      const waitingAgents = workspaceAgents.filter(
+        (a) => a.status === "waiting",
+      ).length;
+      const attentionPanes = new Set(
+        $attentionStore
+          .filter((ev) => rootPaneSet.has(ev.paneId))
+          .map((ev) => ev.paneId),
+      ).size;
+      const count = Math.max(waitingAgents, attentionPanes, 1);
+      return { label: `${count} waiting`, color: variantColor("warning") };
+    }
+    if (bannerRailBotStatus === "thinking") {
+      const running = workspaceAgents.filter(
+        (a) => a.status === "running" || a.status === "active",
+      ).length;
+      return { label: `${running} running`, color: variantColor("success") };
+    }
+    if (bannerRailBotStatus === "idle") {
+      const idle = workspaceAgents.filter(
+        (a) => a.status === "idle" || a.status === "done",
+      ).length;
+      return { label: `${idle} idle`, color: variantColor("muted") };
+    }
+    return null;
+  })();
 
   // True when the primary workspace of this workspace is currently active.
   // Makes the banner border solid only when the primary workspace
@@ -311,7 +371,6 @@
     ? resolveWorkspaceColor(workspace.color, $theme)
     : "";
   $: headerFg = workspace ? contrastColor(workspaceHex) : $theme.fg;
-  $: subtitleFg = $theme.fgMuted ?? $theme.fgDim ?? $theme.fg;
   $: dimIconColor = ($theme.fgDim ?? $theme.fgMuted ?? "#888") as string;
 
   let hoveredDashId: string | null = null;
@@ -556,25 +615,29 @@
       </svelte:fragment>
 
       <svelte:fragment slot="banner-subtitle">
-        <div style="pointer-events: auto;">
-          <PathStatusLine
-            target={{
-              id: workspace.id,
-              path: workspace.path,
-              isGit: workspace.isGit,
-            }}
-            fgColor={subtitleFg}
-            iconColor={workspaceHex}
-          />
-        </div>
-        {#if primaryWs}
+        {#each $workspaceSubtitleStore as sub (sub.id)}
+          {@const subApi = getExtensionApiById(sub.source)}
           <div style="pointer-events: auto;">
-            <WorkspaceDiffPrSubtitle
-              workspaceId={primaryWs.id}
-              accentColor={workspaceHex}
-            />
+            <SidebarSubtitleRow color={$theme.fgMuted}>
+              {#if subApi}
+                <ExtensionWrapper
+                  api={subApi}
+                  component={sub.component}
+                  props={{
+                    workspaceId: workspace.id,
+                    accentColor: workspaceHex,
+                  }}
+                />
+              {:else}
+                <svelte:component
+                  this={sub.component as Component}
+                  workspaceId={workspace.id}
+                  accentColor={workspaceHex}
+                />
+              {/if}
+            </SidebarSubtitleRow>
           </div>
-        {/if}
+        {/each}
       </svelte:fragment>
 
       <svelte:fragment slot="btn-row" let:collapsed let:toggle let:showToggle>
@@ -681,14 +744,9 @@
   .dashboard-chip-grid {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     gap: 4px;
-    /* Visible gap above/below the chip strip is 8px on each side.
-       Top: chip-grid padding-top (10px) minus the children container's
-       margin-top: -2px collapse against the banner border = 8px.
-       Bottom: chip-grid padding-bottom (0) plus WorkspaceListView's
-       margin-top: 8px = 8px. Keep these in sync if either neighbor
-       changes its margin contribution. */
-    padding: 10px 8px 0 8px;
+    padding: 6px 8px;
   }
   /* Inside the grid the chip button is absolutely positioned to fill
      its fluid wrapper. The class default `width: 28px` would pin it

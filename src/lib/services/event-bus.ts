@@ -5,6 +5,12 @@
  * subscribe via on()/off(). A Svelte store adapter is available for
  * reactive subscriptions in components.
  */
+// Type-only import — no runtime cycle even though branch-lifecycle.ts
+// imports the eventBus value back. TypeScript strips `import type`.
+import type { BranchLifecycle } from "./branch-lifecycle";
+import type { AttentionEventKind, AttentionEventSource } from "./attention-api";
+import type { AgentType } from "./agent-type";
+
 // --- Event types ---
 
 export type AppEvent =
@@ -66,7 +72,32 @@ export type AppEvent =
       agentName: string;
     }
   | { type: "agent:interrupted"; agentId: string; agentName: string }
-  | { type: "agent:killed"; agentId: string; agentName: string };
+  | { type: "agent:killed"; agentId: string; agentName: string }
+  | {
+      // Emitted whenever a branch's derived lifecycle transitions to a new
+      // value. `from` is null when the branch is observed for the first time.
+      // Extensions react to this without re-deriving from raw inputs.
+      type: "branch:lifecycleChanged";
+      branchId: string;
+      from: BranchLifecycle | null;
+      to: BranchLifecycle;
+    }
+  | {
+      // Emitted by attention-api whenever a new AttentionEvent is appended
+      // to attentionStore. Extensions and chrome that need transition-only
+      // handlers (e.g. play a chime, ping a notification provider) subscribe
+      // here instead of diffing the store themselves.
+      type: "attention:event";
+      paneId: string;
+      surfaceId?: string;
+      agentType?: AgentType;
+      kind: AttentionEventKind;
+      title?: string;
+      body?: string;
+      level?: string;
+      source: AttentionEventSource;
+      createdAt: number;
+    };
 
 export type AppEventType = AppEvent["type"];
 

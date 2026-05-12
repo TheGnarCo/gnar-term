@@ -19,10 +19,6 @@ import {
 import type { ExtensionManifest } from "../extension-types";
 
 import {
-  agenticOrchestratorManifest,
-  registerAgenticOrchestratorExtension,
-} from "../../extensions/agentic-orchestrator";
-import {
   diffViewerManifest,
   registerDiffViewerExtension,
 } from "../../extensions/diff-viewer";
@@ -38,6 +34,10 @@ import {
   spacebaseManifest,
   registerSpacebaseExtension,
 } from "../../extensions/spacebase";
+import {
+  agenticManifest,
+  registerAgenticExtension,
+} from "../../extensions/agentic";
 
 type IncludedExtension = readonly [
   ExtensionManifest,
@@ -51,11 +51,6 @@ type IncludedExtension = readonly [
  * activation is independent per extension.
  */
 export const INCLUDED_EXTENSIONS: readonly IncludedExtension[] = [
-  [
-    agenticOrchestratorManifest,
-    registerAgenticOrchestratorExtension,
-    "agentic-orchestrator",
-  ],
   [diffViewerManifest, registerDiffViewerExtension, "diff-viewer"],
   [claudeSettingsManifest, registerClaudeSettingsExtension, "claude-settings"],
   [
@@ -64,6 +59,7 @@ export const INCLUDED_EXTENSIONS: readonly IncludedExtension[] = [
     "branched-workspaces",
   ],
   [spacebaseManifest, registerSpacebaseExtension, "spacebase"],
+  [agenticManifest, registerAgenticExtension, "agentic"],
 ] as const;
 
 export async function registerIncludedExtensions(

@@ -5,9 +5,9 @@
  * read or write the workspaces store but might race the bootstrap
  * `restoreWorkspaces` call. Pre-unification the equivalent flow was a
  * dedicated `open-preview` pendingAction; on the unified branch every
- * deferred consumer (e.g. the agentic-orchestrator's auto-provision
- * loop) goes through `waitRestored()` instead, so this contract has
- * become the de-facto regression boundary the original test guarded.
+ * deferred consumer (e.g. an extension's auto-provision loop) goes
+ * through `waitRestored()` instead, so this contract has become the
+ * de-facto regression boundary the original test guarded.
  */
 import { describe, it, expect, beforeEach } from "vitest";
 

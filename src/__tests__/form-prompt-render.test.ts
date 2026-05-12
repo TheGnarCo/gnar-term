@@ -61,6 +61,58 @@ describe("FormPrompt rendering", () => {
     expect(container.querySelectorAll("button").length).toBeGreaterThan(0);
   });
 
+  it("renders select options inside <optgroup> elements when options carry a group tag", () => {
+    formPrompt.set({
+      title: "New agentic branch",
+      fields: [
+        {
+          key: "base",
+          label: "Source branch",
+          type: "select",
+          defaultValue: "feat/agentic-core-refresh",
+          options: [
+            {
+              label: "feat/agentic-core-refresh (current)",
+              value: "feat/agentic-core-refresh",
+              group: "Local",
+            },
+            {
+              label: "chore/lint-pass",
+              value: "chore/lint-pass",
+              group: "Local",
+            },
+            {
+              label: "origin/dependabot/bump-vite",
+              value: "origin/dependabot/bump-vite",
+              group: "Remote",
+            },
+            {
+              label: "spike/rust-color-pipeline",
+              value: "spike/rust-color-pipeline",
+              group: "Worktrees",
+            },
+          ],
+        },
+      ],
+      resolve: () => {},
+    });
+
+    const { container } = render(FormPrompt);
+    const optgroups = Array.from(container.querySelectorAll("optgroup"));
+    const labels = optgroups.map((og) => og.getAttribute("label"));
+
+    // Three groups render, in caller-supplied order (locals first, worktrees last).
+    expect(labels).toEqual(["Local", "Remote", "Worktrees"]);
+
+    // Worktree section sits after the local + remote sections.
+    expect(labels.indexOf("Worktrees")).toBeGreaterThan(
+      labels.indexOf("Local"),
+    );
+    expect(labels.indexOf("Worktrees")).toBeGreaterThan(
+      labels.indexOf("Remote"),
+    );
+  });
+
   it("renders just the name field when fired in project mode", () => {
     formPrompt.set({
       title: "New Agent Dashboard",

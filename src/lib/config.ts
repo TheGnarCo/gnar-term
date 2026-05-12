@@ -3,10 +3,10 @@
  *
  * Settings file locations (in priority order):
  *   ./settings.json                     (per-project)
- *   ./gnar-term.json                    (legacy per-project)
+ *   ./gnar-term.json                    (per-project; one-shot migration → settings.json)
  *   ./cmux.json                         (per-project, cmux compat)
  *   ~/.config/gnar-term/settings.json   (global)
- *   ~/.config/gnar-term/gnar-term.json  (legacy global)
+ *   ~/.config/gnar-term/gnar-term.json  (global; one-shot migration → settings.json)
  *   ~/.config/cmux/cmux.json            (global, cmux compat)
  *
  * Runtime state:
@@ -17,11 +17,12 @@ import { invoke } from "@tauri-apps/api/core";
 import { writable, type Readable } from "svelte/store";
 import { getHome, getConfigDir } from "./services/service-helpers";
 import type { ThemeDef } from "./theme-data";
+import { migrateAgentsConfig, type AgentPreset } from "./agents-config";
 
 // --- Types (cmux-compatible + extensions) ---
 
 export interface SurfaceDef {
-  type?: "terminal" | "browser" | "extension" | "preview" | "registry";
+  type?: "terminal" | "browser" | "extension" | "preview" | "registry" | "ssh";
   name?: string;
   command?: string;
   cwd?: string;
@@ -34,10 +35,20 @@ export interface SurfaceDef {
   /** Absolute path to the backing file for preview surfaces. */
   path?: string;
   focus?: boolean;
+  /**
+   * SSH surface config. Present when `type === "ssh"`. Persisted so the
+   * SSH connection can be re-spawned on workspace reload.
+   */
+  sshConfig?: import("./surfaces/ssh-surface").SshSurfaceConfig;
 }
 
 export interface PaneDef {
   surfaces: SurfaceDef[];
+  /**
+   * Optional intended agent hint. Round-trips through serialize/hydrate.
+   * The detection service prefers confirmed detection over this value.
+   */
+  intendedAgent?: import("./services/agent-type").AgentType;
 }
 
 export interface SplitDef {
@@ -83,6 +94,12 @@ export interface WorkspaceTemplate {
     | { kind: "global" }
     | { kind: "workspace"; rootWorkspaceId: string };
   spawnedFromIssues?: number[];
+  /**
+   * Set when this workspace template represents an agentic-Controlled
+   * Workspace (spawned via MCP / agentic dashboard / spawn-helper).
+   * Round-trips through serialize/hydrate via `WorkspaceDef.controlled`.
+   */
+  controlled?: boolean;
   extensionData?: Record<string, unknown>;
 }
 
@@ -139,6 +156,14 @@ export interface WorkspaceDef {
   repoPath?: string;
   // Flags
   locked?: boolean;
+  /**
+   * Persisted "Controlled Workspace" marker. True when the workspace
+   * was spawned through the agentic flow (MCP `spawn_branch`, agentic
+   * dashboard, or spawn-helper). Drives lifecycle-pill visibility and
+   * agentic-dashboard participation. Absent / false on manually-
+   * created branches.
+   */
+  controlled?: boolean;
   // Extension data
   extensionData?: Record<string, unknown>;
 }
@@ -200,6 +225,12 @@ export interface AgentDetectionPattern {
 export interface AgentsConfig {
   knownAgents?: AgentDetectionPattern[];
   idleTimeout?: number;
+  /**
+   * Number of days of inactivity (no git commits, no agent running, no PR)
+   * after which a Worktree Branch is classified as `abandoned`.
+   * Default: 14.
+   */
+  abandonedAfterDays?: number;
 }
 
 /**
@@ -216,6 +247,8 @@ export type { Workspace } from "./types";
  */
 export type { RootWorkspace } from "./stores/workspace";
 
+export { type AgentPreset } from "./agents-config";
+
 export interface GnarTermConfig {
   // gnar-term extensions
   theme?: string;
@@ -226,7 +259,16 @@ export interface GnarTermConfig {
   autoload?: string[]; // workspace command names to launch on startup
   extensions?: Record<string, ExtensionConfig>;
   worktrees?: WorktreesConfig;
-  agents?: AgentsConfig;
+  /**
+   * Agent detection settings — user-tunable pattern entries and idle
+   * timeout for the passive agent-detection service.
+   */
+  agentDetection?: AgentsConfig;
+  /**
+   * Agent spawn presets — launchable agent configurations shown in the
+   * command palette. Different concept from `agentDetection`.
+   */
+  agents?: AgentPreset[];
   /**
    * Per-pseudo-workspace color overrides, keyed by pseudo id
    * (e.g. `"agentic.global"`). Values are slot names from
@@ -279,14 +321,6 @@ export interface ArchivedWorkspaceDef {
   childWorkspaceDefs: (WorkspaceTemplate & { name: string })[];
 }
 
-// --- Config file paths ---
-
-const CONFIG_FILENAMES = [
-  "settings.json",
-  "gnar-term.json", // legacy
-  "cmux.json",
-];
-
 // --- Read/Write via Rust backend ---
 
 let _config: GnarTermConfig = {};
@@ -295,16 +329,32 @@ const _configStore = writable<GnarTermConfig>({});
 export const configStore: Readable<GnarTermConfig> = _configStore;
 
 /**
- * Bring a legacy on-disk config forward to dev's shape. Only rewrites
- * the deltas that would otherwise break behavior on load:
+ * Migration map — transforms an on-disk config into the current shape on
+ * load. Only rewrites the deltas that would otherwise break behavior:
  *   - `SurfaceDef.type === "markdown"` → `"preview"` (the markdown
  *     surface kind was folded into the unified preview surface; the
  *     `path` field is identical, so the rest of the def survives).
+ *   - `agents` (detection shape) → `agentDetection`, with the new
+ *     `agents[]` preset array taking the freed name. See
+ *     `migrateAgentsConfig`.
  * Other dropped fields (e.g. `opacity`) are tolerated as ignored keys.
  */
 export function migrateLoadedConfig(raw: unknown): GnarTermConfig {
   if (!raw || typeof raw !== "object") return {} as GnarTermConfig;
-  const cfg = raw as GnarTermConfig;
+
+  // Migrate agents field: old detection shape → agentDetection; new preset
+  // array → stays as agents. Returns normalised sub-fields + remaining keys.
+  const { agentDetection, agents, otherFields } = migrateAgentsConfig(raw);
+
+  // Rebuild the config object with migrated fields. We spread otherFields first
+  // so that any top-level keys we don't explicitly manage are preserved for
+  // round-trip compat (cmux.json unknown keys survive save → load).
+  const cfg = {
+    ...otherFields,
+    ...(agentDetection !== undefined ? { agentDetection } : {}),
+    ...(agents !== undefined ? { agents } : {}),
+  } as GnarTermConfig;
+
   if (Array.isArray(cfg.commands)) {
     for (const cmd of cfg.commands) {
       if (cmd?.workspace?.layout) {
@@ -348,21 +398,30 @@ export async function loadConfig(
 
   const [home, configDir] = await Promise.all([getHome(), getConfigDir()]);
 
-  // Try per-project config first (higher priority), then global.
-  // Legacy global `gnar-term.json` is still read so existing installs keep
-  // working after the rename to `settings.json`.
-  const paths = [
-    ...CONFIG_FILENAMES, // ./settings.json, ./gnar-term.json, ./cmux.json
-    `${configDir}/settings.json`,
-    `${configDir}/gnar-term.json`,
-    `${home}/.config/cmux/cmux.json`,
+  // Try per-project config first (higher priority), then global. Each
+  // entry is `{ read, writeForward? }`: `read` is the file we try to
+  // load; `writeForward` (if set) is the canonical path to redirect
+  // _configPath to so the next saveConfig writes the new filename and
+  // orphans the old one. This is the migration map — once-per-install:
+  // the next save lands at `writeForward`, after which `read` is never
+  // consulted again.
+  const candidates: { read: string; writeForward?: string }[] = [
+    { read: "settings.json" },
+    { read: "gnar-term.json", writeForward: "settings.json" },
+    { read: "cmux.json" },
+    { read: `${configDir}/settings.json` },
+    {
+      read: `${configDir}/gnar-term.json`,
+      writeForward: `${configDir}/settings.json`,
+    },
+    { read: `${home}/.config/cmux/cmux.json` },
   ];
 
-  for (const path of paths) {
+  for (const { read, writeForward } of candidates) {
     try {
-      const content = await invoke<string>("read_file", { path });
+      const content = await invoke<string>("read_file", { path: read });
       _config = migrateLoadedConfig(JSON.parse(content));
-      _configPath = path;
+      _configPath = writeForward ?? read;
       _configStore.set(_config);
       return _config;
     } catch {}

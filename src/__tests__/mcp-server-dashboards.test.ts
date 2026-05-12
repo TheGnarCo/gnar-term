@@ -195,10 +195,10 @@ describe("MCP dashboard contribution tools", () => {
     it("rejects an autoProvision contribution", async () => {
       seedWorkspace("g1");
       registerDashboardContribution({
-        id: "agentic",
-        source: "agentic-orchestrator",
-        label: "Agentic",
-        actionLabel: "Add Agentic",
+        id: "auto",
+        source: "test-auto",
+        label: "Auto",
+        actionLabel: "Add Auto",
         capPerWorkspace: 1,
         autoProvision: true,
         openAsTab: vi.fn(async () => {}),
@@ -207,7 +207,7 @@ describe("MCP dashboard contribution tools", () => {
       const resp = await dispatch(
         rpc("tools/call", {
           name: "add_dashboard_to_workspace",
-          arguments: { workspace_id: "g1", contribution_id: "agentic" },
+          arguments: { workspace_id: "g1", contribution_id: "auto" },
         }),
       );
       expect((resp as any).error).toBeDefined();
@@ -266,10 +266,10 @@ describe("MCP dashboard contribution tools", () => {
     it("rejects an autoProvision contribution", async () => {
       seedWorkspace("g1");
       registerDashboardContribution({
-        id: "agentic",
-        source: "agentic-orchestrator",
-        label: "Agentic",
-        actionLabel: "Add Agentic",
+        id: "auto",
+        source: "test-auto",
+        label: "Auto",
+        actionLabel: "Add Auto",
         capPerWorkspace: 1,
         autoProvision: true,
         openAsTab: vi.fn(async () => {}),
@@ -278,7 +278,7 @@ describe("MCP dashboard contribution tools", () => {
       const resp = await dispatch(
         rpc("tools/call", {
           name: "remove_dashboard_from_workspace",
-          arguments: { workspace_id: "g1", contribution_id: "agentic" },
+          arguments: { workspace_id: "g1", contribution_id: "auto" },
         }),
       );
       expect((resp as any).error).toBeDefined();

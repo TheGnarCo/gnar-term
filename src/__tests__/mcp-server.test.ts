@@ -25,9 +25,15 @@ const { spawnAgentInWorktreeMock } = vi.hoisted(() => ({
   spawnAgentInWorktreeMock: vi.fn(),
 }));
 
-vi.mock("../lib/services/spawn-helper", () => ({
-  spawnAgentInWorktree: spawnAgentInWorktreeMock,
-}));
+vi.mock("../lib/services/spawn-helper", async () => {
+  const actual = await vi.importActual<
+    typeof import("../lib/services/spawn-helper")
+  >("../lib/services/spawn-helper");
+  return {
+    ...actual,
+    spawnAgentInWorktree: spawnAgentInWorktreeMock,
+  };
+});
 
 const { agentsStoreMock } = vi.hoisted(() => {
   // vi.hoisted runs before imports, so we can't use the svelte/store `writable`
@@ -66,6 +72,14 @@ vi.mock("../lib/services/agent-intervention-service", () => ({
   interruptAgent: interruptAgentMock,
   killAgent: killAgentMock,
   sendKeysToAgent: sendKeysToAgentMock,
+}));
+
+const { getConfigMock } = vi.hoisted(() => ({
+  getConfigMock: vi.fn<() => Record<string, unknown>>().mockReturnValue({}),
+}));
+
+vi.mock("../lib/config", () => ({
+  getConfig: getConfigMock,
 }));
 
 import {
@@ -149,10 +163,12 @@ describe("MCP server JSON-RPC", () => {
         "close_preview",
         "create_preview_file",
         "dispatch_tasks",
+        "emit_attention",
         "file_exists",
         "get_active_pane",
         "get_active_workspace",
         "get_agent_context",
+        "get_pane_agent",
         "get_session_info",
         "get_status_for_workspace",
         "invoke_command",
@@ -188,12 +204,13 @@ describe("MCP server JSON-RPC", () => {
         "send_prompt",
         "set_workspace_lock",
         "spawn_agent",
+        "spawn_branch",
         "spawn_preview",
         "split_pane",
         "write_file",
       ].sort(),
     );
-    expect(names).toHaveLength(46);
+    expect(names).toHaveLength(49);
     for (const t of tools) {
       expect(t).toHaveProperty("inputSchema");
     }
@@ -1433,8 +1450,8 @@ describe("tool metadata", () => {
     }
   });
 
-  it("tool count matches spec (46)", () => {
-    expect(_getToolsForTest()).toHaveLength(46);
+  it("tool count matches spec (49)", () => {
+    expect(_getToolsForTest()).toHaveLength(49);
   });
 });
 
@@ -1442,6 +1459,7 @@ describe("MCP — spawn_agent worktree flag", () => {
   beforeEach(() => {
     invokeMock.mockReset();
     spawnAgentInWorktreeMock.mockReset();
+    getConfigMock.mockReset().mockReturnValue({});
     _resetMcpServerForTest();
     workspaces.set([]);
     activeWorkspaceIdx.set(-1);
@@ -1604,6 +1622,117 @@ describe("MCP — spawn_agent worktree flag", () => {
       ctx,
     );
     expect(spawnAgentInWorktreeMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("resolves agent_preset_name and overlays type/command/taskContext/env (worktree path)", async () => {
+    getConfigMock.mockReturnValue({
+      agents: [
+        {
+          name: "Feature Work",
+          command: "claude --model opus",
+          intendedAgent: "claude",
+          initialPrompt: "Land feature X",
+          env: { CLAUDE_MODEL: "opus" },
+        },
+      ],
+    });
+    spawnAgentInWorktreeMock.mockResolvedValue({
+      surface_id: "s",
+      workspace_id: "w",
+      pane_id: "p",
+      branch: "b",
+      worktree_path: "/x",
+    });
+    const ctx = _testContext(null);
+    await dispatch(
+      rpc("tools/call", {
+        name: "spawn_agent",
+        arguments: {
+          name: "preset-spawn",
+          agent_preset_name: "Feature Work",
+          worktree: { repoPath: "/work/proj" },
+        },
+      }),
+      ctx,
+    );
+    expect(spawnAgentInWorktreeMock).toHaveBeenCalledTimes(1);
+    const arg = spawnAgentInWorktreeMock.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
+    expect(arg).toMatchObject({
+      name: "preset-spawn",
+      agent: "claude-code",
+      command: "claude --model opus",
+      taskContext: "Land feature X",
+      env: { CLAUDE_MODEL: "opus" },
+      repoPath: "/work/proj",
+    });
+  });
+
+  it("explicit args win over agent_preset_name when both are passed (worktree path)", async () => {
+    getConfigMock.mockReturnValue({
+      agents: [
+        {
+          name: "Should Be Overridden",
+          command: "ignored",
+          intendedAgent: "aider",
+          initialPrompt: "ignored prompt",
+        },
+      ],
+    });
+    spawnAgentInWorktreeMock.mockResolvedValue({
+      surface_id: "s",
+      workspace_id: "w",
+      pane_id: "p",
+      branch: "b",
+      worktree_path: "/x",
+    });
+    const ctx = _testContext(null);
+    await dispatch(
+      rpc("tools/call", {
+        name: "spawn_agent",
+        arguments: {
+          name: "explicit-wins",
+          agent: "codex",
+          command: "codex --explicit",
+          agent_preset_name: "Should Be Overridden",
+          worktree: {
+            repoPath: "/work/proj",
+            taskContext: "explicit prompt",
+          },
+        },
+      }),
+      ctx,
+    );
+    const arg = spawnAgentInWorktreeMock.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
+    expect(arg).toMatchObject({
+      agent: "codex",
+      command: "codex --explicit",
+      taskContext: "explicit prompt",
+    });
+  });
+
+  it("errors when neither agent nor agent_preset_name is provided", async () => {
+    const ctx = _testContext(null);
+    const resp = await dispatch(
+      rpc("tools/call", {
+        name: "spawn_agent",
+        arguments: {
+          name: "no-agent",
+          worktree: { repoPath: "/work/proj" },
+        },
+      }),
+      ctx,
+    );
+    expect((resp as any).error?.code).toBe(-32000);
+    expect((resp as any).error?.message).toMatch(
+      /either `agent` or `agent_preset_name` is required/,
+    );
+    expect(spawnAgentInWorktreeMock).not.toHaveBeenCalled();
   });
 });
 

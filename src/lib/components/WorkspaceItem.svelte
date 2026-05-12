@@ -17,10 +17,17 @@
   import { discoEmojiFor, discoColorFor } from "../utils/disco-decoration";
 
   $: isDisco = $theme.name === "Molly Disco";
-  import { getAllSurfaces } from "../types";
+  import { getAllSurfaces, getAllPanes, isBranchedWorkspace } from "../types";
   import type { Workspace } from "../types";
   import { workspaceSurfaceMap } from "../services/workspace-runtime-service";
   import { workspacesStore } from "../stores/workspace";
+  import {
+    branchLifecycleStore,
+    type BranchLifecycle,
+  } from "../services/branch-lifecycle";
+  import { agentsStore } from "../services/agent-detection-service";
+  import { attentionStore } from "../services/attention-api";
+  import { workspaceRailBotStatus } from "../services/rail-attention";
 
   export let workspace: Workspace;
   export let index: number;
@@ -78,8 +85,7 @@
   // Workspaces spawned by a dashboard (Global Agentic or per-workspace)
   // get a bot marker so they're visually distinguishable from plain
   // child workspaces or worktrees. `metadata.spawnedBy` is the §3.2
-  // marker; `parentOrchestratorId` is the pre-migration field we still
-  // honor for legacy user data that has not yet been migrated.
+  // marker.
   // Dashboards are singleton surfaces bound to their workspace;
   // suppress close / rename / right-click affordances so the user
   // interacts with them only via the workspace's tile.
@@ -119,24 +125,71 @@
   $: processStatusStore = getWorkspaceStatusByCategory(workspace.id, "process");
   $: processItems = $processStatusStore;
   $: agentBadges = aggregateAgentBadges(processItems);
-  // Per-row bot status for the rail hat. Precedence (highest first):
-  //   attention (waiting) → thinking (running) → idle (any other
-  //   tracked process item like muted/done) → none.
-  // A waiting agent always wins so the pulse can't be hidden by a
-  // co-resident running or idle agent. Mirrors rootRailBotStatus.
-  $: rowBotStatus = (() => {
-    let sawThinking = false;
-    let sawIdle = false;
-    for (const item of processItems) {
-      if (item.variant === "warning") return "attention" as const;
-      if (item.variant === "success") sawThinking = true;
-      else sawIdle = true;
-    }
-    if (sawThinking) return "thinking" as const;
-    if (sawIdle) return "idle" as const;
-    return "none" as const;
-  })();
+  // Per-row bot status for the rail hat. Derived from the same
+  // pipeline as the Root-level rootRailBotStatus so per-branch hats
+  // and the collapsed-rail hat agree on precedence and stay in sync
+  // with OSC-driven attention events that bypass DetectedAgent.status.
+  $: rowPaneIds = workspace.paneLayout
+    ? getAllPanes(workspace.paneLayout).map((p) => p.id)
+    : [];
+  $: rowBotStatus = workspaceRailBotStatus(
+    workspace.id,
+    rowPaneIds,
+    $agentsStore,
+    $attentionStore,
+  );
   $: subtitleComponents = $workspaceSubtitleStore;
+
+  // Branch lifecycle subtitle — populated only for Controlled
+  // BranchedWorkspaces (spawned through the agentic flow). Manual
+  // branches never set `controlled`, so the lifecycle pill stays
+  // hidden on them — gh-derived "awaiting review" state for a hand-
+  // rolled branch is not a useful signal in the sidebar. Absent when
+  // the producer hasn't synced the workspace yet (e.g. mid-creation)
+  // or for non-branched rows.
+  $: branchLifecycleEntry = (() => {
+    if (!isBranchedWorkspace(workspace)) return null;
+    if (workspace.controlled !== true) return null;
+    return $branchLifecycleStore.get(workspace.branch) ?? null;
+  })();
+  $: lifecycleDisplay = branchLifecycleEntry
+    ? lifecycleLabel(branchLifecycleEntry.lifecycle)
+    : "";
+  $: lifecycleColor = branchLifecycleEntry
+    ? lifecycleColorFor(branchLifecycleEntry.lifecycle)
+    : $theme.fgMuted;
+
+  function lifecycleLabel(state: BranchLifecycle): string {
+    switch (state) {
+      case "draft":
+        return "draft";
+      case "active":
+        return "active";
+      case "awaiting_review":
+        return "awaiting review";
+      case "in_review":
+        return "in review";
+      case "merged":
+        return "merged";
+      case "abandoned":
+        return "abandoned";
+    }
+  }
+  function lifecycleColorFor(state: BranchLifecycle): string {
+    switch (state) {
+      case "active":
+        return $theme.accent;
+      case "awaiting_review":
+      case "in_review":
+        return $theme.notify;
+      case "merged":
+      case "abandoned":
+        return $theme.fgDim;
+      case "draft":
+      default:
+        return $theme.fgMuted;
+    }
+  }
 
   export async function startRename(): Promise<void> {
     await labelComponent?.startRename();
@@ -198,7 +251,7 @@
     style="flex: 1; min-width: 0;"
   >
     <div
-      style="padding: 0 24px 0 2px; display: flex; align-items: center; gap: 8px;"
+      style="padding: 0 0 0 2px; display: flex; align-items: center; gap: 8px;"
     >
       <div
         style="flex: 1; overflow: hidden; display: flex; align-items: center; gap: 4px;"
@@ -320,9 +373,26 @@
           <WorktreeIcon size={10} />
         </span>
         <span
-          style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+          style="min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
         >
           {worktreeDirName}
+        </span>
+      </SidebarSubtitleRow>
+    {/if}
+
+    {#if branchLifecycleEntry && !hideStatusBadges}
+      <SidebarSubtitleRow
+        data-workspace-branch-lifecycle={branchLifecycleEntry.lifecycle}
+        color={lifecycleColor}
+        title={branchLifecycleEntry.reason ??
+          `Branch lifecycle: ${lifecycleDisplay}`}
+      >
+        <span
+          style="min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+        >
+          {lifecycleDisplay}{#if !branchLifecycleEntry.prStateKnown}
+            <span style="opacity: 0.7;"> · gh offline</span>
+          {/if}
         </span>
       </SidebarSubtitleRow>
     {/if}
@@ -333,9 +403,9 @@
         color={$theme.danger}
         title="Workspace root path no longer exists on disk"
       >
-        <span aria-hidden="true">⚠</span>
+        <span aria-hidden="true" style="flex-shrink: 0;">⚠</span>
         <span
-          style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+          style="min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
           >path missing</span
         >
       </SidebarSubtitleRow>

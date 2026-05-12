@@ -400,9 +400,8 @@ function matchesSpec(s: Surface, spec: DashboardTabSpec): boolean {
  *
  * No-op if the workspace doesn't exist or no matching tab is found.
  * Iterates every pane so callers don't need to know which split holds
- * the dashboard. Returns the count of removed tabs (typically 0 or 1;
- * the matchProps contract guarantees only one matching surface, but
- * legacy state may carry duplicates).
+ * the dashboard. Returns the count of removed tabs (typically 0 or 1,
+ * since the matchProps contract guarantees a single matching surface).
  */
 export function closeDashboardSurfaceTab(
   rootWorkspaceId: string,
@@ -430,8 +429,8 @@ export function closeDashboardSurfaceTab(
  * toggle to retire a contribution's tab without needing to know the
  * surfaceTypeId / matchProps the contribution used to open itself.
  *
- * Returns the count of removed tabs (typically 0 or 1, but loops every
- * pane in case legacy state has duplicates).
+ * Returns the count of removed tabs (typically 0 or 1; loops every pane
+ * so callers don't need to know which split holds the contribution).
  */
 export function closeDashboardContributionTab(
   rootWorkspaceId: string,

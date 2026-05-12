@@ -29,7 +29,7 @@
   import {
     bannerCollapsedState,
     setBannerCollapsed,
-    sidebarVisible,
+    pointerInsideWindow,
   } from "../stores/ui";
   import SidebarElement from "./SidebarElement.svelte";
   import SidebarRail from "./SidebarRail.svelte";
@@ -125,12 +125,17 @@
    * Number of dashboard chips this banner will render in its
    * children-leading slot. Combined with `nonDashboardCount` it
    * determines whether the banner is expandable and whether the
-   * children container renders. Default 0 keeps the legacy behavior
-   * for callers that haven't migrated.
+   * children container renders.
    */
   export let dashboardCount: number = 0;
 
   let bannerHovered = false;
+
+  // Force-clear hover when the cursor leaves the window. The banner
+  // sits flush with the viewport's left edge — fast exits via that
+  // edge can skip the row's own `mouseleave`. `pointerInsideWindow`
+  // is the app-wide signal for that condition.
+  $: if (!$pointerInsideWindow && bannerHovered) bannerHovered = false;
 
   // Wrapper-level click for the banner body. The visible bar, the
   // banner-subtitle slots, and any empty space in the row should all
@@ -185,14 +190,6 @@
   $: WorkspaceListViewResolved = (workspaceListViewComponent ??
     DefaultWorkspaceListView) as Component;
 </script>
-
-<!-- The banner sits flush with the viewport's left edge. When the
-     cursor exits through that edge fast (or out the top into the title
-     bar on Linux/WebKitGTK), the row's own `mouseleave` can be skipped,
-     leaving the bar stuck in its hovered state. A body-level
-     mouseleave is the authoritative "cursor left the app" signal —
-     when it fires we know no DOM element should be considered hovered. -->
-<svelte:body on:mouseleave={() => (bannerHovered = false)} />
 
 {#if parentColor}
   <!-- Nested variant — bar only, with left-edge colored accent. Uses
@@ -381,13 +378,15 @@
           data-dashboard-count={dashboardCount}
           style="
             display: flex; flex-direction: column;
-            {!$sidebarVisible
-            ? `margin-right: 4px;
-                 background: ${$theme.sidebarBg ?? $theme.bg ?? '#000'}cc;
-                 backdrop-filter: blur(10px);
-                 -webkit-backdrop-filter: blur(10px);
-                 border-radius: 0 0 6px 0;`
-            : 'margin-left: -2px; margin-top: -2px;'}
+            margin: 0 4px 0 0;
+            padding: 2px 0;
+            background: {$theme.bgSurface ?? '#000000'}55;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: 6px;
+            box-shadow: 0 0 10px 0 {$theme.bgSurface ?? '#000000'}40;
+            -webkit-mask-image: radial-gradient(120% 130% at 50% 0%, rgba(0,0,0,1) 70%, rgba(0,0,0,0.85) 100%);
+            mask-image: radial-gradient(120% 130% at 50% 0%, rgba(0,0,0,1) 70%, rgba(0,0,0,0.85) 100%);
           "
           transition:slide={{ duration: 200 }}
         >

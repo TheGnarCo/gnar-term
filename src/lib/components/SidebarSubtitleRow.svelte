@@ -2,7 +2,7 @@
   /** Foreground text color for the row. */
   export let color: string;
   /** CSS padding shorthand. Defaults match the worktree/subtitle rows. */
-  export let padding: string = "0 24px 2px 2px";
+  export let padding: string = "0 0 0 2px";
   /** Font size in pixels. Defaults to 11; pass 10 for compact status rows. */
   export let fontSize: number = 11;
   /** Optional opacity (e.g. 0.85 for status badges). */

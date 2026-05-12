@@ -1,30 +1,35 @@
 <script lang="ts">
-  import { getContext } from "svelte";
+  /**
+   * WorkspaceAgentRow — per-agent child row rendered under a Workspace
+   * banner. Click focuses the agent's surface.
+   *
+   * Registered by core in init-agent-status.ts under the "agent-row" kind.
+   * Receives `{ id }` (the agent id) and looks up the live agent reactively
+   * from agentsStore; renders nothing when the agent has exited.
+   */
   import { derived, get } from "svelte/store";
-  import { EXTENSION_API_KEY, type ExtensionAPI } from "../../api";
+  import { agentsStore } from "../services/agent-detection-service";
+  import { focusSurfaceById } from "../services/surface-service";
 
-  const { id }: { id: string } = $props();
+  export let id: string;
 
-  const api = getContext<ExtensionAPI>(EXTENSION_API_KEY);
-
-  // Look up the agent by id. Null when not found — component renders nothing.
   const agent = derived(
-    api.agents,
+    agentsStore,
     ($agents) => $agents.find((a) => a.agentId === id) ?? null,
   );
 
   function handleClick() {
     const current = get(agent);
-    if (current) api.focusSurface(current.surfaceId);
+    if (current) focusSurfaceById(current.surfaceId);
   }
 </script>
 
 {#if $agent}
   <button
     type="button"
-    class="agent-row-banner"
+    class="agent-row"
     data-agent-row={id}
-    onclick={handleClick}
+    on:click={handleClick}
   >
     <span class="agent-name">{$agent.agentName}</span>
     <span class="status-pill" data-status={$agent.status}>{$agent.status}</span>
@@ -32,7 +37,7 @@
 {/if}
 
 <style>
-  .agent-row-banner {
+  .agent-row {
     display: flex;
     align-items: center;
     gap: 6px;
@@ -47,7 +52,7 @@
     font: inherit;
   }
 
-  .agent-row-banner:hover {
+  .agent-row:hover {
     background: rgba(255, 255, 255, 0.05);
   }
 

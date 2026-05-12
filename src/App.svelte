@@ -71,6 +71,7 @@
   import { initGitStatus } from "./lib/bootstrap/init-git-status";
   import { initPreview } from "./lib/bootstrap/init-preview";
   import { initAgentDetectionBootstrap } from "./lib/bootstrap/init-agent-detection";
+  import { initAgentStatus } from "./lib/bootstrap/init-agent-status";
   import { initAttentionApi } from "./lib/services/attention-api";
   import { initBranchLifecycle } from "./lib/services/branch-lifecycle";
   import { startPrStatePoller } from "./lib/services/pr-state-poller";
@@ -701,6 +702,10 @@
     // start them after detection so initial fan-out lands on live subs.
     initAttentionApi();
     initBranchLifecycle();
+    // Per-Workspace agent visibility (subtitle + child rows) ships with
+    // core — registered after branch-lifecycle so the subtitle's
+    // lifecycle pill can read from a live store on first render.
+    initAgentStatus();
     _cleanupPrPoller = startPrStatePoller();
     _cleanupCommitsPoller = startBranchCommitsPoller();
 

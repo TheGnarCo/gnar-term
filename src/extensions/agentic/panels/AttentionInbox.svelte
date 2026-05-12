@@ -8,6 +8,7 @@
     type ExtensionAPI,
     type AttentionEventRef,
   } from "../../api";
+  import { pillStyle, type PaletteKey } from "../palette";
 
   const api = getContext<ExtensionAPI>(EXTENSION_API_KEY);
   const attention = api.attention;
@@ -28,20 +29,20 @@
     return `${Math.floor(diff / 86_400_000)}d ago`;
   }
 
-  function kindClass(kind: AttentionEventRef["kind"]): string {
+  function kindPalette(kind: AttentionEventRef["kind"]): PaletteKey {
     switch (kind) {
       case "awaiting_input":
-        return "kind-awaiting";
+        return "attention";
       case "errored":
-        return "kind-errored";
+        return "error";
       case "completed":
-        return "kind-completed";
+        return "success";
       case "notify":
-        return "kind-notify";
+        return "info";
       case "progress":
-        return "kind-progress";
+        return "neutral";
       default:
-        return "kind-notify";
+        return "info";
     }
   }
 </script>
@@ -62,7 +63,11 @@
       >
         <div class="row-main">
           <span class="row-title">{event.title ?? event.kind}</span>
-          <span class="kind-pill {kindClass(event.kind)}">{event.kind}</span>
+          <span
+            class="kind-pill"
+            data-kind={event.kind}
+            style={pillStyle(kindPalette(event.kind))}>{event.kind}</span
+          >
         </div>
         {#if event.body}
           <p class="row-body">{event.body}</p>
@@ -135,26 +140,5 @@
     padding: 0.1rem 0.35rem;
     border-radius: 3px;
     flex-shrink: 0;
-  }
-
-  .kind-awaiting {
-    background: rgba(234, 179, 8, 0.2);
-    color: #facc15;
-  }
-  .kind-errored {
-    background: rgba(239, 68, 68, 0.2);
-    color: #f87171;
-  }
-  .kind-completed {
-    background: rgba(34, 197, 94, 0.2);
-    color: #4ade80;
-  }
-  .kind-notify {
-    background: rgba(99, 102, 241, 0.2);
-    color: #a5b4fc;
-  }
-  .kind-progress {
-    background: rgba(255, 255, 255, 0.1);
-    color: rgba(255, 255, 255, 0.6);
   }
 </style>

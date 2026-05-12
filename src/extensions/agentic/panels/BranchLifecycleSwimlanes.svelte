@@ -9,6 +9,7 @@
     type ExtensionAPI,
     type BranchLifecycleEntry,
   } from "../../api";
+  import { pillStyle, type PaletteKey } from "../palette";
 
   const COLUMNS = [
     "draft",
@@ -18,6 +19,14 @@
     "merged",
   ] as const;
   type Column = (typeof COLUMNS)[number];
+
+  const COLUMN_PALETTE: Record<Column, PaletteKey> = {
+    draft: "neutral",
+    active: "success",
+    awaiting_review: "attention",
+    in_review: "info",
+    merged: "accent",
+  };
 
   const api = getContext<ExtensionAPI>(EXTENSION_API_KEY);
   const branchLifecycle = api.branchLifecycle;
@@ -106,7 +115,11 @@
               onclick={() => handleCardClick(branchId)}
             >
               <span class="branch-id">{branchId}</span>
-              <span class="lifecycle-pill pill-{col}">{entry.lifecycle}</span>
+              <span
+                class="lifecycle-pill"
+                data-lifecycle={col}
+                style={pillStyle(COLUMN_PALETTE[col])}>{entry.lifecycle}</span
+              >
               {#if entry.reason}
                 <span class="branch-reason">{entry.reason}</span>
               {/if}
@@ -201,25 +214,5 @@
     padding: 0.1rem 0.35rem;
     border-radius: 3px;
     align-self: flex-start;
-  }
-
-  .pill-draft {
-    background: rgba(255, 255, 255, 0.1);
-  }
-  .pill-active {
-    background: rgba(34, 197, 94, 0.2);
-    color: #4ade80;
-  }
-  .pill-awaiting_review {
-    background: rgba(234, 179, 8, 0.2);
-    color: #facc15;
-  }
-  .pill-in_review {
-    background: rgba(99, 102, 241, 0.2);
-    color: #a5b4fc;
-  }
-  .pill-merged {
-    background: rgba(168, 85, 247, 0.2);
-    color: #c084fc;
   }
 </style>

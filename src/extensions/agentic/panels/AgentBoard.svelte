@@ -8,6 +8,7 @@
     type ExtensionAPI,
     type AgentRef,
   } from "../../api";
+  import { pillStyle, type PaletteKey } from "../palette";
 
   const api = getContext<ExtensionAPI>(EXTENSION_API_KEY);
   const agents = api.agents;
@@ -27,18 +28,18 @@
     api.focusSurface(surfaceId);
   }
 
-  function statusClass(status: string): string {
+  function statusPalette(status: string): PaletteKey {
     switch (status) {
       case "running":
-        return "status-running";
+        return "success";
       case "awaiting_input":
-        return "status-awaiting";
+        return "attention";
       case "errored":
-        return "status-errored";
+        return "error";
       case "completed":
-        return "status-completed";
+        return "info";
       default:
-        return "status-idle";
+        return "neutral";
     }
   }
 </script>
@@ -61,7 +62,10 @@
             onkeydown={(e) => e.key === "Enter" && handleFocus(agent.surfaceId)}
           >
             <span class="agent-name">{agent.agentName}</span>
-            <span class="status-pill {statusClass(agent.status)}"
+            <span
+              class="status-pill"
+              data-status={agent.status}
+              style={pillStyle(statusPalette(agent.status))}
               >{agent.status}</span
             >
           </div>
@@ -129,26 +133,5 @@
     border-radius: 3px;
     text-transform: lowercase;
     flex-shrink: 0;
-  }
-
-  .status-running {
-    background: rgba(34, 197, 94, 0.2);
-    color: #4ade80;
-  }
-  .status-awaiting {
-    background: rgba(234, 179, 8, 0.2);
-    color: #facc15;
-  }
-  .status-errored {
-    background: rgba(239, 68, 68, 0.2);
-    color: #f87171;
-  }
-  .status-completed {
-    background: rgba(99, 102, 241, 0.2);
-    color: #a5b4fc;
-  }
-  .status-idle {
-    background: rgba(255, 255, 255, 0.1);
-    color: rgba(255, 255, 255, 0.5);
   }
 </style>

@@ -505,10 +505,10 @@ export async function confirmAndCloseWorkspace(
           key: "action",
           label: "What should happen to the worktree?",
           type: "select",
-          defaultValue: "keep",
+          defaultValue: "delete",
           options: [
-            { label: "Keep worktree on disk", value: "keep" },
             { label: "Delete worktree (git worktree remove)", value: "delete" },
+            { label: "Keep worktree on disk", value: "keep" },
           ],
         },
       ],
@@ -554,13 +554,13 @@ export async function handleWorkspaceClosed(id: string): Promise<void> {
           key: "action",
           label: "What should happen to the worktree?",
           type: "select",
-          defaultValue: "keep",
+          defaultValue: "delete",
           options: [
-            { label: "Keep worktree on disk", value: "keep" },
             {
               label: "Delete worktree (git worktree remove)",
               value: "delete",
             },
+            { label: "Keep worktree on disk", value: "keep" },
           ],
         },
       ],

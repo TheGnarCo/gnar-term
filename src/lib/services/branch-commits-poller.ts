@@ -12,6 +12,9 @@
  * branch happens on the scale of minutes, not seconds. The first tick
  * fires immediately so newly-created branches resolve their draft state
  * without waiting a full interval.
+ *
+ * Lifecycle (start/stop/in-flight guard) lives in `createPoller`; this
+ * module owns the per-tick body only.
  */
 import { invoke } from "@tauri-apps/api/core";
 import {
@@ -19,11 +22,14 @@ import {
   updateBranchCommitState,
   isWipMessage,
 } from "./branch-lifecycle";
+import { createPoller, type PollerHandle } from "./create-poller";
 
 const POLL_MS = 90_000;
 
-let _timer: ReturnType<typeof setInterval> | null = null;
-let _inFlight = false;
+// One-shot per-branch "did we already log a failure?" gate so a
+// persistently broken `git_branch_commit_subjects` invocation doesn't
+// spam the console on every tick.
+const _warnedBranches = new Set<string>();
 
 /**
  * One poll tick. Fans out one `git_branch_commit_subjects` call per
@@ -33,31 +39,25 @@ let _inFlight = false;
 export async function pollBranchCommitsOnce(
   invokeFn: typeof invoke = invoke,
 ): Promise<void> {
-  if (_inFlight) return;
-  _inFlight = true;
-  try {
-    const branches = listBranchDescriptors();
-    if (branches.length === 0) return;
+  const branches = listBranchDescriptors();
+  if (branches.length === 0) return;
 
-    await Promise.all(
-      branches.map(async ({ branchId, repoPath, branch, baseBranch }) => {
-        if (!repoPath || !baseBranch) return;
-        const subjects = await safeListSubjects(
-          repoPath,
-          baseBranch,
-          branch,
-          invokeFn,
-        );
-        if (subjects === null) return;
-        const hasCommits = subjects.length > 0;
-        const wipOnly =
-          subjects.length > 0 && subjects.every((s) => isWipMessage(s));
-        updateBranchCommitState(branchId, hasCommits, wipOnly);
-      }),
-    );
-  } finally {
-    _inFlight = false;
-  }
+  await Promise.all(
+    branches.map(async ({ branchId, repoPath, branch, baseBranch }) => {
+      if (!repoPath || !baseBranch) return;
+      const subjects = await safeListSubjects(
+        repoPath,
+        baseBranch,
+        branch,
+        invokeFn,
+      );
+      if (subjects === null) return;
+      const hasCommits = subjects.length > 0;
+      const wipOnly =
+        subjects.length > 0 && subjects.every((s) => isWipMessage(s));
+      updateBranchCommitState(branchId, hasCommits, wipOnly);
+    }),
+  );
 }
 
 async function safeListSubjects(
@@ -72,10 +72,23 @@ async function safeListSubjects(
       base,
       branch,
     });
-  } catch {
+  } catch (err) {
+    // Log the first failure per (repo, branch) so a regression in the
+    // invoke surface doesn't silently produce permanently-stale lifecycle
+    // data. Subsequent ticks stay quiet to avoid console spam.
+    const key = `${repoPath}:${branch}`;
+    if (!_warnedBranches.has(key)) {
+      _warnedBranches.add(key);
+      console.warn(
+        `[branch-commits-poller] git_branch_commit_subjects failed for ${repoPath} ${base}..${branch}:`,
+        err,
+      );
+    }
     return null;
   }
 }
+
+let _handle: PollerHandle | null = null;
 
 /**
  * Start the poller. Returns a teardown function. Subsequent calls
@@ -84,15 +97,20 @@ async function safeListSubjects(
 export function startBranchCommitsPoller(
   invokeFn: typeof invoke = invoke,
 ): () => void {
-  stopBranchCommitsPoller();
-  void pollBranchCommitsOnce(invokeFn);
-  _timer = setInterval(() => void pollBranchCommitsOnce(invokeFn), POLL_MS);
-  return stopBranchCommitsPoller;
+  _handle = createPoller({
+    intervalMs: POLL_MS,
+    tick: () => pollBranchCommitsOnce(invokeFn),
+  });
+  return _handle.start();
 }
 
 export function stopBranchCommitsPoller(): void {
-  if (_timer) {
-    clearInterval(_timer);
-    _timer = null;
-  }
+  _handle?.stop();
+}
+
+/** Test-only: reset the per-branch warn gate so warning tests start clean. */
+export function _resetBranchCommitsPollerForTests(): void {
+  _warnedBranches.clear();
+  _handle?.stop();
+  _handle = null;
 }

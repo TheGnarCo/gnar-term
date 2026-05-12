@@ -355,9 +355,13 @@ describe("BranchLifecycle: gh-unavailable fallback", () => {
 describe("markAbandoned", () => {
   it("invokes confirmAndCloseWorkspace for the branch's workspace", async () => {
     vi.mocked(confirmAndCloseWorkspace).mockResolvedValue(true);
+    const { workspaces: workspacesStore } =
+      await import("../lib/stores/workspace");
 
     initBranchLifecycle();
-    await _testHelpers.seedBranch("branch-abandon", {
+    // Match branchId to the workspace's branch field so
+    // syncBranchesFromWorkspaces' orphan-cull pass keeps the seeded entry.
+    await _testHelpers.seedBranch("feat/abandon", {
       repoPath: "/repo",
       branch: "feat/abandon",
       hasCommits: false,
@@ -366,11 +370,43 @@ describe("markAbandoned", () => {
       paneId: null,
       workspaceId: "ws-abandon",
     });
+    (workspacesStore as unknown as { set: (v: unknown[]) => void }).set([
+      makeBranchedWorkspace({
+        id: "ws-abandon",
+        branch: "feat/abandon",
+        repoPath: "/repo",
+        paneId: "pane-abandon",
+      }),
+    ]);
+    // Let the workspaces subscription's syncBranchesFromWorkspaces settle.
+    await new Promise((r) => setTimeout(r, 0));
 
-    await markAbandoned("branch-abandon");
+    await markAbandoned("feat/abandon");
 
-    // Should have called confirmAndCloseWorkspace (the close path)
     expect(confirmAndCloseWorkspace).toHaveBeenCalled();
+    const [wsArg, idxArg] =
+      vi.mocked(confirmAndCloseWorkspace).mock.calls[0] ?? [];
+    expect((wsArg as { id: string }).id).toBe("ws-abandon");
+    expect(idxArg).toBe(0);
+  });
+
+  it("is a no-op when the workspace is gone (no fallback close call)", async () => {
+    vi.mocked(confirmAndCloseWorkspace).mockResolvedValue(true);
+
+    initBranchLifecycle();
+    await _testHelpers.seedBranch("branch-orphan", {
+      repoPath: "/repo",
+      branch: "feat/orphan",
+      hasCommits: false,
+      prState: null,
+      lastActivityAt: NOW_MS,
+      paneId: null,
+      workspaceId: "ws-orphan",
+    });
+
+    await markAbandoned("branch-orphan");
+
+    expect(confirmAndCloseWorkspace).not.toHaveBeenCalled();
   });
 
   it("does not directly mutate the derived store state", async () => {
@@ -513,31 +549,31 @@ describe("BranchLifecycle: service lifecycle", () => {
 // Producer: workspaces store → _branches registry
 // ---------------------------------------------------------------------------
 
-describe("BranchLifecycle: producer (workspaces → registry)", () => {
-  function makeBranchedWorkspace(opts: {
-    id: string;
-    branch: string;
-    repoPath: string;
-    paneId: string;
-    createdAt?: string;
-  }) {
-    return {
-      id: opts.id,
-      name: opts.branch,
-      activePaneId: opts.paneId,
-      paneLayout: {
-        type: "pane" as const,
-        pane: { id: opts.paneId, surfaces: [], activeSurfaceId: null },
-      },
-      rootWorkspaceId: "root-ws",
-      worktreePath: `/repos/wt-${opts.branch}`,
-      branch: opts.branch,
-      baseBranch: "main",
-      repoPath: opts.repoPath,
-      createdAt: opts.createdAt ?? new Date().toISOString(),
-    };
-  }
+function makeBranchedWorkspace(opts: {
+  id: string;
+  branch: string;
+  repoPath: string;
+  paneId: string;
+  createdAt?: string;
+}) {
+  return {
+    id: opts.id,
+    name: opts.branch,
+    activePaneId: opts.paneId,
+    paneLayout: {
+      type: "pane" as const,
+      pane: { id: opts.paneId, surfaces: [], activeSurfaceId: null },
+    },
+    rootWorkspaceId: "root-ws",
+    worktreePath: `/repos/wt-${opts.branch}`,
+    branch: opts.branch,
+    baseBranch: "main",
+    repoPath: opts.repoPath,
+    createdAt: opts.createdAt ?? new Date().toISOString(),
+  };
+}
 
+describe("BranchLifecycle: producer (workspaces → registry)", () => {
   it("creating a BranchedWorkspace produces a lifecycle entry", async () => {
     const { workspaces: workspacesStore } =
       await import("../lib/stores/workspace");

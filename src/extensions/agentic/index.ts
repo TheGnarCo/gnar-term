@@ -2,6 +2,7 @@ import type { ExtensionAPI } from "../api";
 import AgenticIcon from "./AgenticIcon.svelte";
 import AgenticDashboardBody from "./AgenticDashboardBody.svelte";
 import { attentionPulseStore } from "./stores/attention-pulse";
+import { registerWorkspaceContributions } from "./contributions/register-workspace-contributions";
 
 export { agenticManifest } from "./manifest";
 
@@ -22,6 +23,8 @@ export function registerAgenticExtension(api: ExtensionAPI): void {
       isActive,
       onClick: spawnOrNavigate,
     });
+
+    registerWorkspaceContributions(api);
   });
 
   api.onDeactivate(() => {

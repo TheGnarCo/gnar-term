@@ -17,13 +17,18 @@ function makeFakeApi(): {
   const registerGlobalSurfaceSpy = vi.fn(() => spawnOrNavigate);
   const registerTitleBarButtonSpy = vi.fn();
   const attention = writable<unknown[]>([]);
+  const agents = writable<unknown[]>([]);
 
   const api = {
     onActivate: onActivateSpy,
     onDeactivate: onDeactivateSpy,
     registerGlobalSurface: registerGlobalSurfaceSpy,
     registerTitleBarButton: registerTitleBarButtonSpy,
+    registerWorkspaceSubtitle: vi.fn(),
+    registerChildRowContributor: vi.fn(),
+    registerRootRowRenderer: vi.fn(),
     attention,
+    agents,
   } as unknown as ExtensionAPI;
 
   return {

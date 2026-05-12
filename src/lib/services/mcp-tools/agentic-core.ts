@@ -227,6 +227,12 @@ export const agenticCoreTools: ToolDef[] = [
       if (!p.kind) {
         throw new Error("emit_attention: kind is required");
       }
+      const trimmedPaneId = p.paneId.trim();
+      if (!paneExists(trimmedPaneId)) {
+        throw new Error(
+          `emit_attention: paneId "${trimmedPaneId}" does not match any known pane`,
+        );
+      }
 
       const VALID_KINDS = new Set<string>([
         "awaiting_input",
@@ -244,7 +250,7 @@ export const agenticCoreTools: ToolDef[] = [
       const eventId = `ext-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
       pushExternalAttention({
-        paneId: p.paneId.trim(),
+        paneId: trimmedPaneId,
         kind: p.kind as AttentionEventKind,
         title: p.title,
         body: p.body,

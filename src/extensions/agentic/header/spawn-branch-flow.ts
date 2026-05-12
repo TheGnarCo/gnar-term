@@ -62,8 +62,14 @@ async function fetchBaseOptionsViaApi(
         }
       }
     }
-  } catch {
-    // list_branches unavailable — caller falls back to text input.
+  } catch (err) {
+    // list_branches unavailable — caller falls back to a text input for
+    // the source branch. Log so a failed Tauri command shows up in the
+    // console instead of silently degrading.
+    console.warn(
+      "[spawn-branch-flow] list_branches failed; falling back to text input:",
+      err,
+    );
   }
 
   try {
@@ -74,8 +80,10 @@ async function fetchBaseOptionsViaApi(
       if (!wt.branch) continue;
       worktreeNames.add(wt.branch);
     }
-  } catch {
-    // list_worktrees unavailable — non-fatal.
+  } catch (err) {
+    // list_worktrees unavailable — non-fatal; the picker just won't show
+    // the trailing "Worktrees" group. Log so the failure is visible.
+    console.warn("[spawn-branch-flow] list_worktrees failed:", err);
   }
 
   const byName = (a: BaseOption, b: BaseOption) =>

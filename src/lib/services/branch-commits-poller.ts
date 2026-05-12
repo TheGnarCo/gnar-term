@@ -100,6 +100,7 @@ export function startBranchCommitsPoller(
   _handle = createPoller({
     intervalMs: POLL_MS,
     tick: () => pollBranchCommitsOnce(invokeFn),
+    onError: (err) => console.warn("[branch-commits-poller] tick failed:", err),
   });
   return _handle.start();
 }

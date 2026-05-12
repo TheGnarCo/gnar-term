@@ -213,6 +213,7 @@ export function startPrStatePoller(
   _handle = createPoller({
     intervalMs: POLL_MS,
     tick: () => pollPrStateOnce(invokeFn),
+    onError: (err) => console.warn("[pr-state-poller] tick failed:", err),
   });
   return _handle.start();
 }

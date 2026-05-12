@@ -69,6 +69,15 @@ vi.mock("../lib/services/worktree-service", () => ({
   getWorktreeSettings: vi.fn().mockReturnValue({}),
 }));
 
+// pane-lookup is consulted by emit_attention to validate paneId. Default
+// behaviour for these tests: pretend every paneId refers to a known pane;
+// individual tests can override paneExists to exercise the failure path.
+const paneExistsMock = vi.fn().mockReturnValue(true);
+vi.mock("../lib/services/pane-lookup", () => ({
+  paneExists: (...args: unknown[]) => paneExistsMock(...args),
+  lookupPaneIntendedAgent: vi.fn().mockReturnValue(null),
+}));
+
 // --- Real attention-api: we want to test actual store writes ---
 // (no mock here — we import the real module)
 
@@ -86,6 +95,8 @@ beforeEach(() => {
   _resetMcpServerForTest();
   resetAttentionApiForTests();
   invokeMock.mockReset();
+  paneExistsMock.mockReset();
+  paneExistsMock.mockReturnValue(true);
 });
 
 // ---------------------------------------------------------------------------
@@ -162,6 +173,33 @@ describe("emit_attention tool", () => {
     const events = get(attentionStore).filter((e) => e.paneId === "pane-xyz");
     expect(events.length).toBeGreaterThan(0);
     expect(events[0]?.kind).toBe("notify");
+  });
+
+  it("failure path — unknown paneId: returns structured error", async () => {
+    const ctx = _testContext(null);
+    paneExistsMock.mockReturnValue(false);
+
+    const resp = await dispatch(
+      {
+        jsonrpc: "2.0",
+        id: 13,
+        method: "tools/call",
+        params: {
+          name: "emit_attention",
+          arguments: {
+            paneId: "pane-nope",
+            kind: "notify",
+          },
+        },
+      },
+      ctx,
+    );
+
+    expect(resp).not.toBeNull();
+    const r = resp as { error?: { code: number; message: string } };
+    expect(r.error).toBeDefined();
+    expect(r.error?.code).toBe(-32000);
+    expect(r.error?.message).toMatch(/does not match any known pane/i);
   });
 
   it("failure path — missing paneId: returns structured error", async () => {

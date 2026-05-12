@@ -206,7 +206,7 @@
 
 {#if showDiff || showPrs || showRemote || prsLoading}
   <div
-    style="display: flex; flex-direction: column; gap: 0; padding: 0 12px 0 6px; overflow: hidden;"
+    style="display: flex; flex-direction: column; gap: 0; padding: 0 24px 0 6px; overflow: hidden;"
   >
     {#if showDiff || showRemote}
       {@const combinedTitle = [
@@ -312,7 +312,7 @@
           <line x1="6" x2="6" y1="9" y2="21" />
         </svg>
         <span
-          style="display: flex; align-items: center; gap: 2px; min-width: 0; overflow: hidden; flex-wrap: wrap;"
+          style="display: flex; align-items: center; gap: 2px; row-gap: 3px; min-width: 0; overflow: hidden; flex-wrap: wrap;"
         >
           {#each prs as p, i (p.number)}
             <!-- svelte-ignore a11y_click_events_have_key_events -->

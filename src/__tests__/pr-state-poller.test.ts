@@ -12,7 +12,12 @@ vi.mock("../lib/services/gh-availability", () => ({
   invalidateGhAvailability: vi.fn(),
 }));
 
-import { pollPrStateOnce } from "../lib/services/pr-state-poller";
+import {
+  pollPrStateOnce,
+  registerRepoForPrTracking,
+  repoOpenPrsStore,
+  _resetPrStatePollerForTests,
+} from "../lib/services/pr-state-poller";
 import {
   branchLifecycleStore,
   _testHelpers,
@@ -23,6 +28,7 @@ interface GhPrFixture {
   number: number;
   title: string;
   state: string;
+  url?: string;
   headRefName: string;
   isDraft: boolean;
 }
@@ -38,9 +44,15 @@ function makeInvoke(
       throw new Error(`unexpected command ${cmd}`);
     }
     const all = prsByRepo[args.repoPath] ?? [];
-    if (args.state === "open") return all.filter((p) => p.state === "OPEN");
+    const withUrl = all.map((p) => ({
+      ...p,
+      url: p.url ?? `https://example/pr/${p.number}`,
+    }));
+    if (args.state === "open") return withUrl.filter((p) => p.state === "OPEN");
     if (args.state === "closed")
-      return all.filter((p) => p.state === "MERGED" || p.state === "CLOSED");
+      return withUrl.filter(
+        (p) => p.state === "MERGED" || p.state === "CLOSED",
+      );
     return [];
   };
 }
@@ -49,10 +61,12 @@ describe("pr-state-poller", () => {
   beforeEach(() => {
     ghAvailableMock.mockReset();
     _testHelpers.clear();
+    _resetPrStatePollerForTests();
   });
 
   afterEach(() => {
     destroyBranchLifecycle();
+    _resetPrStatePollerForTests();
   });
 
   it("is a no-op when gh is unavailable (no invoke calls, no state change)", async () => {
@@ -242,6 +256,93 @@ describe("pr-state-poller", () => {
 
     await pollPrStateOnce(invokeFn);
 
+    expect(invokeFn).not.toHaveBeenCalled();
+  });
+
+  it("publishes per-repo open PRs to repoOpenPrsStore sorted by number desc", async () => {
+    ghAvailableMock.mockResolvedValue(true);
+    await _testHelpers.seedBranch("b1", {
+      repoPath: "/repo",
+      branch: "feat/a",
+      hasCommits: true,
+      prState: null,
+      lastActivityAt: Date.now(),
+      paneId: null,
+    });
+    const invokeFn = vi.fn(
+      makeInvoke({
+        "/repo": [
+          {
+            number: 10,
+            title: "ten",
+            state: "OPEN",
+            headRefName: "feat/a",
+            isDraft: false,
+          },
+          {
+            number: 42,
+            title: "forty-two",
+            state: "OPEN",
+            headRefName: "feat/b",
+            isDraft: true,
+          },
+          {
+            number: 5,
+            title: "merged",
+            state: "MERGED",
+            headRefName: "feat/c",
+            isDraft: false,
+          },
+        ],
+      }),
+    );
+
+    await pollPrStateOnce(invokeFn);
+
+    const list = get(repoOpenPrsStore).get("/repo");
+    expect(list).toBeDefined();
+    // merged PRs do not appear in the open list
+    expect(list!.map((p) => p.number)).toEqual([42, 10]);
+    expect(list![0].isDraft).toBe(true);
+    expect(list![0].url).toBe("https://example/pr/42");
+  });
+
+  it("polls registered repos even when no branch descriptor exists", async () => {
+    ghAvailableMock.mockResolvedValue(true);
+    registerRepoForPrTracking("/root-only-repo");
+    const invokeFn = vi.fn(
+      makeInvoke({
+        "/root-only-repo": [
+          {
+            number: 7,
+            title: "seven",
+            state: "OPEN",
+            headRefName: "main",
+            isDraft: false,
+          },
+        ],
+      }),
+    );
+
+    await pollPrStateOnce(invokeFn);
+
+    const list = get(repoOpenPrsStore).get("/root-only-repo");
+    expect(list?.map((p) => p.number)).toEqual([7]);
+  });
+
+  it("unregister removes a repo from polling (refcounted)", async () => {
+    ghAvailableMock.mockResolvedValue(true);
+    const unregister = registerRepoForPrTracking("/repo");
+    const invokeFn = vi.fn(makeInvoke({}));
+
+    await pollPrStateOnce(invokeFn);
+    expect(invokeFn).toHaveBeenCalled();
+
+    unregister();
+    invokeFn.mockClear();
+
+    await pollPrStateOnce(invokeFn);
+    // No branches, no registered repos — nothing to fetch.
     expect(invokeFn).not.toHaveBeenCalled();
   });
 });

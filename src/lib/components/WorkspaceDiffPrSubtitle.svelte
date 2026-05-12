@@ -1,52 +1,16 @@
-<script context="module" lang="ts">
-  import { writable } from "svelte/store";
-
-  // Module-level PR cache keyed by repoRoot. The collapsed-mode hover
-  // popover reuses the same subtitle instance with a changing
-  // `workspaceId` prop, so without a cache each hover would re-fetch
-  // and re-paint from `prs = null` → loaded, making the popover height
-  // jump as the PR row appears.
-  //
-  // Backing the cache with a writable store (and reassigning the Map
-  // on every update) means subscribers re-derive their displayed list
-  // whenever any row's data lands. Combined with deriving `prs` from
-  // `(repoRoot, $prCacheStore)` rather than imperatively setting it,
-  // this rules out the prior "floating PR" race where the displayed
-  // value briefly held the previous row's PRs after the prop changed
-  // but before the new fetch resolved.
-  //
-  // MUST live in `<script context="module">` — vars in the per-instance
-  // `<script>` are scoped per component instance, not shared across
-  // mounts, so an in-instance cache would defeat the purpose.
-  export interface GhPrListItem {
-    number: number;
-    title: string;
-    state: string;
-    url: string;
-    headRefName: string;
-    isDraft: boolean;
-  }
-  const prCacheStore = writable(new Map<string, GhPrListItem[]>());
-  function setPrCache(root: string, value: GhPrListItem[]): void {
-    prCacheStore.update((m) => {
-      const next = new Map(m);
-      next.set(root, value);
-      return next;
-    });
-  }
-</script>
-
 <script lang="ts">
   /**
    * WorkspaceDiffPrSubtitle — compact diff + PR statusline for individual
    * workspace rows. Registered via workspace-subtitle-registry at priority 20.
    *
    * Diff data comes from the git-status-service status registry (already
-   * polled) — no duplicate git polling. PRs are fetched via `gh_list_prs`
-   * (state: "open") on a 5s timer, keyed on the repo root from the branch
-   * item's metadata, and rendered as a comma-separated list of `#N`
-   * clickable links so the row surfaces every open PR for the repo rather
-   * than only the current branch's PR.
+   * polled) — no duplicate git polling. PR data is read from
+   * `repoOpenPrsStore`, the per-repo cache published by `pr-state-poller`.
+   * The subtitle registers its `repoRoot` with the poller on mount so a
+   * root workspace without branched worktrees still gets its PR list
+   * refreshed; the prior 5s `gh_list_prs` poller embedded in this
+   * component was a parallel state source for the same data and has
+   * been removed.
    */
   import { onDestroy } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
@@ -56,6 +20,11 @@
   import { workspaces } from "../stores/workspace";
   import { isBranchedWorkspace } from "../types";
   import type { StatusItem } from "../types/status";
+  import {
+    repoOpenPrsStore,
+    registerRepoForPrTracking,
+    type OpenPrListItem,
+  } from "../services/pr-state-poller";
 
   export let workspaceId: string;
   export let accentColor: string | undefined = undefined;
@@ -136,65 +105,39 @@
       ].filter(Boolean)
     : [];
 
-  let prTimer: ReturnType<typeof setInterval> | null = null;
-  let lastRepoRoot: string | null = null;
+  // Track the currently-registered repoRoot so reactive `repoRoot` changes
+  // can unregister the previous root before registering the new one. Without
+  // this the poller's refcount would leak whenever a row remounts onto a
+  // different repo.
+  let _unregister: (() => void) | null = null;
+  let _trackedRoot: string | null = null;
 
-  const PR_REFRESH_MS = 5_000;
-
-  // Derive both `prs` and `prInitialResolved` directly from the
-  // current `repoRoot` and the cache store. Imperative assignment
-  // would let `prs` lag behind a `repoRoot` change long enough to
-  // briefly paint the previous row's PRs — exactly the "floating PR"
-  // bug. Derived state ties the displayed list to the row identity
-  // by construction.
-  $: prs = repoRoot ? ($prCacheStore.get(repoRoot) ?? null) : null;
-  $: prInitialResolved = repoRoot ? $prCacheStore.has(repoRoot) : true;
-
-  async function refreshPr(root: string): Promise<void> {
-    try {
-      const result = await invoke<GhPrListItem[]>("gh_list_prs", {
-        repoPath: root,
-        state: "open",
-      });
-      // Sort by PR number descending so the most recent PRs come first.
-      const sorted = [...(result ?? [])].sort((a, b) => b.number - a.number);
-      setPrCache(root, sorted);
-    } catch {
-      // Transient failure: don't clobber a known-good cache entry,
-      // but seed an empty list if we have no prior answer so the
-      // placeholder reservation can clear.
-      prCacheStore.update((m) => {
-        if (m.has(root)) return m;
-        const next = new Map(m);
-        next.set(root, []);
-        return next;
-      });
-    }
+  $: if (isRootWorkspace && repoRoot && repoRoot !== _trackedRoot) {
+    _unregister?.();
+    _unregister = registerRepoForPrTracking(repoRoot);
+    _trackedRoot = repoRoot;
+  }
+  $: if ((!isRootWorkspace || !repoRoot) && _trackedRoot) {
+    _unregister?.();
+    _unregister = null;
+    _trackedRoot = null;
   }
 
-  function startPrPolling(root: string): void {
-    if (prTimer) clearInterval(prTimer);
-    lastRepoRoot = root;
-    void refreshPr(root);
-    prTimer = setInterval(() => void refreshPr(root), PR_REFRESH_MS);
-  }
+  onDestroy(() => {
+    _unregister?.();
+    _unregister = null;
+    _trackedRoot = null;
+  });
 
-  function stopPrPolling(): void {
-    if (prTimer) {
-      clearInterval(prTimer);
-      prTimer = null;
-    }
-  }
-
-  $: if (repoRoot && repoRoot !== lastRepoRoot) {
-    startPrPolling(repoRoot);
-  }
-  $: if (!repoRoot && lastRepoRoot) {
-    stopPrPolling();
-    lastRepoRoot = null;
-  }
-
-  onDestroy(() => stopPrPolling());
+  // Derive `prs` and `prInitialResolved` from the shared store. Tying the
+  // displayed list to the row identity by construction rules out the
+  // prior "floating PR" race where the previous row's PRs briefly
+  // painted after `repoRoot` changed but before the new fetch resolved.
+  $: prs = repoRoot
+    ? (($repoOpenPrsStore.get(repoRoot) as OpenPrListItem[] | undefined) ??
+      null)
+    : null;
+  $: prInitialResolved = repoRoot ? $repoOpenPrsStore.has(repoRoot) : true;
 
   $: showPrs = isRootWorkspace && prs !== null && prs.length > 0;
   // True for root workspaces whose PR fetch hasn't returned yet.
@@ -342,7 +285,7 @@
       <!-- Skeleton placeholder: same structure and dimensions as the
            real PR row but invisible. Reserves vertical space so the
            hover popover paints at its loaded height even on the very
-           first hover, before `gh_view_pr` resolves. -->
+           first hover, before the poller resolves. -->
       <div
         data-pr-row-placeholder
         aria-hidden="true"

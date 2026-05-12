@@ -137,7 +137,7 @@
     min-height: {minHeight};
     margin: 0 4px 0 0;
     border-radius: 0 6px 6px 0;
-    overflow: hidden;
+    overflow: visible;
     cursor: pointer;
     background: {isActive
     ? $theme.bgActive

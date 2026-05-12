@@ -223,7 +223,7 @@
 
 {#if showDiff || showPr || showRemote || prLoading}
   <div
-    style="display: flex; flex-direction: column; gap: 1px; padding: 0 12px 0 6px; overflow: hidden;"
+    style="display: flex; flex-direction: column; gap: 0; padding: 0 12px 0 6px; overflow: hidden;"
   >
     {#if showDiff || showRemote}
       {@const combinedTitle = [
@@ -329,7 +329,8 @@
         <!-- svelte-ignore a11y_click_events_have_key_events -->
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <span
-          style="font-size: 10px; color: {prColor}; white-space: nowrap; flex-shrink: 0; text-decoration: underline; cursor: pointer;"
+          class="pr-link"
+          style="font-size: 10px; color: {prColor}; white-space: nowrap; flex-shrink: 0; cursor: pointer;"
           on:click|stopPropagation={() =>
             pr && invoke("open_url", { url: pr.url })}
         >
@@ -361,3 +362,12 @@
     {/if}
   </div>
 {/if}
+
+<style>
+  .pr-link {
+    text-decoration: none;
+  }
+  .pr-link:hover {
+    text-decoration: underline;
+  }
+</style>

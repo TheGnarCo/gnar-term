@@ -1,15 +1,31 @@
 import type { ExtensionAPI } from "../api";
+import AgenticIcon from "./AgenticIcon.svelte";
+import AgenticDashboardBody from "./AgenticDashboardBody.svelte";
+import { attentionPulseStore } from "./stores/attention-pulse";
 
 export { agenticManifest } from "./manifest";
 
 export function registerAgenticExtension(api: ExtensionAPI): void {
   api.onActivate(() => {
-    // Real registrations land in later cycles. This shell exists so
-    // INCLUDED_EXTENSIONS can wire the manifest and the extension
-    // can be enabled in user config without errors.
+    const spawnOrNavigate = api.registerGlobalSurface("dashboard", {
+      label: "Agentic",
+      icon: AgenticIcon,
+      component: AgenticDashboardBody,
+      accentColor: "#A855F7",
+    });
+
+    const isActive = attentionPulseStore(api);
+
+    api.registerTitleBarButton("agentic", {
+      icon: AgenticIcon,
+      title: "Agentic Dashboard",
+      isActive,
+      onClick: spawnOrNavigate,
+    });
   });
 
   api.onDeactivate(() => {
-    // Mirror onActivate teardown surface. Empty until cycle-2.
+    // api.registerGlobalSurface lifecycle is owned by extension-loader;
+    // it auto-cleans on deactivate. No manual teardown needed for cycle-2.
   });
 }

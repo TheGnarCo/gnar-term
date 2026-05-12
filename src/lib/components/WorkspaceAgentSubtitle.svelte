@@ -132,7 +132,7 @@
   .workspace-agent-subtitle {
     display: flex;
     flex-direction: column;
-    padding: 0 12px 0 6px;
+    padding: 0 0 0 6px;
     overflow: hidden;
     line-height: 1.2;
     flex: 1;

@@ -206,7 +206,7 @@
 
 {#if showDiff || showPrs || showRemote || prsLoading}
   <div
-    style="display: flex; flex-direction: column; gap: 0; padding: 0 0 0 6px; overflow: hidden;"
+    style="display: flex; flex-direction: column; gap: 0; padding: 0 0 0 6px; flex: 1 1 auto; min-width: 0; overflow: hidden;"
   >
     {#if showDiff || showRemote}
       {@const combinedTitle = [

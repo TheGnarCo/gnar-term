@@ -270,6 +270,61 @@ describe("spawn_branch tool", () => {
       expect.objectContaining({
         name: "my-feature",
         agent: "claude-code",
+        repoPath: "/Users/test/repos/my-repo",
+        branch: "my-feature",
+        base: "main",
+        taskContext: "Fix the bug",
+      }),
+    );
+  });
+
+  it("forwards explicit agent.command and trims/normalizes branch + base", async () => {
+    const ws = makeWorkspace();
+    const ctx = _testContext({ workspaceId: ws.id });
+
+    spawnAgentInWorktreeMock.mockResolvedValue({
+      workspace_id: "wt-cmd-ws",
+      pane_id: "wt-cmd-pane",
+      surface_id: "wt-cmd-surf",
+      branch: "weekly-cleanup",
+      worktree_path: "/repos/x-weekly-cleanup",
+    });
+
+    const resp = await dispatch(
+      {
+        jsonrpc: "2.0",
+        id: 42,
+        method: "tools/call",
+        params: {
+          name: "spawn_branch",
+          arguments: {
+            name: "  weekly cleanup  ",
+            base: "  dev  ",
+            repoPath: "/repos/x",
+            agent: {
+              type: "custom",
+              command: "./scripts/run-bot.sh --once",
+              initialPrompt: "Run the nightly bot",
+            },
+          },
+        },
+      },
+      ctx,
+    );
+
+    expect(resp).not.toBeNull();
+    expect(spawnAgentInWorktreeMock).toHaveBeenCalledTimes(1);
+    // Whitespace in name collapses to hyphens for the branch; base is trimmed.
+    // Explicit agent.command forwards verbatim — even for type "custom".
+    expect(spawnAgentInWorktreeMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "weekly cleanup",
+        agent: "custom",
+        command: "./scripts/run-bot.sh --once",
+        taskContext: "Run the nightly bot",
+        repoPath: "/repos/x",
+        branch: "weekly-cleanup",
+        base: "dev",
       }),
     );
   });

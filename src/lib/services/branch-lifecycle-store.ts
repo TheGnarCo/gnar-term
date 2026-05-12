@@ -142,8 +142,19 @@ function syncBranchesFromWorkspaces(): void {
   }
 
   if (mutated) {
-    void recomputeAll();
+    scheduleRecompute();
   }
+}
+
+/**
+ * Fire-and-forget wrapper around recomputeAll(). Logs any rejection instead
+ * of leaving the promise unhandled; lifecycle derivation calls gh + git so
+ * a transient failure shouldn't crash the store but should still be visible.
+ */
+function scheduleRecompute(): void {
+  recomputeAll().catch((err) => {
+    console.error("[branch-lifecycle] recomputeAll failed:", err);
+  });
 }
 
 async function recomputeAll(): Promise<void> {
@@ -232,7 +243,7 @@ export function initBranchLifecycle(prStateProvider?: PrStateProvider): void {
       const t = Date.parse(entry.transitionedAt);
       if (Number.isFinite(t)) bumpBranchActivity(desc.branchId, t);
     }
-    void recomputeAll();
+    scheduleRecompute();
   });
   cleanups.push(unsubState);
 
@@ -248,7 +259,7 @@ export function initBranchLifecycle(prStateProvider?: PrStateProvider): void {
     },
   };
 
-  void recomputeAll();
+  scheduleRecompute();
   void prStateProvider;
 }
 
@@ -293,7 +304,7 @@ export function updateBranchPrState(
   }
   desc.prState = prState;
   desc.lastActivityAt = Date.now();
-  void recomputeAll();
+  scheduleRecompute();
 }
 
 export function updateBranchCommitState(
@@ -307,7 +318,7 @@ export function updateBranchCommitState(
   desc.hasCommits = hasCommits;
   desc.wipOnly = wipOnly;
   desc.lastActivityAt = Date.now();
-  void recomputeAll();
+  scheduleRecompute();
 }
 
 export function bumpBranchActivity(branchId: string, atMs?: number): void {
@@ -316,7 +327,7 @@ export function bumpBranchActivity(branchId: string, atMs?: number): void {
   const next = atMs ?? Date.now();
   if (next <= desc.lastActivityAt) return;
   desc.lastActivityAt = next;
-  void recomputeAll();
+  scheduleRecompute();
 }
 
 /** Iterate over the current branch registry — read-only snapshot. */

@@ -115,9 +115,17 @@ export function resolveAgentPresetForSpawn(
       `agent preset "${presetName}" not found in settings.json agents[]`,
     );
   }
-  const type: SpawnAgentType = preset.intendedAgent
-    ? (INTENDED_AGENT_TO_SPAWN_TYPE[preset.intendedAgent] ?? "custom")
-    : "custom";
+  let type: SpawnAgentType = "custom";
+  if (preset.intendedAgent) {
+    const mapped = INTENDED_AGENT_TO_SPAWN_TYPE[preset.intendedAgent];
+    if (mapped) {
+      type = mapped;
+    } else {
+      console.warn(
+        `[spawn-helper] preset "${preset.name}" intendedAgent="${preset.intendedAgent}" has no SpawnAgentType mapping; falling back to "custom" — preset.command will be used verbatim`,
+      );
+    }
+  }
   const resolved: ResolvedAgentPreset = {
     type,
     command: preset.command,

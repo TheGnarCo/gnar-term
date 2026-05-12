@@ -13,14 +13,18 @@
   <button
     class="header-btn primary"
     data-header-btn="new-branch"
-    onclick={() => openSpawnBranchFlow(api)}
+    onclick={() => {
+      void openSpawnBranchFlow(api);
+    }}
   >
     + New agentic branch
   </button>
   <button
     class="header-btn"
     data-header-btn="preset-library"
-    onclick={() => openPresetLibrary(api)}
+    onclick={() => {
+      void openPresetLibrary(api);
+    }}
   >
     AgentPreset library
   </button>

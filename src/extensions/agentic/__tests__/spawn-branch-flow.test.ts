@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { writable } from "svelte/store";
-import type { ExtensionAPI, AgentPresetRef } from "../../api";
+import type { ExtensionAPI, AgentPresetRef, WorkspaceRef } from "../../api";
 
 // Import after defining mocks (hoisted by vitest)
 import { openSpawnBranchFlow } from "../header/spawn-branch-flow";
@@ -17,8 +17,10 @@ function makePreset(overrides: Partial<AgentPresetRef> = {}): AgentPresetRef {
 function makeFakeApi(
   presets: AgentPresetRef[] = [],
   cwd: string = "/home/user/my-repo",
+  activeWorkspaceValue: WorkspaceRef | null = null,
 ) {
   const agentPresets = writable<AgentPresetRef[]>(presets);
+  const activeWorkspace = writable<WorkspaceRef | null>(activeWorkspaceValue);
   const getActiveCwd = vi.fn().mockResolvedValue(cwd);
   const showFormPrompt = vi
     .fn()
@@ -29,6 +31,7 @@ function makeFakeApi(
 
   const api = {
     agentPresets,
+    activeWorkspace,
     getActiveCwd,
     showFormPrompt,
     invoke,
@@ -38,6 +41,7 @@ function makeFakeApi(
 
   return {
     api,
+    activeWorkspace,
     getActiveCwd,
     showFormPrompt,
     invoke,
@@ -48,6 +52,7 @@ function makeFakeApi(
 
 function makeFakeApiNoCwd(presets: AgentPresetRef[] = []) {
   const agentPresets = writable<AgentPresetRef[]>(presets);
+  const activeWorkspace = writable<WorkspaceRef | null>(null);
   const getActiveCwd = vi
     .fn()
     .mockResolvedValue(undefined as string | undefined);
@@ -58,6 +63,7 @@ function makeFakeApiNoCwd(presets: AgentPresetRef[] = []) {
 
   const api = {
     agentPresets,
+    activeWorkspace,
     getActiveCwd,
     showFormPrompt,
     invoke,
@@ -188,6 +194,40 @@ describe("openSpawnBranchFlow", () => {
     expect(reportError).toHaveBeenCalled();
     expect(invoke).not.toHaveBeenCalled();
     expect(createWorkspaceFromDef).not.toHaveBeenCalled();
+  });
+
+  it("forwards activeWorkspace.id as rootWorkspaceId so the spawn becomes a Branch", async () => {
+    const activeWs = {
+      id: "ws-active-42",
+      name: "active",
+    } as unknown as WorkspaceRef;
+    const { api, createWorkspaceFromDef } = makeFakeApi(
+      [makePreset()],
+      "/home/user/my-repo",
+      activeWs,
+    );
+
+    await openSpawnBranchFlow(api);
+
+    expect(createWorkspaceFromDef).toHaveBeenCalledWith(
+      expect.objectContaining({ rootWorkspaceId: "ws-active-42" }),
+    );
+  });
+
+  it("omits rootWorkspaceId when no active workspace is available", async () => {
+    const { api, createWorkspaceFromDef } = makeFakeApi(
+      [makePreset()],
+      "/home/user/my-repo",
+      null,
+    );
+
+    await openSpawnBranchFlow(api);
+
+    const call = createWorkspaceFromDef.mock.calls[0][0] as Record<
+      string,
+      unknown
+    >;
+    expect(call).not.toHaveProperty("rootWorkspaceId");
   });
 
   it("calls reportError and skips createWorkspaceFromDef when invoke throws", async () => {

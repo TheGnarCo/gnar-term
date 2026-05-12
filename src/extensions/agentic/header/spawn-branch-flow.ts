@@ -30,8 +30,17 @@ export async function openSpawnBranchFlow(api: ExtensionAPI): Promise<void> {
   // Step a: read current presets
   const presets = get(api.agentPresets);
 
-  // Step b: get active cwd as the repo root
-  const repoPath = await api.getActiveCwd();
+  // Step b: capture active workspace + cwd. The active workspace id is
+  // forwarded as `rootWorkspaceId` so the spawned workspace is attached
+  // as a Branch of the triggering workspace rather than a standalone root.
+  const activeWs = get(api.activeWorkspace);
+  let repoPath: string | null | undefined;
+  try {
+    repoPath = await api.getActiveCwd();
+  } catch (err) {
+    api.reportError("Cannot spawn agentic branch: " + (err as Error).message);
+    return;
+  }
   if (!repoPath) {
     api.reportError("Cannot spawn agentic branch: no active workspace cwd");
     return;
@@ -127,6 +136,7 @@ export async function openSpawnBranchFlow(api: ExtensionAPI): Promise<void> {
     await api.createWorkspaceFromDef({
       name,
       cwd: worktreePath,
+      ...(activeWs?.id ? { rootWorkspaceId: activeWs.id } : {}),
       layout: {
         pane: {
           surfaces: [

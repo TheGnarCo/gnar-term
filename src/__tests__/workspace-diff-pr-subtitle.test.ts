@@ -94,8 +94,9 @@ describe("WorkspaceDiffPrSubtitle", () => {
 
     const called = invokeMock.mock.calls.some(
       ([cmd, args]) =>
-        cmd === "gh_view_pr" &&
-        (args as Record<string, unknown>).repoPath === "/repos/project",
+        cmd === "gh_list_prs" &&
+        (args as Record<string, unknown>).repoPath === "/repos/project" &&
+        (args as Record<string, unknown>).state === "open",
     );
     expect(called).toBe(true);
   });
@@ -125,17 +126,18 @@ describe("WorkspaceDiffPrSubtitle", () => {
     const { invoke } = await import("@tauri-apps/api/core");
     const invokeMock = vi.mocked(invoke);
 
-    const fakePr = {
-      number: 42,
-      title: "Cached PR",
-      state: "OPEN",
-      url: "https://example.com/pr/42",
-      headRefName: "feat-x",
-      isDraft: false,
-      ciStatus: "SUCCESS",
-    };
+    const fakePrs = [
+      {
+        number: 42,
+        title: "Cached PR",
+        state: "OPEN",
+        url: "https://example.com/pr/42",
+        headRefName: "feat-x",
+        isDraft: false,
+      },
+    ];
     invokeMock.mockImplementation(async (cmd: string) =>
-      cmd === "gh_view_pr" ? fakePr : null,
+      cmd === "gh_list_prs" ? fakePrs : null,
     );
 
     workspaces.set([makeRootWorkspace("ws-1")]);
@@ -151,13 +153,13 @@ describe("WorkspaceDiffPrSubtitle", () => {
     for (let i = 0; i < 8; i++) await Promise.resolve();
     await tick();
 
-    // Sanity check: gh_view_pr fired at least once on first mount and the
-    // first call resolved with our fake PR (proving the cache should be
+    // Sanity check: gh_list_prs fired at least once on first mount and the
+    // first call resolved with our fake PRs (proving the cache should be
     // populated by now).
     expect(
       invokeMock.mock.calls.some(
         ([cmd, args]) =>
-          cmd === "gh_view_pr" &&
+          cmd === "gh_list_prs" &&
           (args as Record<string, unknown>).repoPath ===
             "/repos/cache-hit-test",
       ),
@@ -182,38 +184,40 @@ describe("WorkspaceDiffPrSubtitle", () => {
   it("never paints the previous row's PR after the workspaceId prop changes", async () => {
     // Regression: the collapsed-rail popover reuses one subtitle
     // instance with a changing `workspaceId` prop. Imperatively-set
-    // `pr` would briefly show row A's PR after switching to row B,
+    // `prs` would briefly show row A's PRs after switching to row B,
     // until the `repoRoot` reactive chain caught up. The fix derives
-    // `pr` from `(repoRoot, prCacheStore)` so the displayed PR can
+    // `prs` from `(repoRoot, prCacheStore)` so the displayed list can
     // never be from a different repo root than the one we're
     // currently rendering.
     const { invoke } = await import("@tauri-apps/api/core");
     const invokeMock = vi.mocked(invoke);
 
-    const prA = {
-      number: 11,
-      title: "PR A",
-      state: "OPEN",
-      url: "https://example.com/pr/11",
-      headRefName: "feat-a",
-      isDraft: false,
-      ciStatus: "SUCCESS",
-    };
-    const prB = {
-      number: 22,
-      title: "PR B",
-      state: "OPEN",
-      url: "https://example.com/pr/22",
-      headRefName: "feat-b",
-      isDraft: false,
-      ciStatus: "SUCCESS",
-    };
+    const prsA = [
+      {
+        number: 11,
+        title: "PR A",
+        state: "OPEN",
+        url: "https://example.com/pr/11",
+        headRefName: "feat-a",
+        isDraft: false,
+      },
+    ];
+    const prsB = [
+      {
+        number: 22,
+        title: "PR B",
+        state: "OPEN",
+        url: "https://example.com/pr/22",
+        headRefName: "feat-b",
+        isDraft: false,
+      },
+    ];
     invokeMock.mockImplementation(async (cmd: string, args?: unknown) => {
-      if (cmd !== "gh_view_pr") return null;
+      if (cmd !== "gh_list_prs") return null;
       const path = (args as { repoPath: string }).repoPath;
-      if (path === "/repos/A") return prA;
-      if (path === "/repos/B") return prB;
-      return null;
+      if (path === "/repos/A") return prsA;
+      if (path === "/repos/B") return prsB;
+      return [];
     });
 
     workspaces.set([makeRootWorkspace("ws-A"), makeRootWorkspace("ws-B")]);
@@ -240,5 +244,68 @@ describe("WorkspaceDiffPrSubtitle", () => {
     for (let i = 0; i < 8; i++) await Promise.resolve();
     await tick();
     expect(view.container.textContent).toMatch(/#22/);
+  });
+
+  it("renders every open PR for the repo as a comma-separated list of clickable links", async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const invokeMock = vi.mocked(invoke);
+
+    const allOpen = [
+      {
+        number: 139,
+        title: "feat: agentic core refresh",
+        state: "OPEN",
+        url: "https://example.com/pr/139",
+        headRefName: "feat/agentic-core-refresh",
+        isDraft: false,
+      },
+      {
+        number: 141,
+        title: "feat: comma-sep PRs",
+        state: "OPEN",
+        url: "https://example.com/pr/141",
+        headRefName: "feat/pr-list",
+        isDraft: true,
+      },
+      {
+        number: 137,
+        title: "fix: old PR",
+        state: "OPEN",
+        url: "https://example.com/pr/137",
+        headRefName: "fix/older",
+        isDraft: false,
+      },
+    ];
+    invokeMock.mockImplementation(async (cmd: string) =>
+      cmd === "gh_list_prs" ? allOpen : null,
+    );
+
+    workspaces.set([makeRootWorkspace("ws-1")]);
+    setBranch("ws-1", "/repos/multi-pr");
+
+    const { container } = render(WorkspaceDiffPrSubtitle, {
+      props: { workspaceId: "ws-1" },
+    });
+    await tick();
+    for (let i = 0; i < 8; i++) await Promise.resolve();
+    await tick();
+
+    // Every PR number should be rendered, each as its own clickable span.
+    const links = Array.from(container.querySelectorAll("[data-pr-number]"));
+    const numbers = links
+      .map((el) => Number(el.getAttribute("data-pr-number")))
+      .sort((a, b) => a - b);
+    expect(numbers).toEqual([137, 139, 141]);
+
+    // Sorted descending by PR number — the rendered order should be 141, 139, 137.
+    const renderedOrder = links.map((el) =>
+      Number(el.getAttribute("data-pr-number")),
+    );
+    expect(renderedOrder).toEqual([141, 139, 137]);
+
+    // Comma separators appear between PRs (n-1 commas for n PRs).
+    const text = container.textContent ?? "";
+    const commaCount = (text.match(/,/g) ?? []).length;
+    expect(commaCount).toBeGreaterThanOrEqual(2);
   });
 });

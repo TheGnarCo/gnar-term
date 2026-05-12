@@ -115,6 +115,21 @@
   $: verticalPadding = isDashboard || compact ? "0px" : "4px";
   $: minHeight = isDashboard ? "30px" : "32px";
   $: innerXPadding = isDashboard ? "8px" : "6px";
+
+  // Child rows nested inside a parent banner render a frosted-glass
+  // background — translucent fill + backdrop-blur — so the terminal
+  // behind shows through rather than being masked by a solid dark
+  // chip. Active rows stay fully opaque so the selected branch reads
+  // crisply against its accent border. Root rows (compact=false) keep
+  // the legacy solid theme bg.
+  $: glass = compact && !isParent;
+  $: idleBg = glass
+    ? `${$theme.bgSurface ?? "#000000"}66`
+    : ($theme.bgSurface ?? "transparent");
+  $: hoverBg = glass
+    ? `${$theme.bgHighlight ?? "#000000"}99`
+    : ($theme.bgHighlight ?? "transparent");
+  $: bg = isActive ? $theme.bgActive : isHovered ? hoverBg : idleBg;
 </script>
 
 <!-- Sidebar rows sit flush with the viewport edge. Fast cursor exits
@@ -139,11 +154,10 @@
     border-radius: 0 6px 6px 0;
     overflow: visible;
     cursor: pointer;
-    background: {isActive
-    ? $theme.bgActive
-    : isHovered
-      ? $theme.bgHighlight
-      : ($theme.bgSurface ?? 'transparent')};
+    background: {bg};
+    {glass && !isActive
+    ? 'backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);'
+    : ''}
     border: 1px solid {isActive
     ? effectiveColor
     : ($theme.border ?? 'transparent')};

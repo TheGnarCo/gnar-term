@@ -3,7 +3,6 @@
   // API is provided via Svelte context (EXTENSION_API_KEY), set by ExtensionWrapper.
   import { getContext } from "svelte";
   import { EXTENSION_API_KEY, type ExtensionAPI } from "../../api";
-  import { openSpawnBranchFlow } from "./spawn-branch-flow";
   import { openBotTaskFlow } from "./bot-task-flow";
   import { openPresetLibrary } from "./preset-library";
 
@@ -11,15 +10,6 @@
 </script>
 
 <div class="dashboard-header">
-  <button
-    class="header-btn"
-    data-header-btn="new-branch"
-    onclick={() => {
-      void openSpawnBranchFlow(api);
-    }}
-  >
-    + New agentic branch
-  </button>
   <button
     class="header-btn primary"
     data-header-btn="new-bot-task"

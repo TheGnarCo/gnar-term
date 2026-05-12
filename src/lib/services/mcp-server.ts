@@ -89,7 +89,9 @@ import {
   spawnAgentInWorktree,
   resolveAgentPresetForSpawn,
   buildStartupCommand,
+  SPAWN_AGENT_TYPES,
   type ResolvedAgentPreset,
+  type SpawnAgentType,
 } from "./spawn-helper";
 import {
   type ConnectionBinding,
@@ -108,13 +110,15 @@ export type McpStatus = "live" | "error" | "disabled" | "pending";
 const _mcpStatus = writable<McpStatus>("pending");
 export const mcpStatus = { subscribe: _mcpStatus.subscribe };
 
-type AgentType = "claude-code" | "codex" | "aider" | "custom";
+// Spawn-side taxonomy lives in `spawn-helper.ts` (the single source of
+// truth). McpSession.agent uses it directly so a new launcher there
+// automatically propagates to MCP session records.
 type SessionStatus = "starting" | "running" | "exited";
 
 interface McpSession {
   session_id: string;
   name: string;
-  agent: AgentType;
+  agent: SpawnAgentType;
   pid: number | undefined;
   status: SessionStatus;
   cwd: string;
@@ -159,7 +163,7 @@ const ANONYMOUS_CONTEXT: ConnectionContext = {
 
 // ---- Agent command map ----
 
-const AGENT_COMMANDS: Record<AgentType, string | null> = {
+const AGENT_COMMANDS: Record<SpawnAgentType, string | null> = {
   "claude-code": "claude",
   codex: "codex",
   aider: "aider",
@@ -496,7 +500,7 @@ registerTool({
       name: { type: "string" },
       agent: {
         type: "string",
-        enum: ["claude-code", "codex", "aider", "custom"],
+        enum: [...SPAWN_AGENT_TYPES],
       },
       task: { type: "string" },
       cwd: { type: "string" },
@@ -543,7 +547,7 @@ registerTool({
   handler: async (args, ctx) => {
     const p = args as {
       name: string;
-      agent?: AgentType;
+      agent?: SpawnAgentType;
       task?: string;
       cwd?: string;
       command?: string;
@@ -565,7 +569,7 @@ registerTool({
       ? resolveAgentPresetForSpawn(p.agent_preset_name)
       : null;
 
-    const effectiveAgent: AgentType | undefined = p.agent ?? preset?.type;
+    const effectiveAgent: SpawnAgentType | undefined = p.agent ?? preset?.type;
     if (!effectiveAgent) {
       throw new Error(
         "spawn_agent: either `agent` or `agent_preset_name` is required",
@@ -1075,7 +1079,7 @@ registerTool({
     const { tasks } = args as {
       tasks: Array<{
         name: string;
-        agent: AgentType;
+        agent: SpawnAgentType;
         task: string;
         cwd?: string;
         command?: string;
@@ -1086,7 +1090,7 @@ registerTool({
     const results: Array<{
       session_id: string;
       name: string;
-      agent: AgentType;
+      agent: SpawnAgentType;
       pid: number | undefined;
       pane_id?: string;
       workspace_id?: string;
@@ -1109,7 +1113,7 @@ registerTool({
         )) as {
           session_id: string;
           name: string;
-          agent: AgentType;
+          agent: SpawnAgentType;
           pid: number | undefined;
           pane_id: string;
           workspace_id: string;

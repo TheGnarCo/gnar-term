@@ -31,6 +31,9 @@ vi.mock("../lib/services/spawn-helper", () => ({
     branch: "branch-1",
     worktree_path: "/tmp/repo-branch-1",
   }),
+  resolveAgentPresetForSpawn: vi.fn().mockReturnValue(null),
+  deriveWorktreePath: vi.fn().mockReturnValue("/tmp/repo-branch-1"),
+  SPAWN_AGENT_TYPES: ["claude-code", "codex", "aider", "custom"] as const,
 }));
 
 // --- agent-detection-service mock with controllable stores ---

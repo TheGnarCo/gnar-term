@@ -42,7 +42,23 @@ import {
   type Workspace,
 } from "../types";
 
-export type SpawnAgentType = "claude-code" | "codex" | "aider" | "custom";
+/**
+ * Spawn-side agent taxonomy. Distinct from the detection-side `AgentType`
+ * (see `agent-type.ts`) because the detector recognises more agents than
+ * the spawn helper has built-in launchers for. Anything outside this set
+ * goes through `"custom"` with a literal command supplied by the caller.
+ *
+ * SPAWN_AGENT_TYPES is the runtime array of the same values — exported so
+ * MCP tool schemas can reuse it for their `enum` arrays without spelling
+ * the literals out again.
+ */
+export const SPAWN_AGENT_TYPES = [
+  "claude-code",
+  "codex",
+  "aider",
+  "custom",
+] as const;
+export type SpawnAgentType = (typeof SPAWN_AGENT_TYPES)[number];
 
 const AGENT_COMMANDS: Record<Exclude<SpawnAgentType, "custom">, string> = {
   "claude-code": "claude",

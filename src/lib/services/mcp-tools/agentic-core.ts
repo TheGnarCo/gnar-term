@@ -23,7 +23,9 @@ import {
   spawnAgentInWorktree,
   resolveAgentPresetForSpawn,
   deriveWorktreePath,
+  SPAWN_AGENT_TYPES,
   type ResolvedAgentPreset,
+  type SpawnAgentType,
 } from "../spawn-helper";
 import { paneExists, lookupPaneIntendedAgent } from "../pane-lookup";
 import { createWorktreeWorkspaceFromConfig } from "../worktree-service";
@@ -63,7 +65,7 @@ export const agenticCoreTools: ToolDef[] = [
           properties: {
             type: {
               type: "string",
-              enum: ["claude-code", "codex", "aider", "custom"],
+              enum: [...SPAWN_AGENT_TYPES],
               description: "Agent type to spawn.",
             },
             command: {
@@ -93,7 +95,7 @@ export const agenticCoreTools: ToolDef[] = [
         base?: string;
         repoPath?: string;
         agent?: {
-          type: "claude-code" | "codex" | "aider" | "custom";
+          type: SpawnAgentType;
           command?: string;
           initialPrompt?: string;
         };

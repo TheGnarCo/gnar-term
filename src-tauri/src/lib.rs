@@ -290,6 +290,7 @@ pub fn run() {
             git_info::git_status,
             git_info::git_remote_url,
             git_info::git_diff,
+            git_info::git_branch_commit_subjects,
             gh_commands::gh_list_prs,
             gh_commands::gh_list_issues,
             gh_commands::gh_available,

@@ -26,6 +26,7 @@ import {
   closeWorkspace,
 } from "./workspace-runtime-service";
 import { workspaces } from "../stores/workspace";
+import { buildStartupCommand, resolveAutoSpawnPreset } from "./spawn-helper";
 
 /** Result of a git_merge Tauri command invocation. */
 interface MergeResult {
@@ -103,6 +104,9 @@ export async function createWorktreeWorkspace(
       ctx.rootWorkspaceId !== undefined && ctx.rootWorkspaceId !== null
         ? String(ctx.rootWorkspaceId)
         : undefined,
+    // Interactive "New Branch" — user did not name an agent, so allow the
+    // autoSpawn preset (if any) to fill the new workspace's terminal.
+    autoSpawnEligible: true,
   });
 }
 
@@ -132,6 +136,12 @@ export interface WorktreeWorkspaceConfig {
    */
   startupCommand?: string;
   /**
+   * Extra environment variables — merged into the workspace's root env on
+   * top of the GNARTERM_WORKTREE_ROOT default. Supplied by AgentPreset so
+   * user-authored env (e.g. CLAUDE_MODEL) reaches the spawned shell.
+   */
+  env?: Record<string, string>;
+  /**
    * Dashboard provenance — when the worktree is spawned from the Global
    * Agentic Dashboard or an Agentic Dashboard contribution on a workspace,
    * this records which. Surfaces as `metadata.spawnedBy` on the new
@@ -149,6 +159,24 @@ export interface WorktreeWorkspaceConfig {
    * into a single workspace's array.
    */
   spawnedFromIssues?: number[];
+  /**
+   * When true, and `startupCommand` is not already supplied, the first
+   * `AgentPreset` in `settings.json#agents[]` with `autoSpawn: true` is
+   * spawned into the new workspace's terminal. Defaults to false — explicit
+   * opt-in so MCP / scripted paths don't unintentionally spawn agents.
+   *
+   * The interactive "New Branch" UI sets this to true; explicit `spawn_agent`
+   * / `spawn_branch` MCP calls leave it false (they already drive the agent
+   * choice themselves).
+   */
+  autoSpawnEligible?: boolean;
+  /**
+   * Mark the resulting workspace as a Controlled (agentic) workspace.
+   * Set by MCP `spawn_branch`, `spawn-helper.spawnAgentForBranch`, and
+   * the agentic dashboard's spawn flow. Manual "New Branch" creation
+   * leaves this unset.
+   */
+  controlled?: boolean;
 }
 
 export async function createWorktreeWorkspaceFromConfig(
@@ -164,6 +192,30 @@ export async function createWorktreeWorkspaceFromConfig(
     throw new Error(
       `Failed to create worktree at ${config.worktreePath} for branch ${config.branch}`,
     );
+  }
+
+  // AgentPreset autoSpawn hook. Only fires when:
+  //   1. The caller opted in via `autoSpawnEligible: true` (e.g. the
+  //      interactive "New Branch" UI).
+  //   2. No explicit `startupCommand` was supplied — preserves the
+  //      caller's intent when they already chose a command.
+  //   3. A preset with `autoSpawn: true` exists in settings.json#agents[].
+  // Source-of-truth: presets are read directly from getConfig() — no
+  // parallel preset store.
+  let effectiveStartupCommand = config.startupCommand;
+  let effectiveEnv = config.env;
+  if (config.autoSpawnEligible && !effectiveStartupCommand) {
+    const auto = resolveAutoSpawnPreset();
+    if (auto) {
+      effectiveStartupCommand = buildStartupCommand(
+        auto.type,
+        auto.taskContext,
+        auto.command,
+      );
+      if (auto.env) {
+        effectiveEnv = { ...(effectiveEnv ?? {}), ...auto.env };
+      }
+    }
   }
 
   const settings = getWorktreeSettings();
@@ -209,7 +261,10 @@ export async function createWorktreeWorkspaceFromConfig(
   await createWorkspaceFromDef({
     name: wsName,
     cwd: config.worktreePath,
-    env: { GNARTERM_WORKTREE_ROOT: config.repoPath },
+    env: {
+      GNARTERM_WORKTREE_ROOT: config.repoPath,
+      ...(effectiveEnv ?? {}),
+    },
     worktreePath: config.worktreePath,
     branch: config.branch,
     baseBranch: config.base,
@@ -221,13 +276,14 @@ export async function createWorktreeWorkspaceFromConfig(
     ...(config.spawnedFromIssues && config.spawnedFromIssues.length > 0
       ? { spawnedFromIssues: config.spawnedFromIssues }
       : {}),
+    ...(config.controlled ? { controlled: true } : {}),
     layout: {
       pane: {
         surfaces: [
           {
             type: "terminal",
-            ...(config.startupCommand
-              ? { command: config.startupCommand }
+            ...(effectiveStartupCommand
+              ? { command: effectiveStartupCommand }
               : {}),
           },
         ],
@@ -408,6 +464,42 @@ export function handleWorkspaceCreated(id: string): void {
 }
 
 /**
+ * Shared worktree close-action prompt. Renders one form with the worktree
+ * path (info field) and a delete-or-keep select. Returns the chosen action,
+ * or null when the user cancels the prompt.
+ */
+async function promptWorktreeCloseAction(
+  header: string,
+  worktreePath: string,
+  submitLabel: string,
+): Promise<"delete" | "keep" | null> {
+  const result = await showFormPrompt(
+    header,
+    [
+      {
+        key: "path",
+        label: "Worktree location",
+        type: "info",
+        defaultValue: worktreePath,
+      },
+      {
+        key: "action",
+        label: "What should happen to the worktree?",
+        type: "select",
+        defaultValue: "delete",
+        options: [
+          { label: "Delete worktree (git worktree remove)", value: "delete" },
+          { label: "Keep worktree on disk", value: "keep" },
+        ],
+      },
+    ],
+    { submitLabel },
+  );
+  if (!result) return null;
+  return result.action === "delete" ? "delete" : "keep";
+}
+
+/**
  * Combined close confirmation for branched workspaces. Shows a single dialog
  * that collects both "confirm close" and "keep/delete worktree" in one step.
  * For non-branched workspaces falls back to the standard confirm prompt.
@@ -436,33 +528,13 @@ export async function confirmAndCloseWorkspace(
       if (!confirmed) return false;
     }
   } else {
-    const result = await showFormPrompt(
+    const action = await promptWorktreeCloseAction(
       `Close "${ws.name}"`,
-      [
-        {
-          key: "path",
-          label: "Worktree location",
-          type: "info",
-          defaultValue: entry.worktreePath,
-        },
-        {
-          key: "action",
-          label: "What should happen to the worktree?",
-          type: "select",
-          defaultValue: "keep",
-          options: [
-            { label: "Keep worktree on disk", value: "keep" },
-            { label: "Delete worktree (git worktree remove)", value: "delete" },
-          ],
-        },
-      ],
-      { submitLabel: "Close Branched Workspace" },
+      entry.worktreePath,
+      "Close Branched Workspace",
     );
-    if (!result) return false;
-    pendingCloseActions.set(
-      ws.id,
-      result.action === "delete" ? "delete" : "keep",
-    );
+    if (action === null) return false;
+    pendingCloseActions.set(ws.id, action);
   }
   closeWorkspace(idx);
   return true;
@@ -481,36 +553,16 @@ export async function handleWorkspaceClosed(id: string): Promise<void> {
   const preAction = pendingCloseActions.get(id);
   pendingCloseActions.delete(id);
 
-  let action: string;
+  let action: "delete" | "keep";
   if (preAction !== undefined) {
     action = preAction;
   } else {
-    const result = await showFormPrompt(
+    const chosen = await promptWorktreeCloseAction(
       `Worktree for "${entry.branch}"`,
-      [
-        {
-          key: "path",
-          label: "Worktree location",
-          type: "info",
-          defaultValue: entry.worktreePath,
-        },
-        {
-          key: "action",
-          label: "What should happen to the worktree?",
-          type: "select",
-          defaultValue: "keep",
-          options: [
-            { label: "Keep worktree on disk", value: "keep" },
-            {
-              label: "Delete worktree (git worktree remove)",
-              value: "delete",
-            },
-          ],
-        },
-      ],
-      { submitLabel: "Apply" },
+      entry.worktreePath,
+      "Apply",
     );
-    action = result?.action ?? "keep";
+    action = chosen ?? "keep";
   }
 
   const remaining = getWorktreeEntries().filter((e) => e.workspaceId !== id);

@@ -33,6 +33,7 @@ import {
   type SplitNode,
   type PreviewSurface,
 } from "../types";
+import { buildSshStartupCommand } from "../surfaces/ssh-surface";
 import {
   saveConfig,
   getConfig,
@@ -69,6 +70,9 @@ export async function createWorkspaceFromDef(
   ): Promise<SplitNode> {
     if ("pane" in nodeDef) {
       const pane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };
+      if (nodeDef.pane.intendedAgent !== undefined) {
+        pane.intendedAgent = nodeDef.pane.intendedAgent;
+      }
       for (const sDef of nodeDef.pane.surfaces) {
         const cwd = sDef.cwd || inheritedCwd;
         if (
@@ -100,6 +104,22 @@ export async function createWorkspaceFromDef(
             hasUnread: false,
           };
           pane.surfaces.push(surface);
+          if (!pane.activeSurfaceId || sDef.focus)
+            pane.activeSurfaceId = surface.id;
+        } else if (sDef.type === "ssh" && sDef.sshConfig) {
+          // SSH surface — a normal PTY that spawns the system `ssh` binary.
+          // The sshConfig is persisted on the surface def; on restore we
+          // re-spawn ssh with the same args. sshConfig is attached to the
+          // runtime TerminalSurface so serializeLayout can emit type:"ssh".
+          const sshStartup = buildSshStartupCommand(sDef.sshConfig);
+          const surface = await createTerminalSurface(pane, cwd);
+          if (sDef.name) surface.title = sDef.name;
+          if (sshStartup) {
+            surface.startupCommand = sshStartup;
+          }
+          // Attach sshConfig to the runtime surface for re-serialization
+          (surface as unknown as Record<string, unknown>).sshConfig =
+            sDef.sshConfig;
           if (!pane.activeSurfaceId || sDef.focus)
             pane.activeSurfaceId = surface.id;
         } else {
@@ -220,6 +240,7 @@ export async function createWorkspaceFromDef(
   if (def.spawnedBy !== undefined) ws.spawnedBy = def.spawnedBy;
   if (def.spawnedFromIssues !== undefined)
     ws.spawnedFromIssues = def.spawnedFromIssues;
+  if (def.controlled !== undefined) ws.controlled = def.controlled;
   if (def.extensionData !== undefined) ws.extensionData = def.extensionData;
 
   // Root-shaped Workspaces own a (possibly empty) members list. Branches
@@ -268,7 +289,7 @@ export async function createWorkspaceFromDef(
   }
   eventBus.emit({ type: "workspace:created", id: ws.id, name: wsName });
   // Route through switchWorkspace so workspace:activated listeners
-  // (e.g. agentic-orchestrator's dashboard workspace re-spawn hook)
+  // (e.g. an extension's dashboard workspace re-spawn hook)
   // fire on creation — auto-switching to the fresh workspace matches
   // the user-driven switch path. Session restore skips the auto-switch
   // because it'll restore the persisted active idx once every workspace

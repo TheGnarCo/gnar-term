@@ -115,6 +115,48 @@ pub async fn git_diff(
     run_git(&repo_path, &args_ref)
 }
 
+/// Return the commit subjects (one per line) reachable from `branch`
+/// but not from `base`. Used by the branchLifecycle observer to derive
+/// `hasCommits` and `wipOnly` for draft-state detection.
+///
+/// Returns at most `limit` commits (newest first). When `base` or
+/// `branch` is unknown to git, returns an empty vector rather than an
+/// error — the poller treats "unknown" as "no commits yet" so a
+/// freshly-created branch with no upstream resolves to draft cleanly.
+#[tauri::command]
+pub async fn git_branch_commit_subjects(
+    repo_path: String,
+    base: String,
+    branch: String,
+    limit: Option<u32>,
+) -> Result<Vec<String>, String> {
+    validate_repo(&repo_path)?;
+    validate_git_ref(&base)?;
+    validate_git_ref(&branch)?;
+    let max = limit.unwrap_or(50).min(500);
+    let range = format!("{base}..{branch}");
+    let max_arg = format!("--max-count={max}");
+    let args = [
+        "log",
+        "--format=%s",
+        "--no-merges",
+        &max_arg,
+        "--end-of-options",
+        &range,
+    ];
+    match run_git(&repo_path, &args) {
+        Ok(out) => Ok(out
+            .lines()
+            .filter(|l| !l.is_empty())
+            .map(str::to_string)
+            .collect()),
+        // Unknown refs produce a non-zero exit — surface as "no commits"
+        // so the poller can keep ticking against partially-initialized
+        // branches without spamming the user with toasts.
+        Err(_) => Ok(Vec::new()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

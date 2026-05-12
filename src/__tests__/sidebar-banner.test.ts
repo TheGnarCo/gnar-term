@@ -41,7 +41,7 @@ Element.prototype.animate = vi.fn().mockImplementation(() => {
 import SidebarBannerWithSlot from "./sidebar-banner-with-slot.svelte";
 import WorkspaceListViewStub from "./workspace-list-view-stub.svelte";
 import { workspaces } from "../lib/stores/workspace";
-import { bannerCollapsedState } from "../lib/stores/ui";
+import { bannerCollapsedState, pointerInsideWindow } from "../lib/stores/ui";
 
 // Seed the workspaces store so nonDashboardCount reflects filterIds correctly.
 function makeWs(id: string) {
@@ -165,20 +165,20 @@ describe("SidebarBanner collapse/expand", () => {
     ).not.toBeNull();
   });
 
-  it("clears banner hover state when the cursor leaves the document", async () => {
+  it("clears banner hover state when the cursor leaves the window", async () => {
     // Regression: rows that sit flush with the viewport's left edge can
     // skip their own `mouseleave` when the cursor exits through that
-    // edge fast (observed on WebKitGTK). The banner stays in its
-    // hovered background until the cursor re-enters and exits via a
-    // different edge. A body-level mouseleave is the authoritative
-    // "cursor left the app" signal — `bannerHovered` must reset to
-    // false in response.
+    // edge fast (observed on WebKitGTK). The app-wide
+    // `pointerInsideWindow` store flipping to `false` is the
+    // authoritative "cursor left the app" signal — `bannerHovered` must
+    // reset to false in response.
     const { container } = render(SidebarBannerWithSlot, { props: baseProps });
     const banner = container.querySelector(
       "[data-sidebar-banner-row]",
     ) as HTMLElement;
     expect(banner).not.toBeNull();
 
+    pointerInsideWindow.set(true);
     const restingStyle = banner.getAttribute("style") ?? "";
 
     await fireEvent.mouseEnter(banner);
@@ -186,11 +186,10 @@ describe("SidebarBanner collapse/expand", () => {
     const hoveredStyle = banner.getAttribute("style") ?? "";
     expect(hoveredStyle).not.toBe(restingStyle);
 
-    // Without the body-mouseleave fallback, this would leave the
-    // banner stuck in its hovered style when the cursor exited the
-    // viewport without re-crossing the row's own boundary.
-    await fireEvent.mouseLeave(document.body);
+    pointerInsideWindow.set(false);
     await tick();
     expect(banner.getAttribute("style") ?? "").toBe(restingStyle);
+
+    pointerInsideWindow.set(true);
   });
 });

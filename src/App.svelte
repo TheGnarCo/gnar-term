@@ -10,6 +10,7 @@
     commandPaletteOpen,
     findBarVisible,
     pendingAction,
+    installPointerWindowListeners,
   } from "./lib/stores/ui";
   import {
     workspaces,
@@ -71,6 +72,11 @@
   import { initGitStatus } from "./lib/bootstrap/init-git-status";
   import { initPreview } from "./lib/bootstrap/init-preview";
   import { initAgentDetectionBootstrap } from "./lib/bootstrap/init-agent-detection";
+  import { initAgentStatus } from "./lib/bootstrap/init-agent-status";
+  import { initAttentionApi } from "./lib/services/attention-api";
+  import { initBranchLifecycle } from "./lib/services/branch-lifecycle";
+  import { startPrStatePoller } from "./lib/services/pr-state-poller";
+  import { startBranchCommitsPoller } from "./lib/services/branch-commits-poller";
   import { initCoreExtensionAPI } from "./lib/bootstrap/init-core-extension-api";
   import {
     initWorkspaces,
@@ -583,14 +589,20 @@
 
   // ---- Initialization ----
   let _cleanupShortcutHints: (() => void) | null = null;
+  let _cleanupPointerWindow: (() => void) | null = null;
   let _cleanupVisibilityRecover: (() => void) | null = null;
   let _cleanupDragDropRouter: (() => void) | null = null;
   let _rootPathSweepInterval: number | null = null;
   let _gitRecheckInterval: ReturnType<typeof setInterval> | null = null;
+  let _cleanupPrPoller: (() => void) | null = null;
+  let _cleanupCommitsPoller: (() => void) | null = null;
   onDestroy(() => {
     _cleanupShortcutHints?.();
     _cleanupVisibilityRecover?.();
     _cleanupDragDropRouter?.();
+    _cleanupPrPoller?.();
+    _cleanupCommitsPoller?.();
+    _cleanupPointerWindow?.();
     if (_rootPathSweepInterval !== null)
       window.clearInterval(_rootPathSweepInterval);
     if (_gitRecheckInterval !== null) clearInterval(_gitRecheckInterval);
@@ -598,6 +610,7 @@
 
   onMount(async () => {
     _cleanupShortcutHints = initShortcutHints();
+    _cleanupPointerWindow = installPointerWindowListeners();
     initDragDropPaneRouter()
       .then((dispose) => {
         _cleanupDragDropRouter = dispose;
@@ -689,6 +702,16 @@
     initGitStatus();
     initPreview();
     initAgentDetectionBootstrap();
+    // Attention API + BranchLifecycle subscribe to detection's stores —
+    // start them after detection so initial fan-out lands on live subs.
+    initAttentionApi();
+    initBranchLifecycle();
+    // Per-Workspace agent visibility (subtitle + child rows) ships with
+    // core — registered after branch-lifecycle so the subtitle's
+    // lifecycle pill can read from a live store on first render.
+    initAgentStatus();
+    _cleanupPrPoller = startPrStatePoller();
+    _cleanupCommitsPoller = startBranchCommitsPoller();
 
     // Workspaces (formerly the project-scope extension) —
     // registered from core so the root-row renderer, commands, and

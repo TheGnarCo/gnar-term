@@ -62,7 +62,7 @@
 
 {#if showFirstRow}
   <div
-    style="display: flex; flex-direction: column; gap: 1px; padding: 0 12px 0 6px; overflow: hidden;"
+    style="display: flex; flex-direction: column; gap: 0; padding: 0 0 0 6px; flex: 1 1 auto; min-width: 0; overflow: hidden;"
   >
     <!-- Path row -->
     <div
@@ -82,7 +82,7 @@
         />
       </svg>
       <span
-        style="font-size: 10px; color: {fgMuted}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;"
+        style="font-size: 10px; color: {fgMuted}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1 1 auto;"
         >{prettyPath}</span
       >
     </div>
@@ -111,7 +111,7 @@
           <path d="M18 9a9 9 0 0 1-9 9" />
         </svg>
         <span
-          style="font-size: 10px; color: {fgMuted}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0;"
+          style="font-size: 10px; color: {fgMuted}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1 1 auto;"
           >{branch ?? "…"}</span
         >
       </div>

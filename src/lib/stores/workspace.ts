@@ -235,6 +235,14 @@ export function serializeLayout(node: SplitNode): LayoutNode {
   if (node.type === "pane") {
     const surfaces = node.pane.surfaces.map((s) => {
       if (isTerminalSurface(s)) {
+        // SSH surfaces are TerminalSurfaces at runtime with sshConfig attached
+        const sshConfig = (s as unknown as { sshConfig?: unknown }).sshConfig;
+        if (sshConfig) {
+          const def: Record<string, unknown> = { type: "ssh", sshConfig };
+          if (s.title) def.name = s.title;
+          if (s.id === node.pane.activeSurfaceId) def.focus = true;
+          return def;
+        }
         const def: Record<string, unknown> = { type: "terminal" };
         if (s.cwd) def.cwd = s.cwd;
         if (s.definedCommand) def.command = s.definedCommand;
@@ -266,7 +274,13 @@ export function serializeLayout(node: SplitNode): LayoutNode {
       }
       return def;
     });
-    return { pane: { surfaces } };
+    const paneDef: import("../config").PaneDef = {
+      surfaces: surfaces as import("../config").SurfaceDef[],
+    };
+    if (node.pane.intendedAgent !== undefined) {
+      paneDef.intendedAgent = node.pane.intendedAgent;
+    }
+    return { pane: paneDef };
   }
   return {
     direction: node.direction,
@@ -314,6 +328,7 @@ export function serializeWorkspace(ws: Workspace): WorkspaceDef {
   if ("repoPath" in ws && ws.repoPath !== undefined)
     def.repoPath = ws.repoPath as string;
   if (ws.locked !== undefined) def.locked = ws.locked;
+  if (ws.controlled !== undefined) def.controlled = ws.controlled;
   if (ws.extensionData !== undefined) def.extensionData = ws.extensionData;
   return def;
 }

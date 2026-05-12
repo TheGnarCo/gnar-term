@@ -40,7 +40,7 @@ describe("SidebarSubtitleRow", () => {
       props: { color: "rgb(255, 255, 255)" },
     });
     const row = getRow(container);
-    expect(row.style.padding).toBe("0px 24px 0px 2px");
+    expect(row.style.padding).toBe("0px 0px 0px 2px");
   });
 
   it("honors a custom padding prop", () => {

@@ -1,16 +1,16 @@
 <script lang="ts">
-  // Agentic Dashboard body — renders the three live panels.
+  // Agentic Dashboard body — renders the header strip and three live panels.
   // Each panel reads the ExtensionAPI via Svelte context (EXTENSION_API_KEY),
   // which is set by the ExtensionWrapper host before mounting this component.
   // No prop threading is needed; context is inherited by all descendants.
+  import DashboardHeader from "./header/DashboardHeader.svelte";
   import AgentBoard from "./panels/AgentBoard.svelte";
   import BranchLifecycleSwimlanes from "./panels/BranchLifecycleSwimlanes.svelte";
   import AttentionInbox from "./panels/AttentionInbox.svelte";
 </script>
 
 <div class="agentic-dashboard">
-  <!-- Header strip: cycle-4 fills this in -->
-  <div class="agentic-dashboard-header"></div>
+  <DashboardHeader />
 
   <div class="agentic-dashboard-content">
     <section class="agentic-section">
@@ -36,11 +36,6 @@
     flex-direction: column;
     height: 100%;
     overflow: hidden;
-  }
-
-  .agentic-dashboard-header {
-    flex-shrink: 0;
-    height: 2rem;
   }
 
   .agentic-dashboard-content {

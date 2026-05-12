@@ -14,6 +14,7 @@
   import {
     workspaces,
     activeWorkspaceIdx,
+    activeWorkspace,
     activePane,
     activeSurface,
     activePseudoWorkspaceId,
@@ -71,7 +72,10 @@
   import { initPreview } from "./lib/bootstrap/init-preview";
   import { initAgentDetectionBootstrap } from "./lib/bootstrap/init-agent-detection";
   import { initCoreExtensionAPI } from "./lib/bootstrap/init-core-extension-api";
-  import { initWorkspaces } from "./lib/bootstrap/init-workspaces";
+  import {
+    initWorkspaces,
+    recheckWorkspaceIsGit,
+  } from "./lib/bootstrap/init-workspaces";
   import {
     restoreWorkspaces,
     markRestored,
@@ -582,12 +586,14 @@
   let _cleanupVisibilityRecover: (() => void) | null = null;
   let _cleanupDragDropRouter: (() => void) | null = null;
   let _rootPathSweepInterval: number | null = null;
+  let _gitRecheckInterval: ReturnType<typeof setInterval> | null = null;
   onDestroy(() => {
     _cleanupShortcutHints?.();
     _cleanupVisibilityRecover?.();
     _cleanupDragDropRouter?.();
     if (_rootPathSweepInterval !== null)
       window.clearInterval(_rootPathSweepInterval);
+    if (_gitRecheckInterval !== null) clearInterval(_gitRecheckInterval);
   });
 
   onMount(async () => {
@@ -827,6 +833,15 @@
       // Re-sweep workspace root paths on focus — picks up directories
       // that were renamed in Finder/`mv` while gnar-term was unfocused.
       void validateWorkspaceRootPaths();
+      // The user may have run `git init` / `git clone` (or removed a
+      // `.git`) in a terminal while the window was blurred. Re-check
+      // every root workspace so the sidebar banner reflects reality
+      // when focus returns.
+      for (const ws of get(workspaces)) {
+        if (ws.rootWorkspaceId === undefined && !ws.isDashboard) {
+          void recheckWorkspaceIsGit(ws.id);
+        }
+      }
     });
 
     // Periodic sweep — catches renames that happen while gnar-term is
@@ -835,6 +850,19 @@
     _rootPathSweepInterval = window.setInterval(() => {
       void validateWorkspaceRootPaths();
     }, 60_000);
+
+    // Polling backstop: focus / activation events miss the common
+    // case of running `git init` in the active workspace's terminal
+    // without leaving the window. A 5s `is_git_repo` stat against
+    // the active root keeps the sidebar in sync without watching
+    // the filesystem. updateWorkspace is only called on diff, so
+    // steady-state polling is a no-op.
+    _gitRecheckInterval = setInterval(() => {
+      const ws = get(activeWorkspace);
+      if (!ws) return;
+      const rootId = ws.rootWorkspaceId ?? ws.id;
+      void recheckWorkspaceIsGit(rootId);
+    }, 5000);
 
     // Flush workspace and extension state to disk before the window closes.
     // Tauri v2: the window closes synchronously unless we preventDefault the

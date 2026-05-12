@@ -346,13 +346,19 @@ describe("heartbeat_idle event", () => {
 });
 
 describe("heartbeat_output event", () => {
-  it("idle → running on heartbeat_output", () => {
+  it("idle → idle on heartbeat_output (steady-state owned by OSC)", () => {
+    // Heartbeat output is too coarse (cursor redraws, TUI repaints,
+    // shell prompt noise all trip it) to flip a settled `idle` agent
+    // back to running. OSC progress is the canonical wake-up signal.
     expect(transitionAgentState("idle", { kind: "heartbeat_output" })).toBe(
-      "running",
+      "idle",
     );
   });
 
-  it("unknown → running on heartbeat_output", () => {
+  it("unknown → running on heartbeat_output (bootstrap only)", () => {
+    // The one place heartbeat output is allowed to drive a transition:
+    // a freshly spawned pane needs *some* signal to leave `unknown`,
+    // and the first output byte arrives before the agent's first OSC.
     expect(transitionAgentState("unknown", { kind: "heartbeat_output" })).toBe(
       "running",
     );
@@ -364,10 +370,13 @@ describe("heartbeat_output event", () => {
     );
   });
 
-  it("awaiting_input → running on heartbeat_output (output resumes)", () => {
+  it("awaiting_input → awaiting_input on heartbeat_output (steady-state owned by OSC)", () => {
+    // OSC notify put the agent into awaiting_input; only an OSC
+    // progress event should clear it. Output bytes alone (cursor
+    // blink, prompt redraw) don't imply the user resumed.
     expect(
       transitionAgentState("awaiting_input", { kind: "heartbeat_output" }),
-    ).toBe("running");
+    ).toBe("awaiting_input");
   });
 
   it("completed → completed on heartbeat_output (terminal)", () => {

@@ -105,15 +105,17 @@ export function transitionAgentState(
       return current;
 
     case "heartbeat_output":
-      // Output observed → running from any non-terminal state.
-      if (
-        current === "idle" ||
-        current === "unknown" ||
-        current === "awaiting_input"
-      ) {
+      // Bootstrap only. The OSC progress / notify events own every
+      // steady-state flip between `idle`, `running`, and
+      // `awaiting_input` — heartbeat output is too coarse (cursor
+      // redraws, TUI repaints, shell prompt noise all trip it) to
+      // override a state the OSC stream has already settled on.
+      // `unknown` is the one exception: a freshly spawned pane needs
+      // *some* signal to leave `unknown`, and the first output byte
+      // (usually a banner) arrives before the agent's first OSC.
+      if (current === "unknown") {
         return "running";
       }
-      // Already running: no-op.
       return current;
 
     default: {

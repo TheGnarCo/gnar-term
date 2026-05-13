@@ -113,13 +113,18 @@ describe("DragGrip", () => {
       ".rail-bot-bubble",
     ) as HTMLElement | null;
     expect(bubble).not.toBeNull();
-    const computed = window.getComputedStyle(bubble!);
-    // Circular silhouette — border-radius set to 50% (or equivalent
-    // value ≥ half the short axis).
-    expect(
-      computed.borderRadius === "" || computed.borderRadius !== "0px",
-    ).toBe(true);
+    // Circular silhouette — verified at source level because jsdom
+    // doesn't evaluate scoped Svelte styles. computed.borderRadius is
+    // always "" here, so a DOM-level assertion would be a tautology.
+    const sourceText = readFileSync(
+      "src/lib/components/DragGrip.svelte",
+      "utf-8",
+    );
+    const ruleMatch = sourceText.match(/\.rail-bot-bubble\s*\{[^}]*\}/);
+    expect(ruleMatch).not.toBeNull();
+    expect(ruleMatch![0]).toMatch(/border-radius:\s*50%/);
     // No multi-stop gradient divider stripe (the old hat's hallmark).
+    const computed = window.getComputedStyle(bubble!);
     const bg = (bubble!.style.background || "") + (computed.background || "");
     expect(bg).not.toContain("linear-gradient");
   });

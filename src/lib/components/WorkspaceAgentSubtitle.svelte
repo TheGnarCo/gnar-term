@@ -23,6 +23,7 @@
    */
   import { derived, get } from "svelte/store";
   import { agentsStore } from "../services/agent-detection-service";
+  import { attentionStore } from "../services/attention-api";
   import {
     branchLifecycleStore,
     listBranchDescriptors,
@@ -32,6 +33,9 @@
     TERMINAL_AGENT_STATUSES,
     agentStatusBucket,
   } from "../services/agent-status-service";
+  import { workspaceRailBotStatus } from "../services/rail-attention";
+  import { workspaces } from "../stores/workspace";
+  import { getAllPanes } from "../types";
   import { theme } from "../stores/theme";
   import { botHatColor, type BotHatStatus } from "../utils/bot-hat-color";
   import BotIcon from "../icons/BotIcon.svelte";
@@ -45,9 +49,24 @@
     ),
   );
 
+  // Pane ids owned by this workspace. Used by both the rail-attention
+  // aggregator (so it can scope OSC attention events to this workspace)
+  // and the lifecycle lookup. Reactive on `workspaces` so pane splits
+  // re-flow into the status.
+  const workspacePaneIds = derived(workspaces, ($ws) => {
+    const w = $ws.find((x) => x.id === workspaceId);
+    if (!w || !w.paneLayout) return [] as string[];
+    return getAllPanes(w.paneLayout).map((p) => p.id);
+  });
+
   const lifecycleEntry = derived(
-    [agentsStore, branchLifecycleStore],
-    ([$agents, $branchLifecycle]) => {
+    [agentsStore, branchLifecycleStore, workspaces],
+    ([$agents, $branchLifecycle, $workspaces]) => {
+      const ws = $workspaces.find((w) => w.id === workspaceId);
+      // Lifecycle pill is reserved for agentically-spawned (controlled)
+      // branches — manual branches stay pill-less.
+      if (!ws || ws.controlled !== true) return undefined;
+
       const paneIds = new Set(
         $agents
           .filter((a) => a.workspaceId === workspaceId && a.paneId !== null)
@@ -64,10 +83,14 @@
     },
   );
 
-  // Render distinct buckets present across this workspace's own active
-  // agents, in precedence order (waiting > running > idle). The inline
-  // status reports only the workspace's own bots — the rail "hat"
-  // aggregates root + branches and lives elsewhere.
+  // The icon color (and the row's `data-bot-status`) come from the
+  // canonical rail-attention pipeline so the inline bot icon's color
+  // always agrees with the rail's "hat" color — including OSC-driven
+  // attention events that flip the hat before any agent's status flips
+  // to "waiting". The textual label still enumerates the distinct
+  // agent-derived buckets present (waiting, running, idle) so the row
+  // reports *what* the agents are doing, while the color tracks the
+  // canonical "highest-priority signal" the rail surfaces.
   const BUCKET_LABEL: Record<BotHatStatus, string> = {
     attention: "Waiting",
     thinking: "Running",
@@ -86,7 +109,12 @@
     return BUCKET_ORDER.filter((b) => seen.has(b));
   })();
   $: statusLabel = presentBuckets.map((b) => BUCKET_LABEL[b]).join(", ");
-  $: dominantBucket = presentBuckets[0] ?? "none";
+  $: dominantBucket = workspaceRailBotStatus(
+    workspaceId,
+    $workspacePaneIds,
+    $agentsStore,
+    $attentionStore,
+  );
   $: iconColor = botHatColor(dominantBucket) ?? fgMuted;
   $: shouldRender = statusLabel !== "" || $lifecycleEntry !== undefined;
 
@@ -132,7 +160,11 @@
   .workspace-agent-subtitle {
     display: flex;
     flex-direction: column;
-    padding: 0 0 0 6px;
+    /* No inner padding: the wrapping SidebarSubtitleRow already supplies
+       the row-level x=2 alignment used by sibling subtitle rows. Adding
+       padding here pushed the bot icon out by 6px and broke left-edge
+       alignment with the inline worktree/lifecycle rows. */
+    padding: 0;
     overflow: hidden;
     line-height: 1.2;
     flex: 1;

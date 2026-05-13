@@ -43,7 +43,27 @@ import {
   _testHelpers as branchLifecycleTestHelpers,
   resetBranchLifecycleForTests,
 } from "../lib/services/branch-lifecycle";
+import { workspaces } from "../lib/stores/workspace";
+import type { BranchedWorkspace } from "../lib/types";
 import WorkspaceAgentSubtitle from "../lib/components/WorkspaceAgentSubtitle.svelte";
+
+function makeControlledBranch(id: string): BranchedWorkspace {
+  return {
+    id,
+    name: id,
+    paneLayout: {
+      type: "pane",
+      pane: { id: "pane-1", surfaces: [], activeSurfaceId: null },
+    },
+    activePaneId: null,
+    rootWorkspaceId: "root-1",
+    worktreePath: "/repo/.worktrees/feat-x",
+    branch: "feat/x",
+    baseBranch: "main",
+    color: "#aaa",
+    controlled: true,
+  };
+}
 
 function makeAgent(overrides: Partial<DetectedAgent> = {}): DetectedAgent {
   return {
@@ -64,6 +84,7 @@ function resetRegistries() {
   resetWorkspaceSubtitles();
   setAgentsForTests([]);
   resetBranchLifecycleForTests();
+  workspaces.set([]);
 }
 
 describe("initAgentStatus() registration", () => {
@@ -234,7 +255,8 @@ describe("WorkspaceAgentSubtitle", () => {
     expect(focusSurfaceByIdMock).toHaveBeenCalledWith("surf-42");
   });
 
-  it("renders the lifecycle pill when exactly one workspace branch matches a pane", async () => {
+  it("renders the lifecycle pill when exactly one workspace branch matches a pane (controlled)", async () => {
+    workspaces.set([makeControlledBranch("ws-1")]);
     setAgentsForTests([
       makeAgent({
         agentId: "a1",
@@ -258,6 +280,33 @@ describe("WorkspaceAgentSubtitle", () => {
     const pill = container.querySelector("[data-lifecycle]");
     expect(pill).toBeTruthy();
     expect(pill!.getAttribute("data-lifecycle")).toBeTruthy();
+  });
+
+  it("hides the lifecycle pill for uncontrolled (manual) branches", async () => {
+    const uncontrolled = makeControlledBranch("ws-1");
+    delete uncontrolled.controlled;
+    workspaces.set([uncontrolled]);
+    setAgentsForTests([
+      makeAgent({
+        agentId: "a1",
+        workspaceId: "ws-1",
+        paneId: "pane-1",
+        status: "active",
+      }),
+    ]);
+    await branchLifecycleTestHelpers.seedBranch("branch-1", {
+      repoPath: "/repo",
+      branch: "feat/x",
+      baseBranch: "main",
+      hasCommits: true,
+      prState: null,
+      lastActivityAt: 0,
+      paneId: "pane-1",
+    });
+    const { container } = render(WorkspaceAgentSubtitle, {
+      props: { workspaceId: "ws-1" },
+    });
+    expect(container.querySelector("[data-lifecycle]")).toBeNull();
   });
 
   it("hides the lifecycle pill when multiple branches match (ambiguous)", async () => {

@@ -1,17 +1,17 @@
 import { get } from "svelte/store";
 import type { ExtensionAPI } from "../../api";
-import { openSpawnBranchFlow } from "../header/spawn-branch-flow";
+import { openBotTaskFlow } from "../header/bot-task-flow";
 
 /**
  * Register workspace-tile and workspace-zone actions for the agentic extension.
  *
  * - "spawn-agentic-branch": appears on each workspace tile ("+ branch + agent").
- *   Reuses the same spawn flow as the dashboard header button.
+ *   Reuses the same Bot Task flow as the dashboard header button.
  *
  * - "boot-agent-here": appears in the workspace zone when the active pane has
- *   no detected agent. Degrades gracefully to the full spawn-branch flow because
- *   a lightweight "spawn agent into this pane" API does not exist in the current
- *   extension surface. Deviation documented in cycle-6.md.
+ *   no detected agent. Degrades gracefully to the full Bot Task flow because
+ *   a lightweight "spawn agent into this pane" API does not exist in the
+ *   current extension surface. Deviation documented in cycle-6.md.
  *
  * The `when` predicate honors `ctx.activePaneId` / `ctx.paneId` if core ever
  * supplies them; when the context is empty (the current shape for the
@@ -22,16 +22,16 @@ export function registerWorkspaceActions(api: ExtensionAPI): void {
   api.registerWorkspaceAction("spawn-agentic-branch", {
     label: "+ branch + agent",
     zone: "workspace-tile",
-    handler: () => openSpawnBranchFlow(api),
+    handler: () => openBotTaskFlow(api),
   });
 
   api.registerWorkspaceAction("boot-agent-here", {
     label: "Boot agent here",
     zone: "workspace",
     // Degraded: no "spawn into active pane" API exists on the extension
-    // surface. Reuse the full spawn-branch flow so the action is always
+    // surface. Reuse the full Bot Task flow so the action is always
     // wired. Tracked as a follow-up (see cycle-6.md deviation note).
-    handler: () => openSpawnBranchFlow(api),
+    handler: () => openBotTaskFlow(api),
     when: (ctx) => {
       const ctxPaneId =
         typeof ctx.activePaneId === "string"

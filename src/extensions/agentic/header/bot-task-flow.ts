@@ -1,5 +1,5 @@
 import { get } from "svelte/store";
-import type { ExtensionAPI } from "../../api";
+import type { ExtensionAPI, AgentPresetRef } from "../../api";
 
 interface BranchInfo {
   name: string;
@@ -20,14 +20,24 @@ interface BaseOption {
   group?: string;
 }
 
-/**
- * Build the Source branch picker payload via api.invoke (so the extension
- * stays within its barrier: nothing imported from src/lib). Mirrors the
- * shape of fetchBaseOptions in core's worktree-helpers but uses the
- * extension's invoke proxy. Returns options pre-sorted alphabetically
- * within group, with worktree-occupied branches in a trailing
- * "Worktrees" group.
- */
+const DEFAULT_PRESETS: AgentPresetRef[] = [
+  { name: "Claude Code", command: "claude", intendedAgent: "claude-code" },
+  { name: "Codex", command: "codex", intendedAgent: "codex" },
+];
+
+function quoteTaskForShell(input: string): string {
+  const escaped = input
+    .replace(/\\/g, "\\\\")
+    .replace(/'/g, "\\'")
+    .replace(/\n/g, "\\n")
+    .replace(/\r/g, "\\r")
+    .replace(
+      /[\x00-\x1f\x7f]/g,
+      (c) => `\\x${c.charCodeAt(0).toString(16).padStart(2, "0")}`,
+    );
+  return `$'${escaped}'`;
+}
+
 async function fetchBaseOptionsViaApi(
   api: ExtensionAPI,
   repoPath: string,
@@ -63,11 +73,8 @@ async function fetchBaseOptionsViaApi(
       }
     }
   } catch (err) {
-    // list_branches unavailable — caller falls back to a text input for
-    // the source branch. Log so a failed Tauri command shows up in the
-    // console instead of silently degrading.
     console.warn(
-      "[spawn-branch-flow] list_branches failed; falling back to text input:",
+      "[bot-task-flow] list_branches failed; falling back to text input:",
       err,
     );
   }
@@ -81,9 +88,7 @@ async function fetchBaseOptionsViaApi(
       worktreeNames.add(wt.branch);
     }
   } catch (err) {
-    // list_worktrees unavailable — non-fatal; the picker just won't show
-    // the trailing "Worktrees" group. Log so the failure is visible.
-    console.warn("[spawn-branch-flow] list_worktrees failed:", err);
+    console.warn("[bot-task-flow] list_worktrees failed:", err);
   }
 
   const byName = (a: BaseOption, b: BaseOption) =>
@@ -115,37 +120,31 @@ async function fetchBaseOptionsViaApi(
 }
 
 /**
- * Open a multi-step form to spawn a new agentic branch.
- *
- * Deviation from intent.md AC-3:
- *   The intent references `api.invoke("spawn_branch", ...)` but `spawn_branch`
- *   is an MCP tool, not a Tauri command. Instead this flow uses:
- *     1. `api.invoke("create_worktree", ...)` to materialize the worktree.
- *     2. `api.createWorkspaceFromDef(...)` to create the Branch workspace and
- *        auto-run the chosen AgentPreset command inside it.
- *   This reaches the same end state without adding a new core API.
+ * Open a multi-step form to spawn a "Bot Task" — a controlled workspace
+ * dedicated to running an agent against a specific task. Differs from the
+ * plain spawn-branch flow in three ways: the picker is always populated
+ * (built-in defaults fill in when no user presets exist), the dialog has
+ * a Task field whose contents are quoted into the preset command as the
+ * agent's first argument, and the dialog is titled "New Bot Task".
  */
-export async function openSpawnBranchFlow(api: ExtensionAPI): Promise<void> {
-  // Step a: read current presets
-  const presets = get(api.agentPresets);
+export async function openBotTaskFlow(api: ExtensionAPI): Promise<void> {
+  const userPresets = get(api.agentPresets);
+  const presets: AgentPresetRef[] =
+    userPresets.length > 0 ? userPresets : DEFAULT_PRESETS;
 
-  // Step b: capture active workspace + cwd. The active workspace id is
-  // forwarded as `rootWorkspaceId` so the spawned workspace is attached
-  // as a Branch of the triggering workspace rather than a standalone root.
   const activeWs = get(api.activeWorkspace);
   let repoPath: string | null | undefined;
   try {
     repoPath = await api.getActiveCwd();
   } catch (err) {
-    api.reportError("Cannot spawn agentic branch: " + (err as Error).message);
+    api.reportError("Cannot spawn bot task: " + (err as Error).message);
     return;
   }
   if (!repoPath) {
-    api.reportError("Cannot spawn agentic branch: no active workspace cwd");
+    api.reportError("Cannot spawn bot task: no active workspace cwd");
     return;
   }
 
-  // Step c: build field list dynamically
   type FormField =
     | {
         key: string;
@@ -163,9 +162,6 @@ export async function openSpawnBranchFlow(api: ExtensionAPI): Promise<void> {
       }
     | { key: string; label: string; type: "info"; defaultValue?: string };
 
-  // Source branch picker: prefer a grouped select sourced from
-  // list_branches / list_worktrees. Fall back to a plain text input when
-  // either command is unavailable. Defaults to the current branch.
   const { options: baseOptions, currentBranch } = await fetchBaseOptionsViaApi(
     api,
     repoPath,
@@ -201,32 +197,26 @@ export async function openSpawnBranchFlow(api: ExtensionAPI): Promise<void> {
       key: "name",
       label: "Branch name",
       type: "text" as const,
-      placeholder: "feat/my-branch",
+      placeholder: "feat/my-bot-task",
     },
     baseField,
-  ];
-
-  if (presets.length > 0) {
-    fields.push({
+    {
       key: "preset",
       label: "Agent preset",
       type: "select" as const,
       options: presets.map((p) => ({ label: p.name, value: p.name })),
-    });
-  } else {
-    fields.push({
-      key: "noPresets",
-      label:
-        "No agent presets configured yet. The branch will be created without an agent. Use the AgentPreset library to add one.",
-      type: "info" as const,
-    });
-  }
+    },
+    {
+      key: "task",
+      label: "Task (optional — auto-run as the agent's first prompt)",
+      type: "text" as const,
+      placeholder: "e.g. Land the auth refactor and open a PR",
+    },
+  ];
 
-  // Step d: show form
-  const result = await api.showFormPrompt("New agentic branch", fields);
+  const result = await api.showFormPrompt("New Bot Task", fields);
   if (result === null) return;
 
-  // Step e: validate name
   const name = result.name?.trim() ?? "";
   if (!name) {
     api.reportError("Branch name cannot be empty.");
@@ -235,7 +225,6 @@ export async function openSpawnBranchFlow(api: ExtensionAPI): Promise<void> {
 
   const worktreePath = api.deriveWorktreePath(repoPath, name);
 
-  // Step f: create the worktree
   try {
     await api.invoke("create_worktree", {
       repoPath,
@@ -244,18 +233,20 @@ export async function openSpawnBranchFlow(api: ExtensionAPI): Promise<void> {
       worktreePath,
     });
   } catch (err) {
-    api.reportError(
-      "Failed to create agentic branch: " + (err as Error).message,
-    );
+    api.reportError("Failed to spawn bot task: " + (err as Error).message);
     return;
   }
 
-  // Step g/h: resolve preset and create workspace
   const chosenPreset = presets.find((p) => p.name === result.preset) ?? null;
+
+  const task =
+    (result.task?.trim() || chosenPreset?.initialPrompt?.trim()) ?? "";
 
   const surface: Record<string, unknown> = { type: "terminal" };
   if (chosenPreset) {
-    surface.command = chosenPreset.command;
+    surface.command = task
+      ? `${chosenPreset.command} ${quoteTaskForShell(task)}`
+      : chosenPreset.command;
     if (chosenPreset.env) surface.env = chosenPreset.env;
   }
 
@@ -282,8 +273,6 @@ export async function openSpawnBranchFlow(api: ExtensionAPI): Promise<void> {
       },
     });
   } catch (err) {
-    api.reportError(
-      "Failed to create agentic branch: " + (err as Error).message,
-    );
+    api.reportError("Failed to spawn bot task: " + (err as Error).message);
   }
 }

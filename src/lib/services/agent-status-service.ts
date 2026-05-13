@@ -9,7 +9,7 @@
  */
 
 import type { AgentState } from "./agent-state";
-import type { BotHatStatus } from "../utils/bot-hat-color";
+import type { BotStatus } from "../utils/bot-status-color";
 
 export const AGENT_STATUS_SOURCE = "core:agent-status";
 
@@ -32,8 +32,8 @@ export function isActiveStatus(status: string): boolean {
 }
 
 /**
- * Map a single agent's status to its hat-equivalent color bucket. Mirrors
- * the precedence used by rail-attention's `computeRailBotStatus`:
+ * Map a single agent's status to its color bucket. Mirrors the
+ * precedence used by rail-attention's `computeRailBotStatus`:
  *
  *   - waiting              → attention (yellow)
  *   - running / active     → thinking  (green)
@@ -41,9 +41,9 @@ export function isActiveStatus(status: string): boolean {
  *   - anything else        → none      (no color)
  *
  * Used by inline agent rows so the bot icon next to each agent matches
- * the color of the rail's hat for that agent's bucket.
+ * the color of the rail's bot-status bubble for that agent's bucket.
  */
-export function agentStatusBucket(status: string): BotHatStatus {
+export function agentStatusBucket(status: string): BotStatus {
   if (status === "waiting") return "attention";
   if (status === "running" || status === "active") return "thinking";
   if (status === "idle" || status === "done") return "idle";

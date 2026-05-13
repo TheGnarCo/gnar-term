@@ -159,7 +159,7 @@ describe("WorkspaceItem border", () => {
     expect(row.dataset.worktree).toBe("true");
   });
 
-  it("renders a 1px border in railColor for active workspaces", () => {
+  it("renders a 1px border in railColor on top/right/bottom for active workspaces (no left border)", () => {
     const { container } = render(WorkspaceItem, {
       props: {
         workspace: makeChildWorkspace(),
@@ -174,11 +174,17 @@ describe("WorkspaceItem border", () => {
       },
     });
     const row = container.querySelector("[data-drag-idx]") as HTMLElement;
-    expect(row.style.border).toContain("1px solid");
-    expect(row.style.border).toContain("rgb(255, 0, 170)");
+    // Left border is intentionally omitted so the row's leftmost edge
+    // is owned by the colored rail/hat — a 1px theme stripe there
+    // reads as "left edge of the hat" and undoes the bot-hat seam.
+    expect(row.style.borderTop).toContain("1px solid");
+    expect(row.style.borderRight).toContain("1px solid");
+    expect(row.style.borderBottom).toContain("1px solid");
+    expect(row.style.borderLeftStyle).toBe("none");
+    expect(row.style.borderTop).toContain("rgb(255, 0, 170)");
   });
 
-  it("renders a 1px inactive-theme border for inactive workspaces (worktree or not)", () => {
+  it("renders a 1px inactive-theme border on top/right/bottom for inactive workspaces (worktree or not)", () => {
     const { container } = render(WorkspaceItem, {
       props: {
         workspace: makeChildWorkspace(),
@@ -194,8 +200,11 @@ describe("WorkspaceItem border", () => {
     });
     const row = container.querySelector("[data-drag-idx]") as HTMLElement;
     expect(row.dataset.worktree).toBeUndefined();
-    expect(row.style.border).toContain("1px solid");
+    expect(row.style.borderTop).toContain("1px solid");
+    expect(row.style.borderRight).toContain("1px solid");
+    expect(row.style.borderBottom).toContain("1px solid");
+    expect(row.style.borderLeftStyle).toBe("none");
     // Inactive uses theme.border, NOT the accentColor.
-    expect(row.style.border).not.toContain("rgb(255, 0, 170)");
+    expect(row.style.borderTop).not.toContain("rgb(255, 0, 170)");
   });
 });

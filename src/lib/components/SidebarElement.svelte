@@ -144,9 +144,16 @@
     : isHovered
       ? $theme.bgHighlight
       : ($theme.bgSurface ?? 'transparent')};
-    border: 1px solid {isActive
+    border-top: 1px solid {isActive
     ? effectiveColor
     : ($theme.border ?? 'transparent')};
+    border-right: 1px solid {isActive
+    ? effectiveColor
+    : ($theme.border ?? 'transparent')};
+    border-bottom: 1px solid {isActive
+    ? effectiveColor
+    : ($theme.border ?? 'transparent')};
+    border-left: none;
     transition: background 0.1s;
   "
   on:contextmenu|preventDefault={onContextMenu}

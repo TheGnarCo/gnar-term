@@ -43,6 +43,7 @@ function makeFakeApi() {
 
   const attention = writable<unknown[]>([]);
   const agents = writable<unknown[]>([]);
+  const workspaces = writable<unknown[]>([]);
 
   const api = {
     onActivate: vi.fn((cb: () => void) => {
@@ -50,6 +51,10 @@ function makeFakeApi() {
     }),
     onDeactivate: vi.fn((cb: () => void) => {
       deactivateCallback = cb;
+    }),
+    onWorkspacesRestored: vi.fn((cb: () => void) => {
+      cb();
+      return () => {};
     }),
     registerGlobalSurface,
     registerTitleBarButton,
@@ -61,6 +66,7 @@ function makeFakeApi() {
     getAgentByPane,
     attention,
     agents,
+    workspaces,
   } as unknown as ExtensionAPI;
 
   function activate() {

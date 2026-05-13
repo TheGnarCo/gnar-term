@@ -14,6 +14,10 @@ describe("agenticManifest", () => {
     expect(agenticManifest.included).toBe(true);
   });
 
+  it("is marked defaultEnabled so the title-bar button shows on first run", () => {
+    expect(agenticManifest.defaultEnabled).toBe(true);
+  });
+
   it("has entry ./index.ts", () => {
     expect(agenticManifest.entry).toBe("./index.ts");
   });

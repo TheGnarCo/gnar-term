@@ -110,6 +110,12 @@
     return $workspacesStore.find((w) => w.id === rootId)?.pathMissing === true;
   })();
   $: isAgentSpawned = workspace.spawnedBy != null;
+  // "Controlled" branches are those spawned through the agentic flow
+  // (controlled: true on the BranchedWorkspace). They get the bot icon
+  // even when no spawnedBy provenance was stamped, because the workspace
+  // is by definition agent-managed.
+  $: isControlled = (workspace as { controlled?: boolean }).controlled === true;
+  $: showBotIcon = isAgentSpawned || isControlled;
   $: agentSpawnTooltip = (() => {
     const sb = workspace.spawnedBy;
     if (!sb) return "";
@@ -256,7 +262,7 @@
       <div
         style="flex: 1; overflow: hidden; display: flex; align-items: center; gap: 4px;"
       >
-        {#if isManaged && !shouldShowWorktreeStatus}
+        {#if isManaged && (!shouldShowWorktreeStatus || isControlled)}
           <span
             aria-hidden="true"
             data-workspace-worktree-icon
@@ -269,7 +275,7 @@
             <WorktreeIcon size={12} />
           </span>
         {/if}
-        {#if isAgentSpawned}
+        {#if showBotIcon}
           <span
             aria-hidden="true"
             data-workspace-agent-icon
@@ -354,18 +360,28 @@
           "
         />
       </div>
+    </div>
 
-      {#if !hideStatusBadges && hasUnread && agentBadges.length === 0}
+    {#if !hideStatusBadges && hasUnread && agentBadges.length === 0}
+      <SidebarSubtitleRow
+        color={$theme.notify}
+        title="Workspace has new terminal activity"
+      >
         <span
-          title="Workspace has new terminal activity"
-          style="display: inline-flex; align-items: center; padding: 0 3px; flex-shrink: 0;"
+          aria-hidden="true"
+          style="display: inline-flex; align-items: center; flex-shrink: 0;"
         >
           <span
             style="width: 6px; height: 6px; border-radius: 50%; background: {$theme.notify}; box-shadow: 0 0 0 1px color-mix(in srgb, {$theme.notify} 35%, transparent);"
           ></span>
         </span>
-      {/if}
-    </div>
+        <span
+          style="min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+        >
+          new activity
+        </span>
+      </SidebarSubtitleRow>
+    {/if}
 
     {#if shouldShowWorktreeStatus && !hideStatusBadges}
       <SidebarSubtitleRow color={$theme.fgMuted}>

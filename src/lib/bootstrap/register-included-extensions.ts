@@ -70,7 +70,12 @@ export async function registerIncludedExtensions(
   for (const [manifest, registerFn, label] of INCLUDED_EXTENSIONS) {
     try {
       registerExtension(manifest, registerFn);
-      if (extConfig[label]?.enabled) {
+      // Honor an explicit user preference; otherwise fall back to the
+      // manifest's `defaultEnabled` so default-on extensions activate
+      // automatically on fresh installs.
+      const userPref = extConfig[label]?.enabled;
+      const shouldActivate = userPref ?? manifest.defaultEnabled === true;
+      if (shouldActivate) {
         await activateExtension(label);
       }
     } catch (err) {

@@ -18,6 +18,7 @@ function makeFakeApi(): {
   const registerTitleBarButtonSpy = vi.fn();
   const attention = writable<unknown[]>([]);
   const agents = writable<unknown[]>([]);
+  const workspaces = writable<unknown[]>([]);
 
   const api = {
     onActivate: onActivateSpy,
@@ -29,9 +30,14 @@ function makeFakeApi(): {
     registerRootRowRenderer: vi.fn(),
     registerWorkspaceAction: vi.fn(),
     unregisterWorkspaceAction: vi.fn(),
+    onWorkspacesRestored: vi.fn((cb: () => void) => {
+      cb();
+      return () => {};
+    }),
     getAgentByPane: vi.fn().mockReturnValue(null),
     attention,
     agents,
+    workspaces,
   } as unknown as ExtensionAPI;
 
   return {

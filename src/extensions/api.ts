@@ -237,6 +237,12 @@ export interface ExtensionManifest {
   entry: string;
   included?: boolean;
   /**
+   * When true and the user has no recorded preference, the extension is
+   * activated automatically at app start. Explicit `enabled: false` in
+   * settings.json still wins. Only honored for bundled extensions.
+   */
+  defaultEnabled?: boolean;
+  /**
    * Elevated permissions opted into by the extension. Valid values:
    *   - `"pty"`        — spawn/write/kill PTYs (`spawn_pty`, `write_pty`, …)
    *   - `"shell"`      — `run_script` arbitrary shell exec

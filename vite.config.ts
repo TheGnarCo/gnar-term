@@ -23,7 +23,6 @@ export default defineConfig({
         "src/**/*.test.ts",
         "src/**/*.d.ts",
         "src/lib/types/**/*.ts",
-        "src/extensions/agentic-orchestrator/index.ts",
         "src/lib/services/git-status-service.ts",
         // Dominated by a Tauri event listener (installMcpOutputListener)
         // that can't be exercised without a live Tauri runtime.

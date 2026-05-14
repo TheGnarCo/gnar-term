@@ -11,16 +11,27 @@ import {
   type TerminalSurface,
 } from "../types";
 
-// Cached home directory — resolved once, reused everywhere
+// Cached home directory — resolved once, reused everywhere.
+// Only the successful resolution is cached. A transient Tauri failure falls back
+// to "/tmp" but does NOT cache it, so the next call retries the invoke.
 let _home = "";
 export async function getHome(): Promise<string> {
   if (_home) return _home;
   try {
     _home = await invoke<string>("get_home");
-  } catch {
-    _home = "/tmp";
+  } catch (err) {
+    console.warn(
+      "[getHome] Tauri get_home invoke failed; falling back to /tmp. Next call will retry.",
+      err,
+    );
+    return "/tmp";
   }
   return _home;
+}
+
+/** For tests only — resets the module-level home cache. */
+export function resetHomeForTests(): void {
+  _home = "";
 }
 
 // Cached global config directory — gnar-term in release, gnar-term-dev in debug

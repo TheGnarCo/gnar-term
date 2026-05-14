@@ -5,7 +5,7 @@
  * management (activate/deactivate), event filtering, command registration
  * with source tracking, scoped state, and the extension store.
  */
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { get } from "svelte/store";
 
 vi.mock("@tauri-apps/api/event", () => ({
@@ -1230,7 +1230,7 @@ describe("ExtensionAPI invoke allowlist", () => {
 
     await expect(
       api.invoke("read_file", {
-        path: "/home/user/.config/gnar-term/settings.json",
+        path: "/home/user/.config/gnar-term/gnar-term.json",
       }),
     ).rejects.toThrow(/Access denied/);
 

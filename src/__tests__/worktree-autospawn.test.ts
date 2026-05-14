@@ -4,7 +4,7 @@
  * The hook lives in `createWorktreeWorkspaceFromConfig` and is gated by:
  *   1. `autoSpawnEligible: true` on the config (opt-in)
  *   2. no explicit `startupCommand` already supplied (preserves caller intent)
- *   3. at least one `AgentPreset` with `autoSpawn: true` in settings.json
+ *   3. at least one `AgentPreset` with `autoSpawn: true` in gnar-term.json
  *
  * When all three hold, the new workspace's first terminal surface is created
  * with the preset's resolved startup command + env merged in.

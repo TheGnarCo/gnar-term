@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { tick } from "svelte";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
-// get is available if needed for store testing
+import { get } from "svelte/store";
 import { readFileSync } from "fs";
 import type { Workspace, Pane, TerminalSurface } from "../lib/types";
 
@@ -2734,10 +2734,13 @@ describe("PreviewSurface link interception", () => {
 });
 
 describe("terminal link handling", () => {
-  it("registerLinkProvider is called and link activate invokes open_url", async () => {
+  it("plain URL link click dispatches open-preview pendingAction; Cmd/Ctrl-click escapes to open_url", async () => {
     const { invoke: invokeMock } = await import("@tauri-apps/api/core");
     const invokeMockFn = vi.mocked(invokeMock);
     invokeMockFn.mockClear();
+
+    const { pendingAction } = await import("../lib/stores/ui");
+    pendingAction.set(null);
 
     const { Terminal: TerminalMock } = await import("@xterm/xterm");
     // TerminalMock is the mock constructor; instances track calls on the instance
@@ -2800,24 +2803,49 @@ describe("terminal link handling", () => {
     expect(getLineMock).toHaveBeenCalledWith(0);
     expect(capturedLinks).toBeDefined();
     expect(capturedLinks!.length).toBeGreaterThan(0);
+
+    // Plain click → preview surface via pendingAction; no open_url invoke.
+    const openUrlCallsBefore = invokeMockFn.mock.calls.filter(
+      (c) => c[0] === "open_url",
+    ).length;
     capturedLinks![0].activate(
       new MouseEvent("click"),
+      "https://example.com/path",
+    );
+    expect(get(pendingAction)).toEqual({
+      type: "open-preview",
+      target: "https://example.com/path",
+    });
+    expect(
+      invokeMockFn.mock.calls.filter((c) => c[0] === "open_url").length,
+    ).toBe(openUrlCallsBefore);
+
+    // Cmd-click → escapes to system browser.
+    pendingAction.set(null);
+    capturedLinks![0].activate(
+      new MouseEvent("click", { metaKey: true }),
       "https://example.com/path",
     );
     expect(invokeMockFn).toHaveBeenCalledWith("open_url", {
       url: "https://example.com/path",
     });
+    expect(get(pendingAction)).toBeNull();
   });
 
-  it("OSC 8 linkHandler is wired in Terminal options and invokes open_url", async () => {
+  it("OSC 8 linkHandler is wired and dispatches open-preview by default; Cmd-click escapes to open_url", async () => {
     // Regression: xterm.js's default OSC 8 handler calls window.confirm
     // before navigating. Tauri remaps window.confirm to plugin:dialog|confirm,
     // which is not granted in capabilities — so the click rejects with
     // "dialog.confirm not allowed. Command not found" and the URL never opens.
-    // We override linkHandler in Terminal options to bypass that path.
+    // We override linkHandler in Terminal options to bypass that path AND
+    // to route plain clicks into the preview surface (Cmd-click escapes
+    // to the system browser via open_url).
     const { invoke: invokeMock } = await import("@tauri-apps/api/core");
     const invokeMockFn = vi.mocked(invokeMock);
     invokeMockFn.mockClear();
+
+    const { pendingAction } = await import("../lib/stores/ui");
+    pendingAction.set(null);
 
     const { Terminal: TerminalMock } = await import("@xterm/xterm");
     const TerminalCtor = vi.mocked(
@@ -2846,12 +2874,31 @@ describe("terminal link handling", () => {
     // open_url enforces the actual scheme allowlist on the Rust side.
     expect(options.linkHandler!.allowNonHttpProtocols).toBe(true);
 
+    // Plain click → preview dispatch via pendingAction.
+    const openUrlCallsBefore = invokeMockFn.mock.calls.filter(
+      (c) => c[0] === "open_url",
+    ).length;
     options.linkHandler!.activate(
       new MouseEvent("click"),
+      "https://github.com/foo/bar/pull/1",
+    );
+    expect(get(pendingAction)).toEqual({
+      type: "open-preview",
+      target: "https://github.com/foo/bar/pull/1",
+    });
+    expect(
+      invokeMockFn.mock.calls.filter((c) => c[0] === "open_url").length,
+    ).toBe(openUrlCallsBefore);
+
+    // Cmd-click → escape to system browser.
+    pendingAction.set(null);
+    options.linkHandler!.activate(
+      new MouseEvent("click", { metaKey: true }),
       "https://github.com/foo/bar/pull/1",
     );
     expect(invokeMockFn).toHaveBeenCalledWith("open_url", {
       url: "https://github.com/foo/bar/pull/1",
     });
+    expect(get(pendingAction)).toBeNull();
   });
 });

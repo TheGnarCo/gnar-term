@@ -1019,6 +1019,10 @@ function buildTerminalContextMenu(
     action: () => terminal.clear(),
   });
   items.push({
+    label: "Refresh Rendering",
+    action: () => clearAllTerminalAtlases(),
+  });
+  items.push({
     label: "Split Right",
     shortcut: `${modLabel}D`,
     action: () => pendingAction.set({ type: "split-right" }),

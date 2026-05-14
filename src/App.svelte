@@ -617,16 +617,23 @@
       })
       .catch((e) => console.warn("[drag-drop] init failed:", e));
 
-    // OS sleep/resume can return the GPU context with a corrupted texture
-    // atlas — visible as garbled multi-color glyphs that "fix themselves"
-    // when the user resizes the window (resize is the only path that
-    // currently invalidates the atlas). Clear on every visibility regain.
+    // OS sleep/resume and long-running sessions can return the GPU context
+    // with a corrupted texture atlas — visible as garbled multi-color glyphs
+    // that "fix themselves" when the user resizes the window (resize is the
+    // only path that currently invalidates the atlas). Clear on every
+    // visibility regain AND on window focus regain so alt-tabbing across
+    // apps on the same desktop (which doesn't fire visibilitychange) also
+    // recovers without a manual resize.
     const onVisibility = () => {
       if (document.visibilityState === "visible") clearAllTerminalAtlases();
     };
+    const onWindowFocus = () => clearAllTerminalAtlases();
     document.addEventListener("visibilitychange", onVisibility);
-    _cleanupVisibilityRecover = () =>
+    window.addEventListener("focus", onWindowFocus);
+    _cleanupVisibilityRecover = () => {
       document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", onWindowFocus);
+    };
     await fontReady;
     void setupListeners();
     startCwdPolling();

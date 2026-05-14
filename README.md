@@ -337,8 +337,6 @@ gnar-term reads configuration from:
 5. `~/.config/gnar-term/cmux.json` (global, one-shot migration → rewritten to `~/.config/gnar-term/gnar-term.json` on next save)
 6. `~/.config/cmux/cmux.json` (global, one-shot migration → rewritten to `~/.config/gnar-term/gnar-term.json` on next save)
 
-> **Note:** `settings.json` (per-project and global) is no longer read. If you have a `settings.json`, rename it to `gnar-term.json`.
-
 The config format is a superset of [cmux.json](https://cmux.com/docs/custom-commands). Any valid `cmux.json` works as a `gnar-term.json` (and is automatically migrated on the next save).
 
 ### gnar-term extensions

@@ -58,7 +58,7 @@ export const spacebaseManifest: ExtensionManifest = {
           type: "string",
           title: "API key",
           description:
-            "Spacebase Bearer token (sw_...). Treated as a secret — stored in settings.json on disk; do not commit project-level settings files containing this value.",
+            "Spacebase Bearer token (sw_...). Treated as a secret — stored in gnar-term.json on disk; do not commit project-level config files containing this value.",
           default: "",
         },
         baseUrl: {

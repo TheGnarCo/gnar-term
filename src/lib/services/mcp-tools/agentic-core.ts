@@ -84,7 +84,7 @@ export const agenticCoreTools: ToolDef[] = [
         agent_preset_name: {
           type: "string",
           description:
-            "Name of an AgentPreset from settings.json `agents[]`. Resolves to agent type + command + initialPrompt + env. Ignored when `agent` is provided.",
+            "Name of an AgentPreset from gnar-term.json `agents[]`. Resolves to agent type + command + initialPrompt + env. Ignored when `agent` is provided.",
         },
       },
       required: ["name"],

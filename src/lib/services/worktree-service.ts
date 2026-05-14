@@ -161,7 +161,7 @@ export interface WorktreeWorkspaceConfig {
   spawnedFromIssues?: number[];
   /**
    * When true, and `startupCommand` is not already supplied, the first
-   * `AgentPreset` in `settings.json#agents[]` with `autoSpawn: true` is
+   * `AgentPreset` in `gnar-term.json#agents[]` with `autoSpawn: true` is
    * spawned into the new workspace's terminal. Defaults to false — explicit
    * opt-in so MCP / scripted paths don't unintentionally spawn agents.
    *
@@ -199,7 +199,7 @@ export async function createWorktreeWorkspaceFromConfig(
   //      interactive "New Branch" UI).
   //   2. No explicit `startupCommand` was supplied — preserves the
   //      caller's intent when they already chose a command.
-  //   3. A preset with `autoSpawn: true` exists in settings.json#agents[].
+  //   3. A preset with `autoSpawn: true` exists in gnar-term.json#agents[].
   // Source-of-truth: presets are read directly from getConfig() — no
   // parallel preset store.
   let effectiveStartupCommand = config.startupCommand;

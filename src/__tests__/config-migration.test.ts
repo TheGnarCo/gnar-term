@@ -7,7 +7,8 @@
  * Covered today:
  *   - SurfaceDef.type "markdown" (main) → "preview" (dev). Same `path`
  *     field, so the rest of the def survives.
- *   - Config path policy: gnar-term.json is canonical; settings.json is dropped.
+ *   - Config path policy: gnar-term.json is canonical write target across
+ *     project and global scopes, with legacy formats migrating on next save.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -183,45 +184,7 @@ describe("loadConfig — config path policy (gnar-term.json canonical)", () => {
     );
   }
 
-  // ── AC-2: settings.json hard-drop ──────────────────────────────────────
-
-  it("AC-2: loadConfig ignores ./settings.json entirely", async () => {
-    mockFileSystem({
-      "settings.json": JSON.stringify({ theme: "from-settings" }),
-    });
-    const cfg = await loadConfig();
-    // settings.json must not be read — result should be empty default
-    expect(cfg).toEqual({});
-
-    await saveConfig({});
-    const writes = vi
-      .mocked(invoke)
-      .mock.calls.filter(([cmd]) => cmd === "write_file")
-      .map(([, args]) => (args as { path: string }).path);
-    // Next save must NOT go to settings.json
-    expect(writes).not.toContain("settings.json");
-    // Must default to configDir/gnar-term.json
-    expect(writes).toContain(`${CONFIG_DIR}/gnar-term.json`);
-  });
-
-  it("AC-2: loadConfig ignores configDir/settings.json entirely", async () => {
-    mockFileSystem({
-      [`${CONFIG_DIR}/settings.json`]: JSON.stringify({
-        theme: "global-settings",
-      }),
-    });
-    const cfg = await loadConfig();
-    // configDir/settings.json must not be read — result should be empty default
-    expect(cfg).toEqual({});
-
-    await saveConfig({});
-    const writes = vi
-      .mocked(invoke)
-      .mock.calls.filter(([cmd]) => cmd === "write_file")
-      .map(([, args]) => (args as { path: string }).path);
-    expect(writes).not.toContain(`${CONFIG_DIR}/settings.json`);
-    expect(writes).toContain(`${CONFIG_DIR}/gnar-term.json`);
-  });
+  // ── AC-2: canonical path policy ───────────────────────────────────────
 
   it("AC-2: loadConfig reads ./gnar-term.json as canonical (no write-forward)", async () => {
     mockFileSystem({
@@ -235,9 +198,8 @@ describe("loadConfig — config path policy (gnar-term.json canonical)", () => {
       .mocked(invoke)
       .mock.calls.filter(([cmd]) => cmd === "write_file")
       .map(([, args]) => (args as { path: string }).path);
-    // Canonical — next save stays at gnar-term.json, NOT forwarded to settings.json
+    // Canonical — next save stays at gnar-term.json
     expect(writes).toContain("gnar-term.json");
-    expect(writes).not.toContain("settings.json");
   });
 
   it("AC-2: loadConfig defaults _configPath to configDir/gnar-term.json when no source found", async () => {
@@ -251,7 +213,6 @@ describe("loadConfig — config path policy (gnar-term.json canonical)", () => {
       .mock.calls.filter(([cmd]) => cmd === "write_file")
       .map(([, args]) => (args as { path: string }).path);
     expect(writes).toContain(`${CONFIG_DIR}/gnar-term.json`);
-    expect(writes).not.toContain(`${CONFIG_DIR}/settings.json`);
   });
 
   // ── AC-3: canonical fixture round-trip ─────────────────────────────────
@@ -418,7 +379,6 @@ describe("loadConfig — config path policy (gnar-term.json canonical)", () => {
       .map(([, args]) => (args as { path: string }).path);
     expect(writes).toContain("gnar-term.json");
     expect(writes).not.toContain("cmux.json");
-    expect(writes).not.toContain("settings.json");
   });
 
   it("AC-6 (g): one-shot migration — ~/.config/cmux/cmux.json read → next save writes configDir/gnar-term.json", async () => {
@@ -437,7 +397,6 @@ describe("loadConfig — config path policy (gnar-term.json canonical)", () => {
       .map(([, args]) => (args as { path: string }).path);
     expect(writes).toContain(`${CONFIG_DIR}/gnar-term.json`);
     expect(writes).not.toContain(`${HOME}/.config/cmux/cmux.json`);
-    expect(writes).not.toContain(`${CONFIG_DIR}/settings.json`);
   });
 
   it("AC-6 (g): one-shot migration — configDir/cmux.json read → next save writes configDir/gnar-term.json", async () => {
@@ -456,7 +415,6 @@ describe("loadConfig — config path policy (gnar-term.json canonical)", () => {
       .map(([, args]) => (args as { path: string }).path);
     expect(writes).toContain(`${CONFIG_DIR}/gnar-term.json`);
     expect(writes).not.toContain(`${CONFIG_DIR}/cmux.json`);
-    expect(writes).not.toContain(`${CONFIG_DIR}/settings.json`);
   });
 
   // ── AC-6 (h): one-shot migration — .gnar-term ─────────────────────────
@@ -475,27 +433,6 @@ describe("loadConfig — config path policy (gnar-term.json canonical)", () => {
       .map(([, args]) => (args as { path: string }).path);
     expect(writes).toContain("gnar-term.json");
     expect(writes).not.toContain(".gnar-term");
-    expect(writes).not.toContain("settings.json");
-  });
-
-  // ── AC-6 (i): settings.json negative test ──────────────────────────────
-
-  it("AC-6 (i): present ./settings.json is NOT read (returns empty cfg)", async () => {
-    mockFileSystem({
-      "settings.json": JSON.stringify({ theme: "should-be-ignored" }),
-    });
-    const cfg = await loadConfig();
-    // settings.json must be completely ignored
-    expect(cfg).toEqual({});
-
-    await saveConfig({});
-    const writes = vi
-      .mocked(invoke)
-      .mock.calls.filter(([cmd]) => cmd === "write_file")
-      .map(([, args]) => (args as { path: string }).path);
-    // Default configPath is configDir/gnar-term.json, never settings.json
-    expect(writes).toContain(`${CONFIG_DIR}/gnar-term.json`);
-    expect(writes).not.toContain("settings.json");
   });
 
   // ── Additional coverage: global canonical path ──────────────────────────
@@ -515,7 +452,6 @@ describe("loadConfig — config path policy (gnar-term.json canonical)", () => {
       .mock.calls.filter(([cmd]) => cmd === "write_file")
       .map(([, args]) => (args as { path: string }).path);
     expect(writes).toContain(`${CONFIG_DIR}/gnar-term.json`);
-    expect(writes).not.toContain(`${CONFIG_DIR}/settings.json`);
   });
 
   it("per-project gnar-term.json takes priority over global gnar-term.json", async () => {

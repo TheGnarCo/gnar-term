@@ -167,7 +167,7 @@
     Import <code>.itermcolors</code> or base16 YAML files. The importer derives
     sidebar/border tones from the bg/fg pair and reuses the ansi palette for
     accent and status colors. Hand-edit
-    <code>userThemes</code> in settings.json for fine-tuning.
+    <code>userThemes</code> in gnar-term.json for fine-tuning.
   </p>
 
   <div style="display: flex; gap: 8px; margin-bottom: 12px;">

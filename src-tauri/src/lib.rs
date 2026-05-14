@@ -166,25 +166,29 @@ fn get_cli_args(args: tauri::State<'_, CliArgs>) -> CliArgs {
     args.inner().clone()
 }
 
-/// Read the `mcp` setting from a settings file. Probe order matches the
-/// frontend's `loadConfig` priority in `src/lib/config.ts`: per-project
-/// `settings.json` first, then legacy `gnar-term.json` / `cmux.json`,
-/// then global `~/.config/gnar-term/settings.json` and its legacy peers.
+/// Read the `mcp` setting from a config file. Probe order matches the
+/// frontend's `loadConfig` priority in `src/lib/config.ts`: canonical
+/// per-project `gnar-term.json` first, then per-project legacy sources
+/// (`.gnar-term`, `cmux.json`), then canonical global
+/// `~/.config/gnar-term/gnar-term.json`, then global legacy peers
+/// (`~/.config/gnar-term/cmux.json`, `~/.config/cmux/cmux.json`).
 /// Returns `"auto"` if no config exists or the field is missing. Values
 /// that aren't recognized fall back to `"auto"`.
 fn read_mcp_setting() -> String {
     let paths: Vec<std::path::PathBuf> = {
         let mut v = Vec::new();
-        v.push(std::path::PathBuf::from("settings.json"));
         v.push(std::path::PathBuf::from("gnar-term.json"));
+        v.push(std::path::PathBuf::from(".gnar-term"));
         v.push(std::path::PathBuf::from("cmux.json"));
         if let Ok(config_dir) = global_config_dir() {
             v.push(std::path::PathBuf::from(format!(
-                "{config_dir}/settings.json"
-            )));
-            v.push(std::path::PathBuf::from(format!(
                 "{config_dir}/gnar-term.json"
             )));
+            v.push(std::path::PathBuf::from(format!("{config_dir}/cmux.json")));
+        }
+        if let Some(home) = std::env::var_os("HOME") {
+            let home = std::path::PathBuf::from(home);
+            v.push(home.join(".config").join("cmux").join("cmux.json"));
         }
         v
     };

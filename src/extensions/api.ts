@@ -239,7 +239,7 @@ export interface ExtensionManifest {
   /**
    * When true and the user has no recorded preference, the extension is
    * activated automatically at app start. Explicit `enabled: false` in
-   * settings.json still wins. Only honored for bundled extensions.
+   * gnar-term.json still wins. Only honored for bundled extensions.
    */
   defaultEnabled?: boolean;
   /**
@@ -826,7 +826,7 @@ export interface ExtensionAPI {
    */
   agents: Readable<AgentRef[]>;
   /**
-   * Reactive list of agent spawn presets defined in `settings.json` under
+   * Reactive list of agent spawn presets defined in `gnar-term.json` under
    * `agents[]`. The store reflects the canonical config; mutations go
    * through the Settings UI or direct config edits. Use this to power
    * preset pickers, kanban "spawn agent" affordances, and similar UI.

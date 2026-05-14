@@ -9,8 +9,6 @@
  *   ~/.config/gnar-term/cmux.json       (global; one-shot migration → global gnar-term.json)
  *   ~/.config/cmux/cmux.json            (global; one-shot migration → global gnar-term.json)
  *
- * `settings.json` is no longer supported at any path — never read, never written.
- *
  * Runtime state:
  *   ~/.config/gnar-term/state.json      (written on quit, restored on launch)
  */
@@ -406,9 +404,6 @@ export async function loadConfig(
   // _configPath to so the next saveConfig writes the new filename and
   // orphans the old one. Entries without `writeForward` are canonical —
   // the next save writes back to the same file.
-  //
-  // settings.json is intentionally absent from this list — it is no
-  // longer read or written at any path.
   const candidates: { read: string; writeForward?: string }[] = [
     { read: "gnar-term.json" },
     { read: ".gnar-term", writeForward: "gnar-term.json" },

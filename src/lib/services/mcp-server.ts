@@ -493,7 +493,7 @@ export function unregisterMcpToolsBySource(source: string): void {
 registerTool({
   name: "spawn_agent",
   description:
-    "Spawn a new gnar-term pane running an AI coding agent (claude-code, codex, aider) or a custom command. Targets the agent's host workspace by default (per connection binding); pass workspace_id/pane_id to override. Pass `worktree` to instead create a fresh branched workspace and spawn the agent there (auto-resolves branch / worktree path; optionally tags the workspace under a dashboard). Pass `agent_preset_name` to resolve agent/command/task/cwd/env from a settings.json `agents[]` entry; explicit args override the preset.",
+    "Spawn a new gnar-term pane running an AI coding agent (claude-code, codex, aider) or a custom command. Targets the agent's host workspace by default (per connection binding); pass workspace_id/pane_id to override. Pass `worktree` to instead create a fresh branched workspace and spawn the agent there (auto-resolves branch / worktree path; optionally tags the workspace under a dashboard). Pass `agent_preset_name` to resolve agent/command/task/cwd/env from a gnar-term.json `agents[]` entry; explicit args override the preset.",
   inputSchema: {
     type: "object",
     properties: {
@@ -513,7 +513,7 @@ registerTool({
       agent_preset_name: {
         type: "string",
         description:
-          "Name of an AgentPreset from settings.json `agents[]`. Resolves to agent type + command + initialPrompt + defaultCwd + env. Explicit args (agent/command/task/cwd/env) override the preset when both are provided. When set, `agent` is no longer required.",
+          "Name of an AgentPreset from gnar-term.json `agents[]`. Resolves to agent type + command + initialPrompt + defaultCwd + env. Explicit args (agent/command/task/cwd/env) override the preset when both are provided. When set, `agent` is no longer required.",
       },
       worktree: {
         type: "object",

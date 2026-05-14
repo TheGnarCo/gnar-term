@@ -1,17 +1,17 @@
 import { variantColor } from "../status-colors";
 
-export type BotHatStatus = "none" | "thinking" | "attention" | "idle";
+export type BotStatus = "none" | "thinking" | "attention" | "idle";
 
 const ATTENTION = variantColor("warning");
 const THINKING = variantColor("success");
 const IDLE = variantColor("muted");
 
 /**
- * Color for the rail "hat" overlay and the rail's top border when a
- * bot is present. Returns `null` for "none" so callers can branch on
- * "no hat painted at all".
+ * Color for the rail bot-status bubble overlay and any inline
+ * affordances that should agree with it. Returns `null` for `"none"`
+ * so callers can branch on "no bot signal painted at all".
  */
-export function botHatColor(status: BotHatStatus): string | null {
+export function botStatusColor(status: BotStatus): string | null {
   switch (status) {
     case "attention":
       return ATTENTION;

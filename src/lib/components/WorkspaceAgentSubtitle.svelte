@@ -9,12 +9,13 @@
    * branch matches a pane, the branch-lifecycle pill rides on the same
    * row.
    *
-   * Scope is intentionally narrower than the rail "hat" — the hat on
-   * the workspace banner aggregates the root workspace AND its branched
-   * workspaces, while this inline row reports only the bots whose
-   * `workspaceId` matches the row's own workspace. Branched workspace
-   * rows therefore show their own scope, and the root banner shows
-   * only the root's own bots even when branches have activity.
+   * Scope is intentionally narrower than the rail bot-status bubble —
+   * the bubble on the workspace banner aggregates the root workspace
+   * AND its branched workspaces, while this inline row reports only
+   * the bots whose `workspaceId` matches the row's own workspace.
+   * Branched workspace rows therefore show their own scope, and the
+   * root banner shows only the root's own bots even when branches
+   * have activity.
    *
    * Hides itself entirely when no active agents are present (and no
    * lifecycle pill would render). Registered by core in
@@ -37,7 +38,7 @@
   import { workspaces } from "../stores/workspace";
   import { getAllPanes } from "../types";
   import { theme } from "../stores/theme";
-  import { botHatColor, type BotHatStatus } from "../utils/bot-hat-color";
+  import { botStatusColor, type BotStatus } from "../utils/bot-status-color";
   import BotIcon from "../icons/BotIcon.svelte";
 
   export let workspaceId: string;
@@ -85,23 +86,24 @@
 
   // The icon color (and the row's `data-bot-status`) come from the
   // canonical rail-attention pipeline so the inline bot icon's color
-  // always agrees with the rail's "hat" color — including OSC-driven
-  // attention events that flip the hat before any agent's status flips
-  // to "waiting". The textual label still enumerates the distinct
-  // agent-derived buckets present (waiting, running, idle) so the row
-  // reports *what* the agents are doing, while the color tracks the
-  // canonical "highest-priority signal" the rail surfaces.
-  const BUCKET_LABEL: Record<BotHatStatus, string> = {
+  // always agrees with the rail's bot-status bubble color — including
+  // OSC-driven attention events that flip the bubble before any
+  // agent's status flips to "waiting". The textual label still
+  // enumerates the distinct agent-derived buckets present (waiting,
+  // running, idle) so the row reports *what* the agents are doing,
+  // while the color tracks the canonical "highest-priority signal"
+  // the rail surfaces.
+  const BUCKET_LABEL: Record<BotStatus, string> = {
     attention: "Waiting",
     thinking: "Running",
     idle: "Idle",
     none: "",
   };
-  const BUCKET_ORDER: BotHatStatus[] = ["attention", "thinking", "idle"];
+  const BUCKET_ORDER: BotStatus[] = ["attention", "thinking", "idle"];
 
   $: fgMuted = ($theme["fgMuted"] ?? $theme.fgDim) as string;
   $: presentBuckets = (() => {
-    const seen = new Set<BotHatStatus>();
+    const seen = new Set<BotStatus>();
     for (const a of $activeAgents) {
       const b = agentStatusBucket(a.status);
       if (b !== "none") seen.add(b);
@@ -115,7 +117,7 @@
     $agentsStore,
     $attentionStore,
   );
-  $: iconColor = botHatColor(dominantBucket) ?? fgMuted;
+  $: iconColor = botStatusColor(dominantBucket) ?? fgMuted;
   $: shouldRender = statusLabel !== "" || $lifecycleEntry !== undefined;
 
   function handleClick() {

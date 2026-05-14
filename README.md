@@ -230,7 +230,7 @@ gnar-term -w Dev
 gnar-term --title "API Server" ~/projects/api
 ```
 
-When launched without arguments and no persisted state, gnar-term opens a default Terminal workspace rooted at `$HOME`. If `autoload` is set or a saved session exists, those take precedence.
+**First-launch behavior.** Workspaces are resolved in this order: CLI args → persisted session (`state.json`) → `config.autoload` → auto-default. If none of the first three produce a workspace and no prior session exists, gnar-term opens a single **Terminal** workspace rooted at `$HOME`. If a previous session explicitly closed every workspace (state file present, `workspaces: []`), the dashboard renders empty instead of auto-defaulting.
 
 ## Install
 
@@ -334,7 +334,8 @@ gnar-term reads configuration from:
 2. `./.gnar-term` (per-project, one-shot migration → rewritten to `./gnar-term.json` on next save)
 3. `./cmux.json` (per-project, one-shot migration → rewritten to `./gnar-term.json` on next save)
 4. `~/.config/gnar-term/gnar-term.json` (global, canonical write path)
-5. `~/.config/cmux/cmux.json` (global, one-shot migration → rewritten to `~/.config/gnar-term/gnar-term.json` on next save)
+5. `~/.config/gnar-term/cmux.json` (global, one-shot migration → rewritten to `~/.config/gnar-term/gnar-term.json` on next save)
+6. `~/.config/cmux/cmux.json` (global, one-shot migration → rewritten to `~/.config/gnar-term/gnar-term.json` on next save)
 
 > **Note:** `settings.json` (per-project and global) is no longer read. If you have a `settings.json`, rename it to `gnar-term.json`.
 

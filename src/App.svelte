@@ -1060,7 +1060,30 @@
 <WorkspaceSwitcher bind:open={workspaceSwitcherOpen} />
 
 <style>
-  :global(:focus-visible) {
+  /* Scope the accent-colored focus ring to actual interactive controls so
+     non-interactive containers (the main work area, xterm wrappers,
+     <body>) never paint a stray outline on first programmatic focus. */
+  :global(
+    :where(
+      button,
+      [role="button"],
+      [role="tab"],
+      [role="menuitem"],
+      [role="menuitemcheckbox"],
+      [role="menuitemradio"],
+      [role="option"],
+      [role="checkbox"],
+      [role="radio"],
+      [role="switch"],
+      [role="link"],
+      a[href],
+      input,
+      textarea,
+      select,
+      summary,
+      [contenteditable="true"]
+    ):focus-visible
+  ) {
     outline: 2px solid var(--theme-accent, #7c6aff);
     outline-offset: 2px;
     border-radius: 2px;

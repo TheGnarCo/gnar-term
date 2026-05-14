@@ -115,7 +115,14 @@ export async function restoreWorkspaces(
   // WorkspaceDef into the WorkspaceTemplate that `createWorkspaceFromDef`
   // consumes so PTY surfaces hydrate through the standard path.
   // ---------------------------------------------------------------------------
-  if (Array.isArray(state.workspaces) && state.workspaces.length > 0) {
+  if (Array.isArray(state.workspaces)) {
+    if (state.workspaces.length === 0) {
+      // Explicit empty array — user deleted all workspaces on purpose.
+      // This is the only valid "stay empty" sentinel: fall through to
+      // EmptySurface. Do NOT autoload, do NOT auto-default.
+      return;
+    }
+
     const runtimeDefs = state.workspaces as WorkspaceDef[];
 
     // Dashboards are tabs now, not workspaces. Silently drop any
@@ -163,13 +170,28 @@ export async function restoreWorkspaces(
 
   // Step 5: auto-default Terminal workspace.
   //
-  // Gate: state.workspaces was undefined (no state.json on disk, or state.json
-  // exists but has no workspaces field) AND no workspaces ended up in the store
-  // from the steps above.
+  // Gate: state.workspaces was absent or corrupt (undefined, or any non-array
+  // value) AND no workspaces ended up in the store from the steps above.
   //
   // Distinguish from state.workspaces === [] (explicit empty array) which means
-  // the user deleted all workspaces on purpose — that falls through to EmptySurface.
-  if (state.workspaces === undefined && get(workspaces).length === 0) {
+  // the user deleted all workspaces on purpose — that falls through to
+  // EmptySurface and is the only valid "stay empty" sentinel.
+  //
+  // Non-array, non-undefined values (strings, objects, numbers) are treated as
+  // corrupt state — auto-default fires rather than landing on EmptySurface.
+  const stateWorkspaces = state.workspaces;
+  const isAbsentOrCorrupt =
+    stateWorkspaces === undefined || !Array.isArray(stateWorkspaces);
+  if (isAbsentOrCorrupt) {
+    if (stateWorkspaces !== undefined) {
+      console.warn(
+        "[restoreWorkspaces] state.workspaces has unexpected type; treating as absent and auto-defaulting.",
+        typeof stateWorkspaces,
+        stateWorkspaces,
+      );
+    }
+  }
+  if (isAbsentOrCorrupt && get(workspaces).length === 0) {
     const home = await getHome();
     const def: WorkspaceTemplate = {
       name: "Terminal",

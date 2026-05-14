@@ -6,7 +6,8 @@
  *   - state.workspaces === [] (explicit empty) → fall through to EmptySurface
  *   - Any existing workspace source (CLI, state, autoload) → no auto-default
  *
- * AC coverage: AC-1, AC-4, AC-5, AC-6-a, AC-6-c, AC-6-d, AC-6-e
+ * AC coverage: AC-1, AC-4, AC-5, AC-6-a, AC-6-b, AC-6-c, AC-6-d, AC-6-e
+ * Finding coverage: F2 (getHome fallback), F4 (corrupt state.workspaces)
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { get } from "svelte/store";
@@ -53,6 +54,7 @@ import {
 import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
 import { resetHomeForTests } from "../lib/services/service-helpers";
 import type { GnarTermConfig } from "../lib/config";
+import canonicalFixture from "./__fixtures__/canonical-gnar-term-config.json";
 
 const EMPTY_CLI: CliArgs = {
   path: null,
@@ -248,5 +250,248 @@ describe("auto-default Terminal workspace", () => {
     const list = get(workspaces);
     expect(list).toHaveLength(1);
     expect(list[0].name).toBe("Terminal");
+  });
+});
+
+// ── F2: getHome() /tmp fallback is warned and not cached ──────────────────
+
+describe("F2: getHome() /tmp fallback behavior", () => {
+  it("F2: emits console.warn when Tauri get_home fails", async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const mockedInvoke = vi.mocked(invoke);
+
+    // First call: get_home fails; subsequent read_file also fails (no state).
+    let callCount = 0;
+    mockedInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "get_home") {
+        callCount++;
+        throw new Error("Tauri bridge unavailable");
+      }
+      if (cmd === "read_file") throw new Error("no state file");
+      throw new Error(`no mock for ${cmd}`);
+    });
+
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    await restoreWorkspaces({ ...EMPTY_CLI }, {});
+
+    // Snapshot calls before restore (restore may clear the mock records).
+    const warnCalls = [...warnSpy.mock.calls];
+    warnSpy.mockRestore();
+
+    // warn must have fired at least once and must mention getHome
+    const homeWarn = warnCalls.find((args) =>
+      String(args[0]).includes("getHome"),
+    );
+    expect(homeWarn).toBeDefined();
+    expect(callCount).toBeGreaterThanOrEqual(1);
+  });
+
+  it("F2: transient failure does not cache /tmp — next call retries invoke", async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const mockedInvoke = vi.mocked(invoke);
+
+    // First get_home call fails; second succeeds with the real home dir.
+    let getHomeCallCount = 0;
+    mockedInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "get_home") {
+        getHomeCallCount++;
+        if (getHomeCallCount === 1) throw new Error("transient failure");
+        return MOCKED_HOME; // second call succeeds
+      }
+      if (cmd === "read_file") throw new Error("no state file");
+      throw new Error(`no mock for ${cmd}`);
+    });
+
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    // First restoreWorkspaces call — get_home fails, falls back to /tmp
+    await restoreWorkspaces({ ...EMPTY_CLI }, {});
+    warnSpy.mockRestore();
+
+    // At this point the cache must NOT hold /tmp. Reset store + signal to
+    // allow a second restoreWorkspaces call.
+    workspaces.set([]);
+    activeWorkspaceIdx.set(-1);
+    resetRestoreSignal();
+    // Do NOT call resetHomeForTests() — we're verifying the cache wasn't
+    // poisoned by the /tmp fallback.
+
+    await restoreWorkspaces({ ...EMPTY_CLI }, {});
+
+    // Second call should have retried and gotten MOCKED_HOME.
+    expect(getHomeCallCount).toBe(2);
+    const list = get(workspaces);
+    expect(list).toHaveLength(1);
+    // The workspace cwd should reflect the real home, not /tmp.
+    const ws = list[0];
+    if (ws.paneLayout.type === "pane") {
+      const surface = ws.paneLayout.pane.surfaces[0] as {
+        kind: string;
+        cwd?: string;
+      };
+      expect(surface.cwd).toBe(MOCKED_HOME);
+    }
+  });
+});
+
+// ── F4: corrupt state.workspaces triggers auto-default ────────────────────
+
+describe("F4: corrupt state.workspaces values fall through to auto-default", () => {
+  it("F4: state.workspaces is a string → warn fires + auto-default Terminal injected", async () => {
+    await mockStateFile(JSON.stringify({ workspaces: "not-an-array" }));
+
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    await restoreWorkspaces({ ...EMPTY_CLI }, {});
+
+    // Snapshot calls before restore
+    const warnCalls = [...warnSpy.mock.calls];
+    warnSpy.mockRestore();
+
+    // Auto-default must have fired
+    const list = get(workspaces);
+    expect(list).toHaveLength(1);
+    expect(list[0].name).toBe("Terminal");
+
+    // Warn must have mentioned the corruption
+    const corruptWarn = warnCalls.find((args) =>
+      String(args[0]).includes("unexpected type"),
+    );
+    expect(corruptWarn).toBeDefined();
+  });
+
+  it("F4: state.workspaces is a number → warn fires + auto-default Terminal injected", async () => {
+    await mockStateFile(JSON.stringify({ workspaces: 42 }));
+
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    await restoreWorkspaces({ ...EMPTY_CLI }, {});
+
+    const warnCalls = [...warnSpy.mock.calls];
+    warnSpy.mockRestore();
+
+    const list = get(workspaces);
+    expect(list).toHaveLength(1);
+    expect(list[0].name).toBe("Terminal");
+    const corruptWarn = warnCalls.find((args) =>
+      String(args[0]).includes("unexpected type"),
+    );
+    expect(corruptWarn).toBeDefined();
+  });
+
+  it("F4: state.workspaces is an object → warn fires + auto-default Terminal injected", async () => {
+    await mockStateFile(
+      JSON.stringify({ workspaces: { id: "ws-1", name: "broken" } }),
+    );
+
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    await restoreWorkspaces({ ...EMPTY_CLI }, {});
+
+    const warnCalls = [...warnSpy.mock.calls];
+    warnSpy.mockRestore();
+
+    const list = get(workspaces);
+    expect(list).toHaveLength(1);
+    expect(list[0].name).toBe("Terminal");
+    const corruptWarn = warnCalls.find((args) =>
+      String(args[0]).includes("unexpected type"),
+    );
+    expect(corruptWarn).toBeDefined();
+  });
+
+  it("F4: state.workspaces is [] (explicit empty) → NO auto-default (user intent preserved)", async () => {
+    // Ensure [] still falls through to EmptySurface — regression guard for F4 fix.
+    await mockStateFile(JSON.stringify({ workspaces: [] }));
+
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    await restoreWorkspaces({ ...EMPTY_CLI }, {});
+
+    const warnCalls = [...warnSpy.mock.calls];
+    warnSpy.mockRestore();
+
+    expect(get(workspaces)).toHaveLength(0);
+    // No corruption warn should have fired
+    const corruptWarn = warnCalls.find((args) =>
+      String(args[0]).includes("unexpected type"),
+    );
+    expect(corruptWarn).toBeUndefined();
+  });
+});
+
+// ── AC-6-b: canonical fixture drives restoreWorkspaces autoload ───────────
+
+describe("AC-6-b: canonical fixture autoload through restoreWorkspaces", () => {
+  it("AC-6-b: canonical fixture autoload populates workspaces, no auto-default Terminal injected", async () => {
+    // State file missing → state.workspaces is undefined (first launch).
+    await mockStateFile(null);
+
+    await restoreWorkspaces(
+      { ...EMPTY_CLI },
+      canonicalFixture as GnarTermConfig,
+    );
+
+    const list = get(workspaces);
+
+    // The fixture's autoload is ["gnar-term-dev"] — exactly one workspace.
+    const autoloadNames = canonicalFixture.autoload;
+    expect(list).toHaveLength(autoloadNames.length);
+
+    // Each name in autoload must appear in the workspace store (in order).
+    for (let i = 0; i < autoloadNames.length; i++) {
+      // The workspace template name comes from the matching commands[].workspace.name.
+      const cmdEntry = canonicalFixture.commands.find(
+        (c) => c.name === autoloadNames[i],
+      );
+      const expectedName = cmdEntry?.workspace?.name ?? autoloadNames[i];
+      expect(list[i]!.name).toBe(expectedName);
+    }
+
+    // No auto-default "Terminal" should have been injected since autoload populated the store.
+    const terminalAutoDefault = list.find(
+      (w) =>
+        w.name === "Terminal" &&
+        !autoloadNames.includes("Terminal") &&
+        !autoloadNames.includes(w.name),
+    );
+    // Simpler: the store must match autoload exactly, not contain an extra Terminal.
+    expect(list.map((w) => w.name)).toEqual(
+      autoloadNames.map((name) => {
+        const cmdEntry = canonicalFixture.commands.find((c) => c.name === name);
+        return cmdEntry?.workspace?.name ?? name;
+      }),
+    );
+    expect(terminalAutoDefault).toBeUndefined();
+  });
+});
+
+// ── code-reviewer/medium: explicit-empty [] beats config.autoload ─────────
+
+describe("explicit-empty state beats config.autoload (code-reviewer/medium)", () => {
+  it("when state.workspaces === [] AND config.autoload is non-empty, explicit-empty wins — store stays empty, autoload does NOT fire", async () => {
+    // state.json exists with explicit workspaces: [] — user deleted everything.
+    await mockStateFile(JSON.stringify({ workspaces: [] }));
+
+    const config: GnarTermConfig = {
+      autoload: ["alpha"],
+      commands: [
+        {
+          name: "alpha",
+          workspace: {
+            name: "Alpha",
+            layout: { pane: { surfaces: [{ type: "terminal" }] } },
+          },
+        },
+      ],
+    };
+
+    await restoreWorkspaces({ ...EMPTY_CLI }, config);
+
+    // Explicit empty is the only valid "stay empty" sentinel.
+    // Store must be empty — autoload must NOT have fired.
+    expect(get(workspaces)).toHaveLength(0);
+    expect(get(activeWorkspaceIdx)).toBe(-1);
   });
 });

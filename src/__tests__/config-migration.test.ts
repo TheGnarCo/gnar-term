@@ -271,7 +271,7 @@ describe("loadConfig — config path policy (gnar-term.json canonical)", () => {
     expect(cfg.extensions).toBeDefined();
   });
 
-  it("AC-3: canonical fixture round-trips through save preserving every top-level key", async () => {
+  it("AC-6-f: canonical fixture round-trips through save preserving every top-level key", async () => {
     const fixtureJson = JSON.stringify(canonicalFixture);
     mockFileSystem({
       "gnar-term.json": fixtureJson,
@@ -305,6 +305,101 @@ describe("loadConfig — config path policy (gnar-term.json canonical)", () => {
     expect((written as Record<string, unknown>).opacity).toBe(
       canonicalFixture.opacity,
     );
+  });
+
+  it("AC-6-g: second save after load → save → reload → save produces byte-identical output (idempotency)", async () => {
+    const fixtureJson = JSON.stringify(canonicalFixture);
+    let capturedWrite: string | undefined;
+
+    // First pass: load then save — capture the first save output.
+    vi.mocked(invoke).mockImplementation(
+      async (cmd: string, args?: unknown) => {
+        if (cmd === "get_home") return HOME;
+        if (cmd === "get_global_config_dir") return CONFIG_DIR;
+        if (cmd === "ensure_dir") return null;
+        if (cmd === "read_file") {
+          const path = (args as { path: string }).path;
+          if (path === "gnar-term.json") return fixtureJson;
+          throw new Error(`ENOENT: ${path}`);
+        }
+        if (cmd === "write_file") {
+          capturedWrite = (args as { content: string }).content;
+          return null;
+        }
+        return null;
+      },
+    );
+
+    await loadConfig();
+    await saveConfig({});
+    const firstSave = capturedWrite!;
+    expect(firstSave).toBeDefined();
+
+    // Second pass: reload the first-save output, then save again.
+    resetConfigStateForTests();
+    const { resetConfigDirForTests } =
+      await import("../lib/services/service-helpers");
+    resetConfigDirForTests();
+
+    vi.mocked(invoke).mockImplementation(
+      async (cmd: string, args?: unknown) => {
+        if (cmd === "get_home") return HOME;
+        if (cmd === "get_global_config_dir") return CONFIG_DIR;
+        if (cmd === "ensure_dir") return null;
+        if (cmd === "read_file") {
+          const path = (args as { path: string }).path;
+          if (path === "gnar-term.json") return firstSave;
+          throw new Error(`ENOENT: ${path}`);
+        }
+        if (cmd === "write_file") {
+          capturedWrite = (args as { content: string }).content;
+          return null;
+        }
+        return null;
+      },
+    );
+
+    await loadConfig();
+    await saveConfig({});
+    const secondSave = capturedWrite!;
+
+    expect(secondSave).toBe(firstSave);
+  });
+
+  it("AC-6-h: all canonical fixture top-level keys survive round-trip (enumerated, not Object.keys)", async () => {
+    const fixtureJson = JSON.stringify(canonicalFixture);
+    mockFileSystem({
+      "gnar-term.json": fixtureJson,
+    });
+    await loadConfig();
+    await saveConfig({});
+
+    const writeCalls = vi
+      .mocked(invoke)
+      .mock.calls.filter(([cmd]) => cmd === "write_file");
+    expect(writeCalls.length).toBeGreaterThan(0);
+
+    const lastWrite = writeCalls[writeCalls.length - 1]!;
+    const written = JSON.parse(
+      (lastWrite[1] as { content: string }).content,
+    ) as Record<string, unknown>;
+
+    // Enumerate each expected top-level key explicitly so a regression that
+    // silently drops any key is caught even without a dedicated test for it.
+    expect(written.theme).toBe(canonicalFixture.theme);
+    expect(written.autoload).toEqual(canonicalFixture.autoload);
+    expect(written.commands).toBeDefined();
+    expect(Array.isArray(written.commands)).toBe(true);
+    expect((written.commands as unknown[]).length).toBe(
+      canonicalFixture.commands.length,
+    );
+    expect(written.fontSize).toBe(canonicalFixture.fontSize);
+    expect(written.fontFamily).toBe(canonicalFixture.fontFamily);
+    // opacity is a dropped field in dev but must survive the round-trip
+    expect((written as Record<string, unknown>).opacity).toBe(
+      canonicalFixture.opacity,
+    );
+    expect(written.extensions).toEqual(canonicalFixture.extensions);
   });
 
   // ── AC-6 (g): one-shot migration — cmux.json ───────────────────────────

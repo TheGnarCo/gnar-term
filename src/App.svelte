@@ -11,6 +11,7 @@
     findBarVisible,
     pendingAction,
     installPointerWindowListeners,
+    showInputPrompt,
   } from "./lib/stores/ui";
   import {
     workspaces,
@@ -120,6 +121,7 @@
     openRegistrySurfaceInPaneById,
     newSurfaceWithCommand,
     newSurfaceFromSidebar,
+    openFileAsPreviewSplit,
   } from "./lib/services/surface-service";
   import {
     registerCommands,
@@ -448,6 +450,15 @@
       action: () => saveCurrentWorkspace(),
       source: "core",
     },
+    {
+      id: "core.preview",
+      title: "Preview...",
+      action: async () => {
+        const target = await showInputPrompt("File path or URL");
+        if (target) openFileAsPreviewSplit(target);
+      },
+      source: "core",
+    },
     ...getWorkspaceCommands().map((cmd) => ({
       id: `core.workspace-cmd-${cmd.name}`,
       title: cmd.name,
@@ -573,6 +584,8 @@
       const idx = $workspaces.findIndex((w) => w.id === action.workspaceId);
       const ws = $workspaces[idx];
       if (idx >= 0 && ws) void confirmAndCloseWorkspace(ws, idx);
+    } else if (action.type === "open-preview") {
+      openFileAsPreviewSplit(action.target);
     }
   }
 
@@ -617,16 +630,23 @@
       })
       .catch((e) => console.warn("[drag-drop] init failed:", e));
 
-    // OS sleep/resume can return the GPU context with a corrupted texture
-    // atlas — visible as garbled multi-color glyphs that "fix themselves"
-    // when the user resizes the window (resize is the only path that
-    // currently invalidates the atlas). Clear on every visibility regain.
+    // OS sleep/resume and long-running sessions can return the GPU context
+    // with a corrupted texture atlas — visible as garbled multi-color glyphs
+    // that "fix themselves" when the user resizes the window (resize is the
+    // only path that currently invalidates the atlas). Clear on every
+    // visibility regain AND on window focus regain so alt-tabbing across
+    // apps on the same desktop (which doesn't fire visibilitychange) also
+    // recovers without a manual resize.
     const onVisibility = () => {
       if (document.visibilityState === "visible") clearAllTerminalAtlases();
     };
+    const onWindowFocus = () => clearAllTerminalAtlases();
     document.addEventListener("visibilitychange", onVisibility);
-    _cleanupVisibilityRecover = () =>
+    window.addEventListener("focus", onWindowFocus);
+    _cleanupVisibilityRecover = () => {
       document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", onWindowFocus);
+    };
     await fontReady;
     void setupListeners();
     startCwdPolling();
@@ -770,6 +790,10 @@
     // agentic extension's provision loop) can safely read and write the
     // workspaces store without racing restore.
     markRestored();
+
+    if (cliArgs.preview) {
+      pendingAction.set({ type: "open-preview", target: cliArgs.preview });
+    }
 
     // Re-apply the persisted window bounds. `restoreWorkspaces` calls
     // loadState() which populates the in-memory AppState — read it via
@@ -1060,7 +1084,30 @@
 <WorkspaceSwitcher bind:open={workspaceSwitcherOpen} />
 
 <style>
-  :global(:focus-visible) {
+  /* Scope the accent-colored focus ring to actual interactive controls so
+     non-interactive containers (the main work area, xterm wrappers,
+     <body>) never paint a stray outline on first programmatic focus. */
+  :global(
+    :where(
+      button,
+      [role="button"],
+      [role="tab"],
+      [role="menuitem"],
+      [role="menuitemcheckbox"],
+      [role="menuitemradio"],
+      [role="option"],
+      [role="checkbox"],
+      [role="radio"],
+      [role="switch"],
+      [role="link"],
+      a[href],
+      input,
+      textarea,
+      select,
+      summary,
+      [contenteditable="true"]
+    ):focus-visible
+  ) {
     outline: 2px solid var(--theme-accent, #7c6aff);
     outline-offset: 2px;
     border-radius: 2px;

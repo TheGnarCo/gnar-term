@@ -63,6 +63,10 @@ pub struct CliArgs {
     /// Path to config file
     #[arg(short = 'c', long)]
     pub config: Option<String>,
+
+    /// Open a preview surface for a file path or URL (file://, http://, https://)
+    #[arg(long)]
+    pub preview: Option<String>,
 }
 
 /// Flags accepted by `CliArgs` that take a value argument.
@@ -76,6 +80,7 @@ const VALUE_FLAGS: &[&str] = &[
     "--workspace",
     "-c",
     "--config",
+    "--preview",
 ];
 
 /// Flags accepted by `CliArgs` that are standalone (no value).
@@ -166,25 +171,29 @@ fn get_cli_args(args: tauri::State<'_, CliArgs>) -> CliArgs {
     args.inner().clone()
 }
 
-/// Read the `mcp` setting from a settings file. Probe order matches the
-/// frontend's `loadConfig` priority in `src/lib/config.ts`: per-project
-/// `settings.json` first, then legacy `gnar-term.json` / `cmux.json`,
-/// then global `~/.config/gnar-term/settings.json` and its legacy peers.
+/// Read the `mcp` setting from a config file. Probe order matches the
+/// frontend's `loadConfig` priority in `src/lib/config.ts`: canonical
+/// per-project `gnar-term.json` first, then per-project legacy sources
+/// (`.gnar-term`, `cmux.json`), then canonical global
+/// `~/.config/gnar-term/gnar-term.json`, then global legacy peers
+/// (`~/.config/gnar-term/cmux.json`, `~/.config/cmux/cmux.json`).
 /// Returns `"auto"` if no config exists or the field is missing. Values
 /// that aren't recognized fall back to `"auto"`.
 fn read_mcp_setting() -> String {
     let paths: Vec<std::path::PathBuf> = {
         let mut v = Vec::new();
-        v.push(std::path::PathBuf::from("settings.json"));
         v.push(std::path::PathBuf::from("gnar-term.json"));
+        v.push(std::path::PathBuf::from(".gnar-term"));
         v.push(std::path::PathBuf::from("cmux.json"));
         if let Ok(config_dir) = global_config_dir() {
             v.push(std::path::PathBuf::from(format!(
-                "{config_dir}/settings.json"
-            )));
-            v.push(std::path::PathBuf::from(format!(
                 "{config_dir}/gnar-term.json"
             )));
+            v.push(std::path::PathBuf::from(format!("{config_dir}/cmux.json")));
+        }
+        if let Some(home) = std::env::var_os("HOME") {
+            let home = std::path::PathBuf::from(home);
+            v.push(home.join(".config").join("cmux").join("cmux.json"));
         }
         v
     };
@@ -626,5 +635,40 @@ mod tests {
             filter_known_args(input.into_iter()),
             args(&["gnar-term", "-w", "dev", "-e", "bash", "~/Documents"])
         );
+    }
+
+    #[test]
+    fn filter_keeps_preview_with_path() {
+        let input = args(&["gnar-term", "--preview", "/tmp/foo.md"]);
+        assert_eq!(filter_known_args(input.clone().into_iter()), input);
+    }
+
+    #[test]
+    fn filter_keeps_preview_with_url() {
+        let input = args(&["gnar-term", "--preview", "https://example.com/foo.md"]);
+        assert_eq!(filter_known_args(input.clone().into_iter()), input);
+    }
+
+    #[test]
+    fn filter_keeps_preview_equals_form() {
+        let input = args(&["gnar-term", "--preview=https://example.com/foo.md"]);
+        assert_eq!(filter_known_args(input.clone().into_iter()), input);
+    }
+
+    #[test]
+    fn cli_args_parse_preview_flag() {
+        let parsed = CliArgs::parse_from(args(&["gnar-term", "--preview", "/tmp/foo.md"]));
+        assert_eq!(parsed.preview.as_deref(), Some("/tmp/foo.md"));
+        assert!(parsed.path.is_none());
+    }
+
+    #[test]
+    fn cli_args_parse_preview_url() {
+        let parsed = CliArgs::parse_from(args(&[
+            "gnar-term",
+            "--preview",
+            "https://example.com/x.md",
+        ]));
+        assert_eq!(parsed.preview.as_deref(), Some("https://example.com/x.md"));
     }
 }

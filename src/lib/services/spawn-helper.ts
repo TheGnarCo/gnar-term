@@ -96,7 +96,7 @@ export interface ResolvedAgentPreset {
 }
 
 /**
- * Resolve a preset name from `settings.json#agents[]` into spawn args.
+ * Resolve a preset name from `gnar-term.json#agents[]` into spawn args.
  * Throws when the preset is missing. Honors every preset field that
  * affects a spawn:
  *   - `intendedAgent` → SpawnAgentType (falls back to "custom")
@@ -112,7 +112,7 @@ export function resolveAgentPresetForSpawn(
   const preset = presets.find((p) => p.name === presetName);
   if (!preset) {
     throw new Error(
-      `agent preset "${presetName}" not found in settings.json agents[]`,
+      `agent preset "${presetName}" not found in gnar-term.json agents[]`,
     );
   }
   let type: SpawnAgentType = "custom";
@@ -143,11 +143,11 @@ export function resolveAgentPresetForSpawn(
 }
 
 /**
- * Find the first `AgentPreset` with `autoSpawn: true` in `settings.json#agents[]`
+ * Find the first `AgentPreset` with `autoSpawn: true` in `gnar-term.json#agents[]`
  * and return its resolved spawn shape. Returns `null` when no preset opts in.
  *
  * First-match policy is intentional — the presets array is ordered, so the
- * user controls priority by editing settings.json. Resolution delegates to
+ * user controls priority by editing gnar-term.json. Resolution delegates to
  * `resolveAgentPresetForSpawn` so there is exactly one place that turns a
  * preset record into a spawn payload (single source of truth).
  */

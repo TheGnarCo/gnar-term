@@ -301,16 +301,18 @@
 
   /* OS-style notification bubble. Absolutely positioned so its presence
      never contributes to row layout — the gap between workspaces is
-     identical whether the bubble paints or not. The bubble is anchored
-     to the rail stripe's left edge and sits mostly above the row top,
-     overlapping the rail by ~2px so it visually crowns the rail. The
-     box-shadow outline acts as the contrasting border that makes the
-     bubble read as a discrete badge instead of bleeding into the rail's
-     color. */
+     identical whether the bubble paints or not. The bubble's CENTER
+     sits on the row's top-left corner: half the bubble (4px) protrudes
+     above the row and half hangs to the left of the rail, so the badge
+     reads as overlapping the corner rather than crowning the rail.
+     Same rule for narrow and expanded sidebar modes — the bubble's
+     position is relative to the 8px-wide grip, which is at the row's
+     left edge at every width. The box-shadow outline gives the bubble
+     its contrasting border so it stays discrete against any background. */
   .rail-bot-bubble {
     position: absolute;
-    left: 0;
-    top: -6px;
+    left: -4px;
+    top: -4px;
     width: 8px;
     height: 8px;
     border-radius: 50%;

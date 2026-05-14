@@ -14,7 +14,9 @@
  *                                 (no naked fallback workspace)
  *   4. --command "<cmd>"       → terminal surface carries `command`
  *   5. autoload list           → opens every named workspace
- *   6. no args, no state, no autoload → leaves the store empty so
+ *   6. no args, no state, no autoload → auto-defaults a Terminal workspace
+ *      at $HOME (state.workspaces === undefined = first launch)
+ *   7. state.workspaces === [] (explicit empty) → store stays empty so
  *      App.svelte renders <EmptySurface />.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
@@ -72,6 +74,7 @@ const EMPTY_CLI: CliArgs = {
   title: null,
   workspace: null,
   config: null,
+  preview: null,
 };
 
 beforeEach(() => {
@@ -154,7 +157,15 @@ describe("restoreWorkspaces — CLI-driven creation", () => {
 
   it("--workspace <unknown> warns and leaves the store empty", async () => {
     const config: GnarTermConfig = {
-      commands: [{ name: "dev", workspace: { name: "Dev Stack", layout: {} } }],
+      commands: [
+        {
+          name: "dev",
+          workspace: {
+            name: "Dev Stack",
+            layout: { pane: { surfaces: [{ type: "terminal" }] } },
+          },
+        },
+      ],
     };
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
@@ -194,10 +205,30 @@ describe("restoreWorkspaces — CLI-driven creation", () => {
     expect(names).toEqual(["Alpha", "Beta"]);
   });
 
-  it("no args + no state + no autoload leaves the store empty for EmptySurface", async () => {
+  it("no args + no state + no autoload auto-defaults a Terminal workspace at $HOME (AC-6-a)", async () => {
+    // invoke is mocked to reject for all calls (including get_home → falls back to /tmp).
+    await restoreWorkspaces({ ...EMPTY_CLI }, {});
+
+    const list = get(workspaces);
+    expect(list).toHaveLength(1);
+    expect(list[0].name).toBe("Terminal");
+  });
+
+  it("state.workspaces === [] (explicit empty) leaves the store empty for EmptySurface (AC-6-e)", async () => {
+    // Override invoke to return a state.json with an explicit empty workspaces array.
+    const { invoke } = await import("@tauri-apps/api/core");
+    const mockedInvoke = vi.mocked(invoke);
+    mockedInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "read_file") return JSON.stringify({ workspaces: [] });
+      throw new Error("no state");
+    });
+
     await restoreWorkspaces({ ...EMPTY_CLI }, {});
 
     expect(get(workspaces)).toHaveLength(0);
     expect(get(activeWorkspaceIdx)).toBe(-1);
+
+    // Restore default mock for subsequent tests.
+    mockedInvoke.mockRejectedValue(new Error("no state"));
   });
 });

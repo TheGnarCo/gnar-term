@@ -19,6 +19,29 @@ import {
   type PreviewResult,
 } from "./preview-registry";
 
+/** Cap remote response size to avoid OOM on a runaway fetch. */
+const MAX_URL_BYTES = 5 * 1024 * 1024;
+
+/** A preview target after dispatching by scheme. `file://` URLs decode into
+ *  a local path; bare paths pass through; `http(s)://` URLs flow to the
+ *  remote fetch branch. */
+export type PreviewTarget =
+  | { kind: "path"; path: string }
+  | { kind: "url"; url: string };
+
+export function parsePreviewTarget(input: string): PreviewTarget {
+  if (input.startsWith("http://") || input.startsWith("https://")) {
+    return { kind: "url", url: input };
+  }
+  if (input.startsWith("file://")) {
+    return {
+      kind: "path",
+      path: decodeURIComponent(input.slice("file://".length)),
+    };
+  }
+  return { kind: "path", path: input };
+}
+
 const BINARY_EXTS = new Set([
   "pdf",
   "png",
@@ -77,6 +100,17 @@ export function refreshPreviewStyles(): void {
 }
 
 export async function openPreview(
+  target: string,
+  options?: { surfaceId?: string },
+): Promise<PreviewResult> {
+  const parsed = parsePreviewTarget(target);
+  if (parsed.kind === "url") {
+    return openPreviewFromUrl(parsed.url, options);
+  }
+  return openPreviewFromPath(parsed.path, options);
+}
+
+async function openPreviewFromPath(
   filePath: string,
   options?: { surfaceId?: string },
 ): Promise<PreviewResult> {
@@ -179,6 +213,54 @@ export async function openPreview(
 }
 
 /**
+ * Fetch a remote URL and render its body into a preview surface. Markdown
+ * (URL ends in `.md`/`.markdown` or `Content-Type: text/markdown`) renders
+ * through the markdown previewer; anything else renders as a fenced code
+ * block so HTML/JSON/text bodies are still readable.
+ */
+async function openPreviewFromUrl(
+  url: string,
+  options?: { surfaceId?: string },
+): Promise<PreviewResult> {
+  const res = await fetch(url, { redirect: "follow" });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch ${url}: ${res.status} ${res.statusText}`);
+  }
+  const lenHeader = res.headers.get("content-length");
+  if (lenHeader && Number(lenHeader) > MAX_URL_BYTES) {
+    throw new Error(
+      `Response too large (${lenHeader} bytes, max ${MAX_URL_BYTES})`,
+    );
+  }
+  const contentType = (res.headers.get("content-type") || "").toLowerCase();
+  const text = await res.text();
+  if (text.length > MAX_URL_BYTES) {
+    throw new Error(
+      `Response too large (${text.length} bytes, max ${MAX_URL_BYTES})`,
+    );
+  }
+
+  const cleanUrl = url.split("?")[0]!.split("#")[0]!;
+  const isMarkdown =
+    contentType.includes("markdown") ||
+    /\.md$/i.test(cleanUrl) ||
+    /\.markdown$/i.test(cleanUrl);
+  const title = cleanUrl.split("/").filter(Boolean).pop() || url;
+
+  const element = renderContentToElement(
+    isMarkdown ? text : text,
+    isMarkdown ? "markdown" : "text",
+    "",
+  );
+  if (options?.surfaceId) {
+    element.setAttribute("data-preview-surface-id", options.surfaceId);
+  }
+
+  const id = `preview-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  return { id, filePath: url, title, element, watchId: 0 };
+}
+
+/**
  * Render in-memory content (markdown/text/code) into a styled preview
  * element. Called when a preview surface opens with `{ content, format,
  * language }` props instead of a file path — e.g. when an MCP client
@@ -227,6 +309,17 @@ export async function refreshPreviewElement(
   filePath: string,
   element: HTMLElement,
 ): Promise<void> {
+  const parsed = parsePreviewTarget(filePath);
+  if (parsed.kind === "url") {
+    try {
+      const fresh = await openPreviewFromUrl(parsed.url);
+      element.replaceChildren(...Array.from(fresh.element.childNodes));
+    } catch (err) {
+      element.textContent = `Error refreshing ${parsed.url}: ${err}`;
+    }
+    return;
+  }
+
   const previewer = findPreviewer(filePath);
   if (!previewer) return;
   const isBinary = BINARY_EXTS.has(getExtension(filePath));

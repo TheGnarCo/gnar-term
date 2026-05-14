@@ -84,6 +84,7 @@ describe("restoreWorkspaces — legacy dashboard records dropped on restore", ()
         title: null,
         workspace: null,
         config: null,
+        preview: null,
       },
       {},
     );

@@ -91,7 +91,7 @@ Click any file path in the terminal to preview it in a new tab. Handles bare fil
 <tr>
 <td width="40%" valign="middle">
 <h3>11 built-in themes</h3>
-Switch themes instantly from the command palette (<code>⌘P</code>) or the native <b>View → Theme</b> menu. Persists to <code>settings.json</code> across restarts.
+Switch themes instantly from the command palette (<code>⌘P</code>) or the native <b>View → Theme</b> menu. Persists to <code>gnar-term.json</code> across restarts.
 </td>
 <td width="60%">
 
@@ -117,7 +117,7 @@ Switch themes instantly from the command palette (<code>⌘P</code>) or the nati
 <tr>
 <td width="40%" valign="middle">
 <h3>cmux-compatible config</h3>
-Define workspace layouts and custom commands in <code>settings.json</code>. Copy your <code>cmux.json</code> and it just works. Autoload workspaces on startup.
+Define workspace layouts and custom commands in <code>gnar-term.json</code>. Copy your <code>cmux.json</code> and it just works (one-shot migration on first save). Autoload workspaces on startup.
 </td>
 <td width="60%">
 
@@ -230,7 +230,7 @@ gnar-term -w Dev
 gnar-term --title "API Server" ~/projects/api
 ```
 
-When launched without arguments, gnar-term loads workspaces from config (if `autoload` is set) or opens a default workspace.
+**First-launch behavior.** Workspaces are resolved in this order: CLI args → persisted session (`state.json`) → `config.autoload` → auto-default. If none of the first three produce a workspace and no prior session exists, gnar-term opens a single **Terminal** workspace rooted at `$HOME`. If a previous session explicitly closed every workspace (state file present, `workspaces: []`), the dashboard renders empty instead of auto-defaulting.
 
 ## Install
 
@@ -330,21 +330,22 @@ npm run build               # full Tauri build (frontend + Rust)
 
 gnar-term reads configuration from:
 
-1. `./settings.json` (per-project)
-2. `./gnar-term.json` (legacy per-project)
-3. `./cmux.json` (per-project cmux compat)
-4. `~/.config/gnar-term/settings.json` (global)
-5. `~/.config/cmux/cmux.json` (global cmux compat)
+1. `./gnar-term.json` (per-project, canonical write path)
+2. `./.gnar-term` (per-project, one-shot migration → rewritten to `./gnar-term.json` on next save)
+3. `./cmux.json` (per-project, one-shot migration → rewritten to `./gnar-term.json` on next save)
+4. `~/.config/gnar-term/gnar-term.json` (global, canonical write path)
+5. `~/.config/gnar-term/cmux.json` (global, one-shot migration → rewritten to `~/.config/gnar-term/gnar-term.json` on next save)
+6. `~/.config/cmux/cmux.json` (global, one-shot migration → rewritten to `~/.config/gnar-term/gnar-term.json` on next save)
 
-The config format is a superset of [cmux.json](https://cmux.com/docs/custom-commands). Any valid `cmux.json` works as a `settings.json`.
+The config format is a superset of [cmux.json](https://cmux.com/docs/custom-commands). Any valid `cmux.json` works as a `gnar-term.json` (and is automatically migrated on the next save).
 
 ### gnar-term extensions
 
-| Key                                             | Type         | Description                                                  |
-| ----------------------------------------------- | ------------ | ------------------------------------------------------------ |
-| `theme`                                         | string       | Theme ID (e.g. `"tokyo-night"`, `"molly"`, `"github-light"`) |
-| `autoload`                                      | string[]     | Workspace command names to launch on startup                 |
-| `commands[].workspace.layout...surfaces[].type` | `"markdown"` | Markdown preview surface (in addition to `"terminal"`)       |
+| Key                                             | Type        | Description                                                                                                       |
+| ----------------------------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------- |
+| `theme`                                         | string      | Theme ID (e.g. `"tokyo-night"`, `"molly"`, `"github-light"`)                                                      |
+| `autoload`                                      | string[]    | Workspace command names to launch on startup                                                                      |
+| `commands[].workspace.layout...surfaces[].type` | `"preview"` | File preview surface (in addition to `"terminal"`); `"markdown"` is a legacy alias handled by the config migrator |
 
 ### Available theme IDs
 

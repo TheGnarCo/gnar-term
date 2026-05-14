@@ -116,7 +116,7 @@ interface ChromeInputs {
  * `mix(bg, fg, t)` curve drives all surface/border tones, and the
  * accent/status hues come straight from the ansi palette. Fine-tuning
  * is left to the user (they can always hand-edit `userThemes` in
- * settings.json).
+ * gnar-term.json).
  */
 function deriveChrome(inputs: ChromeInputs): ThemeDef {
   const { name, bg, fg, termCursor, termSelection, ansi } = inputs;

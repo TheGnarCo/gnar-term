@@ -178,7 +178,8 @@ export type PendingAction =
       props?: Record<string, unknown>;
     }
   | { type: "switch-workspace"; workspaceId: string }
-  | { type: "close-workspace"; workspaceId: string };
+  | { type: "close-workspace"; workspaceId: string }
+  | { type: "open-preview"; target: string };
 export const pendingAction = writable<PendingAction | null>(null);
 
 /** Input prompt — replaces window.prompt() which doesn't work in Tauri WKWebView */

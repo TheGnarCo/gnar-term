@@ -10,7 +10,7 @@ Cloud control plane at `https://spacebase.thegnar.com` exposing markdown documen
 
 - **Bearer token.** `Authorization: Bearer sw_...` on every request.
 - **Project-scoped** API keys (`sw_*` format) — same scoping the gnar plugin uses. A key resolves to one project.
-- **Storage.** No keychain / stronghold integration exists in gnar-term. Keys live in the extension's settings file (`./settings.json` or `~/.config/gnar-term/settings.json`) under field `spacebase.apiKey`. Document this clearly in the settings UI.
+- **Storage.** No keychain / stronghold integration exists in gnar-term. Keys live in the extension's settings file (`./gnar-term.json` or `~/.config/gnar-term/gnar-term.json`) under field `spacebase.apiKey`. Document this clearly in the settings UI.
 - **Env var fallbacks** (read at activate time, do not override an explicit setting):
   - `SPACEBASE_API_KEY` → `apiKey`
   - `SPACEBASE_URL` → `baseUrl` (default `https://spacebase.thegnar.com`)

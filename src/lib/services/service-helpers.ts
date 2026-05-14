@@ -23,6 +23,11 @@ export async function getHome(): Promise<string> {
   return _home;
 }
 
+/** For tests only — resets the module-level home cache. */
+export function resetHomeForTests(): void {
+  _home = "";
+}
+
 // Cached global config directory — gnar-term in release, gnar-term-dev in debug
 let _configDir = "";
 export async function getConfigDir(): Promise<string> {

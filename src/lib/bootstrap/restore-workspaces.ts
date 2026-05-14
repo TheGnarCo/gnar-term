@@ -7,7 +7,11 @@
  *      workspace around the CLI args
  *   3. persisted state.json — restore the last session's workspaces
  *   4. config.autoload — open every named workspace listed
- *   5. fall back to a single default "Workspace 1"
+ *   5. auto-default — if state.workspaces === undefined (no state.json on
+ *      disk, or state.json with no workspaces field) AND no workspaces ended
+ *      up created from autoload → inject a single "Terminal" workspace at $HOME
+ *   6. fall through — store stays empty → App.svelte renders <EmptySurface />
+ *      (only reached when state.json exists with an explicit workspaces: [])
  *
  * If `state.workspaces[]` is present (unified format), each entry is
  * fed directly through `createWorkspaceFromDef` with `restoring: true`.
@@ -24,6 +28,7 @@ import { workspaceDefToTemplate } from "../stores/workspace";
 import { initArchiveFromState } from "../stores/archive";
 import { createWorkspaceFromDef } from "../services/workspace-runtime-service";
 import { switchWorkspace } from "../services/workspace-runtime-service";
+import { getHome } from "../services/service-helpers";
 
 // Restore-complete signal — lets async work (extension provision loops,
 // reconcileWorkspaceDashboards) defer safely until workspaces are in the store.
@@ -146,8 +151,7 @@ export async function restoreWorkspaces(
     return;
   }
 
-  // First launch — autoload from config, otherwise leave the store empty
-  // so App.svelte renders <EmptySurface />.
+  // Step 4: autoload from config.
   if (config.autoload && config.autoload.length > 0 && config.commands) {
     for (const name of config.autoload) {
       const cmd = config.commands.find((c) => c.name === name && c.workspace);
@@ -155,5 +159,27 @@ export async function restoreWorkspaces(
         await createWorkspaceFromDef(cmd.workspace);
       }
     }
+  }
+
+  // Step 5: auto-default Terminal workspace.
+  //
+  // Gate: state.workspaces was undefined (no state.json on disk, or state.json
+  // exists but has no workspaces field) AND no workspaces ended up in the store
+  // from the steps above.
+  //
+  // Distinguish from state.workspaces === [] (explicit empty array) which means
+  // the user deleted all workspaces on purpose — that falls through to EmptySurface.
+  if (state.workspaces === undefined && get(workspaces).length === 0) {
+    const home = await getHome();
+    const def: WorkspaceTemplate = {
+      name: "Terminal",
+      cwd: home,
+      layout: {
+        pane: {
+          surfaces: [{ type: "terminal", cwd: home }],
+        },
+      },
+    };
+    await createWorkspaceFromDef(def);
   }
 }

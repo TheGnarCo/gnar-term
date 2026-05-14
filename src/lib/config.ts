@@ -2,12 +2,14 @@
  * GnarTerm Config — settings and runtime state
  *
  * Settings file locations (in priority order):
- *   ./settings.json                     (per-project)
- *   ./gnar-term.json                    (per-project; one-shot migration → settings.json)
- *   ./cmux.json                         (per-project, cmux compat)
- *   ~/.config/gnar-term/settings.json   (global)
- *   ~/.config/gnar-term/gnar-term.json  (global; one-shot migration → settings.json)
- *   ~/.config/cmux/cmux.json            (global, cmux compat)
+ *   ./gnar-term.json                    (per-project; canonical write target)
+ *   ./.gnar-term                        (per-project; one-shot migration → ./gnar-term.json)
+ *   ./cmux.json                         (per-project; one-shot migration → ./gnar-term.json)
+ *   ~/.config/gnar-term/gnar-term.json  (global; canonical write target)
+ *   ~/.config/gnar-term/cmux.json       (global; one-shot migration → global gnar-term.json)
+ *   ~/.config/cmux/cmux.json            (global; one-shot migration → global gnar-term.json)
+ *
+ * `settings.json` is no longer supported at any path — never read, never written.
  *
  * Runtime state:
  *   ~/.config/gnar-term/state.json      (written on quit, restored on launch)
@@ -402,19 +404,24 @@ export async function loadConfig(
   // entry is `{ read, writeForward? }`: `read` is the file we try to
   // load; `writeForward` (if set) is the canonical path to redirect
   // _configPath to so the next saveConfig writes the new filename and
-  // orphans the old one. This is the migration map — once-per-install:
-  // the next save lands at `writeForward`, after which `read` is never
-  // consulted again.
+  // orphans the old one. Entries without `writeForward` are canonical —
+  // the next save writes back to the same file.
+  //
+  // settings.json is intentionally absent from this list — it is no
+  // longer read or written at any path.
   const candidates: { read: string; writeForward?: string }[] = [
-    { read: "settings.json" },
-    { read: "gnar-term.json", writeForward: "settings.json" },
-    { read: "cmux.json" },
-    { read: `${configDir}/settings.json` },
+    { read: "gnar-term.json" },
+    { read: ".gnar-term", writeForward: "gnar-term.json" },
+    { read: "cmux.json", writeForward: "gnar-term.json" },
+    { read: `${configDir}/gnar-term.json` },
     {
-      read: `${configDir}/gnar-term.json`,
-      writeForward: `${configDir}/settings.json`,
+      read: `${configDir}/cmux.json`,
+      writeForward: `${configDir}/gnar-term.json`,
     },
-    { read: `${home}/.config/cmux/cmux.json` },
+    {
+      read: `${home}/.config/cmux/cmux.json`,
+      writeForward: `${configDir}/gnar-term.json`,
+    },
   ];
 
   for (const { read, writeForward } of candidates) {
@@ -429,7 +436,7 @@ export async function loadConfig(
 
   // No config found — use defaults
   _config = {};
-  _configPath = `${configDir}/settings.json`;
+  _configPath = `${configDir}/gnar-term.json`;
   _configStore.set(_config);
   return _config;
 }
@@ -440,7 +447,7 @@ export async function saveConfig(
   _config = { ..._config, ...updates };
   _configStore.set(_config);
   const configDir = await getConfigDir();
-  const path = _configPath || `${configDir}/settings.json`;
+  const path = _configPath || `${configDir}/gnar-term.json`;
 
   // Ensure directory exists
   try {
@@ -476,6 +483,15 @@ export function getWorkspaceCommands(): CommandDef[] {
 let _appState: AppState = {};
 const _appStateStore = writable<AppState>({});
 export const appStateStore: Readable<AppState> = _appStateStore;
+
+/** For tests only — resets all module-level config and state so tests don't bleed into each other. */
+export function resetConfigStateForTests(): void {
+  _config = {};
+  _configPath = "";
+  _configStore.set({});
+  _appState = {};
+  _appStateStore.set({});
+}
 
 export async function loadState(): Promise<AppState> {
   const configDir = await getConfigDir();

@@ -1,0 +1,45 @@
+{
+  "theme": "github-dark",
+  "autoload": ["gnar-term-dev"],
+  "commands": [
+    {
+      "name": "gnar-term-dev",
+      "workspace": {
+        "name": "gnar-term-dev",
+        "cwd": "/Users/ngmaloney/Workspace/gnar-term",
+        "layout": {
+          "pane": {
+            "surfaces": [
+              {
+                "type": "terminal",
+                "name": "gnar-term",
+                "cwd": "/Users/ngmaloney/Workspace/gnar-term",
+                "focus": true
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "fontSize": 14,
+  "fontFamily": "",
+  "opacity": 1,
+  "extensions": {
+    "file-browser": {
+      "enabled": false
+    },
+    "github-sidebar": {
+      "enabled": false
+    },
+    "project-scope": {
+      "enabled": false
+    },
+    "diff-viewer": {
+      "enabled": false
+    },
+    "worktree-workspaces": {
+      "enabled": false
+    }
+  }
+}

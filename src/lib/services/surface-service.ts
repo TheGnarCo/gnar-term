@@ -692,7 +692,10 @@ export function openFileAsPreviewSplit(
     return;
   }
 
-  if (!canPreview(filePath)) {
+  const isUrl =
+    filePath.startsWith("http://") || filePath.startsWith("https://");
+
+  if (!isUrl && !canPreview(filePath)) {
     void invoke("open_with_default_app", { path: filePath }).catch((err) =>
       console.warn(
         `[surface] open_with_default_app failed for ${filePath}:`,

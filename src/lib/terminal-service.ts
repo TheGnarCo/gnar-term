@@ -705,10 +705,14 @@ function createUrlLinkProvider(terminal: Terminal) {
           },
           text: url,
           decorations: { pointerCursor: true, underline: true },
-          activate(_event: MouseEvent, text: string) {
-            void invoke("open_url", { url: text }).catch((err) =>
-              console.warn("[terminal-service] open_url failed:", err),
-            );
+          activate(event: MouseEvent, text: string) {
+            if (event.metaKey || event.ctrlKey) {
+              void invoke("open_url", { url: text }).catch((err) =>
+                console.warn("[terminal-service] open_url failed:", err),
+              );
+              return;
+            }
+            pendingAction.set({ type: "open-preview", target: text });
           },
         });
       }
@@ -1061,12 +1065,18 @@ export async function createTerminalSurface(
     },
     // Default OSC 8 handler routes through window.confirm, which Tauri
     // remaps to plugin:dialog|confirm — not granted in capabilities, so
-    // the click rejects silently. Override to dispatch via open_url.
+    // the click rejects silently. We override it to: open the URL in a
+    // preview surface by default; Cmd/Ctrl-click escapes to the system
+    // browser via open_url.
     linkHandler: {
-      activate(_event, text) {
-        void invoke("open_url", { url: text }).catch((err) =>
-          console.warn("[terminal-service] open_url failed:", err),
-        );
+      activate(event, text) {
+        if (event.metaKey || event.ctrlKey) {
+          void invoke("open_url", { url: text }).catch((err) =>
+            console.warn("[terminal-service] open_url failed:", err),
+          );
+          return;
+        }
+        pendingAction.set({ type: "open-preview", target: text });
       },
       // Allow `file://` (and other schemes) through; open_url validates the
       // final scheme list, so the terminal can hand off any URL it parses.

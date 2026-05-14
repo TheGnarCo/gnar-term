@@ -63,6 +63,7 @@ const EMPTY_CLI: CliArgs = {
   title: null,
   workspace: null,
   config: null,
+  preview: null,
 };
 
 // Helper: configure the invoke mock for a specific state.json response.

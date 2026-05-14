@@ -74,6 +74,7 @@ const EMPTY_CLI: CliArgs = {
   title: null,
   workspace: null,
   config: null,
+  preview: null,
 };
 
 beforeEach(() => {

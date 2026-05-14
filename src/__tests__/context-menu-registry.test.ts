@@ -297,12 +297,17 @@ describe("terminal-service <-> context-menu integration", () => {
 });
 
 describe("terminal-service link-click dispatch", () => {
-  it("invokes the first matching context-menu handler directly, without pendingAction", async () => {
+  it("file-path link clicks route through the context-menu registry, not pendingAction", async () => {
     const source = await readFile("src/lib/terminal-service.ts", "utf-8");
-    // The old dispatch went through pendingAction:
-    expect(source).not.toContain('"open-preview"');
-    // The new dispatch invokes the registry handler directly:
-    expect(source).toContain("getContextMenuItemsForFile");
+    // Scope the assertion to the file-path link provider only: the URL
+    // provider intentionally dispatches via pendingAction("open-preview")
+    // for the click → preview surface flow.
+    const fnStart = source.indexOf("function createFilePathLinkProvider");
+    expect(fnStart, "createFilePathLinkProvider not found").toBeGreaterThan(-1);
+    const fnEnd = source.indexOf("\nfunction ", fnStart + 1);
+    const slice = source.slice(fnStart, fnEnd === -1 ? undefined : fnEnd);
+    expect(slice).not.toContain('"open-preview"');
+    expect(slice).toContain("getContextMenuItemsForFile");
   });
 });
 

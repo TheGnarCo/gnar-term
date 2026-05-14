@@ -60,6 +60,7 @@ export interface CliArgs {
   title: string | null;
   workspace: string | null;
   config: string | null;
+  preview: string | null;
 }
 
 export async function restoreWorkspaces(

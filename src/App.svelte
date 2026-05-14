@@ -11,6 +11,7 @@
     findBarVisible,
     pendingAction,
     installPointerWindowListeners,
+    showInputPrompt,
   } from "./lib/stores/ui";
   import {
     workspaces,
@@ -120,6 +121,7 @@
     openRegistrySurfaceInPaneById,
     newSurfaceWithCommand,
     newSurfaceFromSidebar,
+    openFileAsPreviewSplit,
   } from "./lib/services/surface-service";
   import {
     registerCommands,
@@ -448,6 +450,15 @@
       action: () => saveCurrentWorkspace(),
       source: "core",
     },
+    {
+      id: "core.preview",
+      title: "Preview...",
+      action: async () => {
+        const target = await showInputPrompt("File path or URL");
+        if (target) openFileAsPreviewSplit(target);
+      },
+      source: "core",
+    },
     ...getWorkspaceCommands().map((cmd) => ({
       id: `core.workspace-cmd-${cmd.name}`,
       title: cmd.name,
@@ -573,6 +584,8 @@
       const idx = $workspaces.findIndex((w) => w.id === action.workspaceId);
       const ws = $workspaces[idx];
       if (idx >= 0 && ws) void confirmAndCloseWorkspace(ws, idx);
+    } else if (action.type === "open-preview") {
+      openFileAsPreviewSplit(action.target);
     }
   }
 
@@ -777,6 +790,10 @@
     // agentic extension's provision loop) can safely read and write the
     // workspaces store without racing restore.
     markRestored();
+
+    if (cliArgs.preview) {
+      pendingAction.set({ type: "open-preview", target: cliArgs.preview });
+    }
 
     // Re-apply the persisted window bounds. `restoreWorkspaces` calls
     // loadState() which populates the in-memory AppState — read it via

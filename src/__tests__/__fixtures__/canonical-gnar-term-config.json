@@ -26,19 +26,19 @@
   "fontFamily": "",
   "opacity": 1,
   "extensions": {
-    "file-browser": {
-      "enabled": false
-    },
-    "github-sidebar": {
-      "enabled": false
-    },
-    "project-scope": {
-      "enabled": false
-    },
     "diff-viewer": {
       "enabled": false
     },
-    "worktree-workspaces": {
+    "claude-settings": {
+      "enabled": false
+    },
+    "branched-workspaces": {
+      "enabled": false
+    },
+    "spacebase": {
+      "enabled": false
+    },
+    "agentic": {
       "enabled": false
     }
   }

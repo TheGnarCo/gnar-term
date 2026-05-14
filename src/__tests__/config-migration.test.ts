@@ -440,6 +440,25 @@ describe("loadConfig — config path policy (gnar-term.json canonical)", () => {
     expect(writes).not.toContain(`${CONFIG_DIR}/settings.json`);
   });
 
+  it("AC-6 (g): one-shot migration — configDir/cmux.json read → next save writes configDir/gnar-term.json", async () => {
+    mockFileSystem({
+      [`${CONFIG_DIR}/cmux.json`]: JSON.stringify({
+        theme: "configdir-cmux",
+      }),
+    });
+    const cfg = await loadConfig();
+    expect(cfg.theme).toBe("configdir-cmux");
+
+    await saveConfig({});
+    const writes = vi
+      .mocked(invoke)
+      .mock.calls.filter(([cmd]) => cmd === "write_file")
+      .map(([, args]) => (args as { path: string }).path);
+    expect(writes).toContain(`${CONFIG_DIR}/gnar-term.json`);
+    expect(writes).not.toContain(`${CONFIG_DIR}/cmux.json`);
+    expect(writes).not.toContain(`${CONFIG_DIR}/settings.json`);
+  });
+
   // ── AC-6 (h): one-shot migration — .gnar-term ─────────────────────────
 
   it("AC-6 (h): one-shot migration — ./.gnar-term read → next save writes ./gnar-term.json", async () => {

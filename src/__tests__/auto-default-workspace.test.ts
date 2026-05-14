@@ -401,6 +401,29 @@ describe("F4: corrupt state.workspaces values fall through to auto-default", () 
     expect(corruptWarn).toBeDefined();
   });
 
+  it("F4: state.workspaces is null → warn fires + auto-default Terminal injected", async () => {
+    // null is a JSON-valid value that is neither an array nor undefined.
+    // Guards against a tempting "safer" refactor (e.g.
+    // `typeof x === "object" && x !== null`) that would silently land users
+    // on EmptySurface instead of auto-defaulting.
+    await mockStateFile(JSON.stringify({ workspaces: null }));
+
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    await restoreWorkspaces({ ...EMPTY_CLI }, {});
+
+    const warnCalls = [...warnSpy.mock.calls];
+    warnSpy.mockRestore();
+
+    const list = get(workspaces);
+    expect(list).toHaveLength(1);
+    expect(list[0].name).toBe("Terminal");
+    const corruptWarn = warnCalls.find((args) =>
+      String(args[0]).includes("unexpected type"),
+    );
+    expect(corruptWarn).toBeDefined();
+  });
+
   it("F4: state.workspaces is [] (explicit empty) → NO auto-default (user intent preserved)", async () => {
     // Ensure [] still falls through to EmptySurface — regression guard for F4 fix.
     await mockStateFile(JSON.stringify({ workspaces: [] }));
@@ -493,5 +516,55 @@ describe("explicit-empty state beats config.autoload (code-reviewer/medium)", ()
     // Store must be empty — autoload must NOT have fired.
     expect(get(workspaces)).toHaveLength(0);
     expect(get(activeWorkspaceIdx)).toBe(-1);
+  });
+});
+
+// ── settings.json is not a blocker for auto-default ───────────────────────
+
+describe("settings.json present must not prevent auto-default Terminal", () => {
+  it("settings.json present at project + global paths, no state file, no gnar-term.json → loadConfig returns empty AND restoreWorkspaces auto-defaults Terminal", async () => {
+    // End-to-end: settings.json files are on disk but loadConfig must ignore
+    // them, and the resulting empty config must not block auto-default.
+    // Guards against a regression where settings.json is silently treated
+    // as a config source (or as state) and suppresses the auto-default path.
+    const CONFIG_DIR = `${MOCKED_HOME}/.config/gnar-term`;
+    const { invoke } = await import("@tauri-apps/api/core");
+    vi.mocked(invoke).mockImplementation(
+      async (cmd: string, args?: unknown) => {
+        if (cmd === "get_home") return MOCKED_HOME;
+        if (cmd === "get_global_config_dir") return CONFIG_DIR;
+        if (cmd === "ensure_dir") return null;
+        if (cmd === "read_file") {
+          const path = (args as { path: string }).path;
+          // Only settings.json files exist on disk — everything else ENOENTs.
+          if (path === "settings.json") {
+            return JSON.stringify({ theme: "should-be-ignored" });
+          }
+          if (path === `${CONFIG_DIR}/settings.json`) {
+            return JSON.stringify({ theme: "should-also-be-ignored" });
+          }
+          throw new Error(`ENOENT: ${path}`);
+        }
+        if (cmd === "write_file") return null;
+        throw new Error(`no mock for ${cmd}`);
+      },
+    );
+
+    const { loadConfig, resetConfigStateForTests } =
+      await import("../lib/config");
+    const { resetConfigDirForTests } =
+      await import("../lib/services/service-helpers");
+    resetConfigDirForTests();
+    resetConfigStateForTests();
+    resetHomeForTests();
+
+    const config = await loadConfig();
+    expect(config).toEqual({});
+
+    await restoreWorkspaces({ ...EMPTY_CLI }, config);
+
+    const list = get(workspaces);
+    expect(list).toHaveLength(1);
+    expect(list[0].name).toBe("Terminal");
   });
 });

@@ -425,13 +425,32 @@ export async function loadConfig(
   ];
 
   for (const { read, writeForward } of candidates) {
+    // Read and parse are split so JSON.parse failures (file present but
+    // corrupt) surface loudly instead of being conflated with ENOENT-like
+    // read errors. A corrupt canonical file aborts the cascade so we don't
+    // silently load a lower-priority legacy source and then overwrite the
+    // corrupt file with stale data on the next saveConfig.
+    let content: string;
     try {
-      const content = await invoke<string>("read_file", { path: read });
+      content = await invoke<string>("read_file", { path: read });
+    } catch {
+      continue;
+    }
+    try {
       _config = migrateLoadedConfig(JSON.parse(content));
-      _configPath = writeForward ?? read;
+    } catch (err) {
+      console.warn(
+        `[config] Failed to parse ${read}; aborting migration cascade so the corrupt file is not overwritten on save.`,
+        err,
+      );
+      _config = {};
+      _configPath = "";
       _configStore.set(_config);
       return _config;
-    } catch {}
+    }
+    _configPath = writeForward ?? read;
+    _configStore.set(_config);
+    return _config;
   }
 
   // No config found — use defaults
@@ -484,6 +503,14 @@ let _appState: AppState = {};
 const _appStateStore = writable<AppState>({});
 export const appStateStore: Readable<AppState> = _appStateStore;
 
+/**
+ * Set when loadState detects state.json exists but is unparseable. When true,
+ * saveState refuses to overwrite the file so the user's last good session
+ * isn't silently wiped on the next quit. Cleared by resetConfigStateForTests
+ * and on the next successful loadState.
+ */
+let _stateLoadCorrupt = false;
+
 /** For tests only — resets all module-level config and state so tests don't bleed into each other. */
 export function resetConfigStateForTests(): void {
   _config = {};
@@ -491,15 +518,33 @@ export function resetConfigStateForTests(): void {
   _configStore.set({});
   _appState = {};
   _appStateStore.set({});
+  _stateLoadCorrupt = false;
 }
 
 export async function loadState(): Promise<AppState> {
   const configDir = await getConfigDir();
   const path = `${configDir}/state.json`;
+  // Split read from parse so a corrupt state.json surfaces loudly instead
+  // of looking like "no state file" — the latter triggers auto-default
+  // Terminal which would then overwrite the user's persisted session on
+  // the next saveState.
+  _stateLoadCorrupt = false;
+  let content: string;
   try {
-    const content = await invoke<string>("read_file", { path });
-    _appState = JSON.parse(content) as AppState;
+    content = await invoke<string>("read_file", { path });
   } catch {
+    _appState = {};
+    _appStateStore.set(_appState);
+    return _appState;
+  }
+  try {
+    _appState = JSON.parse(content) as AppState;
+  } catch (err) {
+    _stateLoadCorrupt = true;
+    console.warn(
+      `[state] Failed to parse ${path}; refusing to overwrite until it is repaired. Falling back to empty state for this session.`,
+      err,
+    );
     _appState = {};
   }
 
@@ -510,6 +555,14 @@ export async function loadState(): Promise<AppState> {
 export async function saveState(updates: Partial<AppState>): Promise<void> {
   _appState = { ..._appState, ...updates };
   _appStateStore.set(_appState);
+  if (_stateLoadCorrupt) {
+    // state.json exists on disk but couldn't be parsed at load time —
+    // refuse to overwrite so the user can recover their previous session.
+    console.warn(
+      "[state] Skipping save: state.json was unparseable at load. Repair or move the file to re-enable persistence.",
+    );
+    return;
+  }
   const configDir = await getConfigDir();
   const path = `${configDir}/state.json`;
   try {

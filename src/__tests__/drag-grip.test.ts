@@ -147,6 +147,33 @@ describe("DragGrip", () => {
     expect(parseFloat(topMatch![1])).toBeLessThan(0);
   });
 
+  // AC-2b: Bubble is centered on the row's top-left corner — half above the
+  // row (top: -4px) and half left of the rail stripe (left: -4px), matching
+  // the bubble's 8x8 px size. Guards against a regression to the earlier
+  // "crowns the rail" position (left: 0; top: -6px) where assertions on
+  // top < 0 alone would still pass.
+  it("AC-2b: bubble is centered on the row's top-left corner (left: -4px; top: -4px)", () => {
+    const source = readFileSync("src/lib/components/DragGrip.svelte", "utf-8");
+    const ruleMatch = source.match(/\.rail-bot-bubble\s*\{[^}]*\}/);
+    expect(ruleMatch).not.toBeNull();
+    const rule = ruleMatch![0];
+    const leftMatch = rule.match(/left:\s*(-?\d+(?:\.\d+)?)px/);
+    const topMatch = rule.match(/top:\s*(-?\d+(?:\.\d+)?)px/);
+    const widthMatch = rule.match(/width:\s*(\d+(?:\.\d+)?)px/);
+    const heightMatch = rule.match(/height:\s*(\d+(?:\.\d+)?)px/);
+    expect(leftMatch).not.toBeNull();
+    expect(topMatch).not.toBeNull();
+    expect(widthMatch).not.toBeNull();
+    expect(heightMatch).not.toBeNull();
+    const left = parseFloat(leftMatch![1]);
+    const top = parseFloat(topMatch![1]);
+    const width = parseFloat(widthMatch![1]);
+    const height = parseFloat(heightMatch![1]);
+    // The bubble's center should sit on (0, 0) — the row's top-left corner.
+    expect(left).toBe(-width / 2);
+    expect(top).toBe(-height / 2);
+  });
+
   // AC-4 (expanded mode): bubble still renders at every rail width and
   // pulses when botStatus === "attention".
   it("AC-4: renders the bubble in expanded (full-width) mode and pulses on attention", () => {

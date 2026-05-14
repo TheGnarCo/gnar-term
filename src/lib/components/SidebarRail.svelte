@@ -25,7 +25,6 @@
   import { theme } from "../stores/theme";
   import { sidebarVisible, canSidebarDrag } from "../stores/ui";
   import DragGrip from "./DragGrip.svelte";
-  import { botHatColor } from "../utils/bot-hat-color";
 
   export let mode: "row" | "container" = "row";
 
@@ -61,11 +60,12 @@
    */
   export let popoverActive: boolean = false;
   /**
-   * Bot status for the row this rail belongs to. Drives the hat
-   * overlay rendered by DragGrip — pulsing yellow for "attention",
-   * green for "thinking", muted-grey for "idle", nothing for
-   * "none". Renders at every sidebar width so bot presence stays
-   * visible whether the sidebar is collapsed or expanded.
+   * Bot status for the row this rail belongs to. Drives the
+   * bot-status bubble rendered by DragGrip — pulsing yellow for
+   * "attention", green for "thinking", muted-grey for "idle",
+   * nothing for "none". Renders at every sidebar width so bot
+   * presence stays visible whether the sidebar is collapsed or
+   * expanded.
    */
   export let botStatus: "none" | "thinking" | "attention" | "idle" = "none";
 
@@ -88,13 +88,13 @@
 
   $: effectiveCanDrag = canDrag && $canSidebarDrag;
   $: railBorderColor = $theme.border ?? "transparent";
-  // Top-border color matches the bot-hat's color when the rail is
-  // hatted, so the segment of the workspace border at the hat's
-  // section reads as part of the hat rather than the rail's accent.
-  // Falls back to the active-rail accent or the neutral border color
-  // otherwise, preserving the existing look for hat-less rows.
-  $: hatColor = botHatColor(botStatus);
-  $: topBorderColor = hatColor ?? (isActive ? color : railBorderColor);
+  // Top-border color: workspace accent when active, neutral theme
+  // border otherwise. The bot-status bubble floats above the row on
+  // its own (DragGrip positions it absolutely with a negative top), so
+  // the border no longer needs to tint to a bot-status color — the
+  // workspace's own borders read as the workspace's, regardless of
+  // bot activity.
+  $: topBorderColor = isActive ? color : railBorderColor;
   // Collapsed mode rail-width policy: thin (4px) when inactive and the
   // row isn't being dragged or showing a popover. Hover no longer
   // factors in — DragGrip's CSS owns the hover look, and the 4px stripe
@@ -139,15 +139,15 @@
     primaryClickable={!$sidebarVisible && !!onClick}
   />
   {#if mode === "container" && hasActiveStripe}
-    <!-- Active-descendant stripe. When a hat is painted, the stripe
-         starts below the hat so it never reads as "1px of workspace
-         accent framing the hat" — the hat owns the top 12px and the
-         stripe owns everything below it. -->
+    <!-- Active-descendant stripe. Spans the full height of the rail
+         row. The bot-status bubble (DragGrip) is absolutely positioned
+         above the row and contributes nothing to layout, so the stripe
+         no longer needs to skip a hat-shaped region at the top. -->
     <div
       aria-hidden="true"
       style="
         position: absolute;
-        top: {hatColor ? '12px' : '0'};
+        top: 0;
         left: 0; bottom: 0;
         width: 1px;
         background: {color};

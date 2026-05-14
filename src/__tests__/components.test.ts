@@ -2325,7 +2325,7 @@ describe("TerminalSurface", () => {
 // ---------------------------------------------------------------------------
 
 describe("WorkspaceItem — harness sub-row", () => {
-  it("paints a green 'thinking' rail hat for a running agent", async () => {
+  it("paints a green 'thinking' rail bubble for a running agent", async () => {
     const { setAgentsForTests } =
       await import("../lib/services/agent-detection-service");
 
@@ -2358,15 +2358,17 @@ describe("WorkspaceItem — harness sub-row", () => {
       },
     });
 
-    const hat = container.querySelector(".rail-bot-hat") as HTMLElement | null;
-    expect(hat).not.toBeNull();
-    // "thinking" hat is static, not pulsing.
-    expect(hat!.classList.contains("pulses")).toBe(false);
+    const bubble = container.querySelector(
+      ".rail-bot-bubble",
+    ) as HTMLElement | null;
+    expect(bubble).not.toBeNull();
+    // "thinking" bubble is static, not pulsing.
+    expect(bubble!.classList.contains("pulses")).toBe(false);
     setAgentsForTests([]);
   });
 
-  it("paints a muted 'idle' rail hat when an agent is attached but idle", async () => {
-    // Idle agents still warrant a hat — it's the "currently
+  it("paints a muted 'idle' rail bubble when an agent is attached but idle", async () => {
+    // Idle agents still warrant a bubble — it's the "currently
     // thinking" presence indicator that survives the BotIcon
     // removal. Color is muted-grey, no pulse.
     const { setAgentsForTests } =
@@ -2411,13 +2413,15 @@ describe("WorkspaceItem — harness sub-row", () => {
       },
     });
 
-    const hat = container.querySelector(".rail-bot-hat") as HTMLElement | null;
-    expect(hat).not.toBeNull();
-    expect(hat!.classList.contains("pulses")).toBe(false);
+    const bubble = container.querySelector(
+      ".rail-bot-bubble",
+    ) as HTMLElement | null;
+    expect(bubble).not.toBeNull();
+    expect(bubble!.classList.contains("pulses")).toBe(false);
     setAgentsForTests([]);
   });
 
-  it("hides the rail hat when hideStatusBadges is true", async () => {
+  it("hides the rail bubble when hideStatusBadges is true", async () => {
     const { setStatusItem, clearAllStatusForWorkspace } =
       await import("../lib/services/status-registry");
 
@@ -2446,12 +2450,12 @@ describe("WorkspaceItem — harness sub-row", () => {
       },
     });
 
-    expect(container.querySelector(".rail-bot-hat")).toBeNull();
+    expect(container.querySelector(".rail-bot-bubble")).toBeNull();
     clearAllStatusForWorkspace(ws.id);
   });
 
-  it("paints a single 'thinking' hat regardless of how many agents are running", async () => {
-    // Multiple agents collapse to one hat — the hat is a per-row
+  it("paints a single 'thinking' bubble regardless of how many agents are running", async () => {
+    // Multiple agents collapse to one bubble — the bubble is a per-row
     // signal, not a per-agent one. Color stays the running-green.
     const { setAgentsForTests } =
       await import("../lib/services/agent-detection-service");
@@ -2506,12 +2510,12 @@ describe("WorkspaceItem — harness sub-row", () => {
       },
     });
 
-    const hats = container.querySelectorAll(".rail-bot-hat");
-    expect(hats.length).toBe(1);
+    const bubbles = container.querySelectorAll(".rail-bot-bubble");
+    expect(bubbles.length).toBe(1);
     setAgentsForTests([]);
   });
 
-  it("paints a pulsing 'attention' hat for a waiting agent", async () => {
+  it("paints a pulsing 'attention' bubble for a waiting agent", async () => {
     const { setAgentsForTests } =
       await import("../lib/services/agent-detection-service");
 
@@ -2544,9 +2548,11 @@ describe("WorkspaceItem — harness sub-row", () => {
       },
     });
 
-    const hat = container.querySelector(".rail-bot-hat") as HTMLElement | null;
-    expect(hat).not.toBeNull();
-    expect(hat!.classList.contains("pulses")).toBe(true);
+    const bubble = container.querySelector(
+      ".rail-bot-bubble",
+    ) as HTMLElement | null;
+    expect(bubble).not.toBeNull();
+    expect(bubble!.classList.contains("pulses")).toBe(true);
     setAgentsForTests([]);
   });
 });

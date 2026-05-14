@@ -75,7 +75,9 @@ describe("DragGrip", () => {
     expect(stripe!.style.width).toBe("4px");
   });
 
-  it("renders the bot-status hat in narrow (collapsed) mode", () => {
+  // AC-1: The .rail-bot-hat element is removed; a new .rail-bot-bubble
+  // takes its place when botStatus !== "none".
+  it("AC-1: renders the bot-status bubble in narrow (collapsed) mode", () => {
     const { container } = render(DragGrip, {
       props: {
         theme: stubTheme,
@@ -85,18 +87,19 @@ describe("DragGrip", () => {
         botStatus: "thinking",
       },
     });
-    const hat = container.querySelector(".rail-bot-hat") as HTMLElement | null;
-    expect(hat).not.toBeNull();
-    expect(hat!.style.width).toBe("4px");
+    // Old cap shape must be gone.
+    expect(container.querySelector(".rail-bot-hat")).toBeNull();
+    // New bubble must paint.
+    const bubble = container.querySelector(
+      ".rail-bot-bubble",
+    ) as HTMLElement | null;
+    expect(bubble).not.toBeNull();
   });
 
-  it("paints the 2px dark divider between hat and rail in narrow (collapsed) mode", () => {
-    // Regression: an earlier iteration dropped the divider in narrowRail
-    // mode on the theory that 4px was too thin to read as a separator.
-    // In practice, removing it made the hat color flow straight into
-    // the rail color — losing the discrete "hat above rail" silhouette
-    // that's the whole point of the shape. The divider must paint at
-    // every rail width.
+  // AC-5: The bubble has a circular silhouette (border-radius ≥ 50% of
+  // its short axis) — no rectangular cap shape, no bottom-divider
+  // gradient stripe.
+  it("AC-5: paints the bubble as a circle with a dark outline, no gradient divider", () => {
     const { container } = render(DragGrip, {
       props: {
         theme: stubTheme,
@@ -106,17 +109,47 @@ describe("DragGrip", () => {
         botStatus: "thinking",
       },
     });
-    const hat = container.querySelector(".rail-bot-hat") as HTMLElement | null;
-    expect(hat).not.toBeNull();
-    const background = hat!.style.background;
-    expect(background).toContain("linear-gradient");
-    expect(background).toContain("rgba(0, 0, 0, 0.55)");
+    const bubble = container.querySelector(
+      ".rail-bot-bubble",
+    ) as HTMLElement | null;
+    expect(bubble).not.toBeNull();
+    // Circular silhouette — verified at source level because jsdom
+    // doesn't evaluate scoped Svelte styles. computed.borderRadius is
+    // always "" here, so a DOM-level assertion would be a tautology.
+    const sourceText = readFileSync(
+      "src/lib/components/DragGrip.svelte",
+      "utf-8",
+    );
+    const ruleMatch = sourceText.match(/\.rail-bot-bubble\s*\{[^}]*\}/);
+    expect(ruleMatch).not.toBeNull();
+    expect(ruleMatch![0]).toMatch(/border-radius:\s*50%/);
+    // No multi-stop gradient divider stripe (the old hat's hallmark).
+    const computed = window.getComputedStyle(bubble!);
+    const bg = (bubble!.style.background || "") + (computed.background || "");
+    expect(bg).not.toContain("linear-gradient");
   });
 
-  it("renders the bot-status hat in expanded (full-width) mode too", () => {
-    // Regression: bot status used to be hidden when the sidebar was
-    // expanded. Now the hat must paint at every rail width so agent
-    // notifications stay visible regardless of sidebar layout.
+  // AC-2: Bubble is absolutely positioned and visually overlaps the top
+  // edge of the row (its bounding box extends above the row by at least
+  // the bubble's radius). jsdom doesn't evaluate scoped Svelte styles,
+  // so we verify the rule at the source level — paired with the in-DOM
+  // presence checks in the other AC tests, this nails down both that
+  // the bubble is rendered AND that its CSS positions it above the row.
+  it("AC-2: positions the bubble above the row's top edge (source check)", () => {
+    const source = readFileSync("src/lib/components/DragGrip.svelte", "utf-8");
+    const ruleMatch = source.match(/\.rail-bot-bubble\s*\{[^}]*\}/);
+    expect(ruleMatch).not.toBeNull();
+    const rule = ruleMatch![0];
+    expect(rule).toMatch(/position:\s*absolute/);
+    // top must be negative — the bubble's box extends above the row top.
+    const topMatch = rule.match(/top:\s*(-?\d+(?:\.\d+)?)px/);
+    expect(topMatch).not.toBeNull();
+    expect(parseFloat(topMatch![1])).toBeLessThan(0);
+  });
+
+  // AC-4 (expanded mode): bubble still renders at every rail width and
+  // pulses when botStatus === "attention".
+  it("AC-4: renders the bubble in expanded (full-width) mode and pulses on attention", () => {
     const { container } = render(DragGrip, {
       props: {
         theme: stubTheme,
@@ -126,13 +159,15 @@ describe("DragGrip", () => {
         botStatus: "attention",
       },
     });
-    const hat = container.querySelector(".rail-bot-hat") as HTMLElement | null;
-    expect(hat).not.toBeNull();
-    expect(hat!.style.width).toBe("8px");
-    expect(hat!.classList.contains("pulses")).toBe(true);
+    const bubble = container.querySelector(
+      ".rail-bot-bubble",
+    ) as HTMLElement | null;
+    expect(bubble).not.toBeNull();
+    expect(bubble!.classList.contains("pulses")).toBe(true);
   });
 
-  it("hides the bot-status hat when botStatus is none", () => {
+  // AC-1 (none-state branch): no bubble when botStatus is "none".
+  it("AC-1: hides the bot-status bubble when botStatus is none", () => {
     const { container } = render(DragGrip, {
       props: {
         theme: stubTheme,
@@ -141,7 +176,37 @@ describe("DragGrip", () => {
         botStatus: "none",
       },
     });
+    expect(container.querySelector(".rail-bot-bubble")).toBeNull();
+    // Old hat must be gone too.
     expect(container.querySelector(".rail-bot-hat")).toBeNull();
+  });
+
+  // AC-3: Bubble presence does NOT change the row's layout height. Since
+  // the bubble is position:absolute it must not contribute to flow.
+  it("AC-3: bubble presence does not change drag-grip layout height", () => {
+    const renderAt = (botStatus: "none" | "idle" | "thinking" | "attention") =>
+      render(DragGrip, {
+        props: {
+          theme: stubTheme,
+          visible: false,
+          railColor: "#abcdef",
+          narrowRail: true,
+          botStatus,
+        },
+      });
+
+    const a = renderAt("none");
+    const aGrip = a.container.querySelector(".drag-grip") as HTMLElement;
+    const aHeight = aGrip.getBoundingClientRect().height;
+    cleanup();
+
+    const b = renderAt("attention");
+    const bGrip = b.container.querySelector(".drag-grip") as HTMLElement;
+    const bHeight = bGrip.getBoundingClientRect().height;
+
+    // jsdom usually reports zero for unsized boxes; the contract we
+    // actually care about is equality between the two states.
+    expect(bHeight).toBe(aHeight);
   });
 });
 

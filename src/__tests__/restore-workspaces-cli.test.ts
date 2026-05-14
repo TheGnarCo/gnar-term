@@ -156,7 +156,15 @@ describe("restoreWorkspaces — CLI-driven creation", () => {
 
   it("--workspace <unknown> warns and leaves the store empty", async () => {
     const config: GnarTermConfig = {
-      commands: [{ name: "dev", workspace: { name: "Dev Stack", layout: {} } }],
+      commands: [
+        {
+          name: "dev",
+          workspace: {
+            name: "Dev Stack",
+            layout: { pane: { surfaces: [{ type: "terminal" }] } },
+          },
+        },
+      ],
     };
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 

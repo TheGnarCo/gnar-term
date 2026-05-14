@@ -37,9 +37,6 @@
     },
     "spacebase": {
       "enabled": false
-    },
-    "agentic": {
-      "enabled": false
     }
   }
 }

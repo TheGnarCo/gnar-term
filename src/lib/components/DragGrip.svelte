@@ -130,20 +130,17 @@
   // 4px policy).
   $: railStripeWidth = narrowRail ? "4px" : "8px";
   $: dotsRender = alwaysShowDots && !narrowRail;
-  // Hat renders at every rail width — bot status is the one signal
+  // Bubble renders at every rail width — bot status is the one signal
   // we always surface on the rail itself so notification visibility
   // doesn't depend on whether the sidebar is collapsed.
-  $: showHat = botStatus !== "none";
-  $: hatColor =
+  $: showBubble = botStatus !== "none";
+  $: bubbleColor =
     botStatus === "attention"
       ? warningColor
       : botStatus === "thinking"
         ? successColor
         : mutedColor;
-  $: hatPulses = botStatus === "attention";
-  // Hat matches the rail's painted width so it caps the rail cleanly
-  // in both collapsed (4px) and expanded (8px) modes.
-  $: hatWidth = railStripeWidth;
+  $: bubblePulses = botStatus === "attention";
 </script>
 
 <!-- The grip is the rail's hover target. Hover state is `:hover`-driven
@@ -173,30 +170,21 @@
     style="width: {railStripeWidth}; background: {effectiveColor}; opacity: {railOpacity};"
   ></div>
 
-  {#if showHat}
-    <!-- Bot-status hat overlay: a small rounded "cap" that protrudes
-         4px above the row plus solid color inside the row, with a 2px
-         dark divider at the bottom so the hat reads as a discrete
-         chunk above the rail stripe. Width tracks the rail stripe
-         (4px in collapsed mode, 8px in expanded) so the cap caps the
-         rail cleanly without ever appearing thicker than the rail
-         itself. The divider paints at every rail width — the
-         separation between hat and rail is the whole point of the
-         hat shape. -->
+  {#if showBubble}
+    <!-- Bot-status bubble: a small OS-style notification badge floating
+         above the rail. The bubble is absolutely positioned so its
+         presence never changes the row's layout height; it overlaps the
+         top edge of the rail by ~2px so it reads as "sitting on" the
+         rail rather than detached from it. A 1px dark outline gives it
+         the contrasting border OS notification badges use to separate
+         from their background. -->
     <div
       aria-hidden="true"
-      class="rail-bot-hat"
-      class:pulses={hatPulses}
+      class="rail-bot-bubble"
+      class:pulses={bubblePulses}
       style="
-        width: {hatWidth};
-        --rail-hat-glow: {hatColor};
-        background: linear-gradient(
-          to bottom,
-          {hatColor} 0,
-          {hatColor} 14px,
-          rgba(0, 0, 0, 0.55) 14px,
-          rgba(0, 0, 0, 0.55) 16px
-        );
+        --rail-bubble-glow: {bubbleColor};
+        background: {bubbleColor};
       "
     ></div>
   {/if}
@@ -311,18 +299,27 @@
     display: block;
   }
 
-  .rail-bot-hat {
+  /* OS-style notification bubble. Absolutely positioned so its presence
+     never contributes to row layout — the gap between workspaces is
+     identical whether the bubble paints or not. The bubble is anchored
+     to the rail stripe's left edge and sits mostly above the row top,
+     overlapping the rail by ~2px so it visually crowns the rail. The
+     box-shadow outline acts as the contrasting border that makes the
+     bubble read as a discrete badge instead of bleeding into the rail's
+     color. */
+  .rail-bot-bubble {
     position: absolute;
     left: 0;
-    top: -4px;
-    height: 16px;
-    border-top-left-radius: 3px;
-    border-top-right-radius: 3px;
+    top: -6px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
     pointer-events: none;
     z-index: 3;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55);
   }
-  .rail-bot-hat.pulses {
-    animation: dg-rail-hat-glow 1.6s ease-in-out infinite;
+  .rail-bot-bubble.pulses {
+    animation: dg-rail-bubble-glow 1.6s ease-in-out infinite;
   }
 
   .grip-chip {
@@ -369,14 +366,16 @@
     pointer-events: none;
   }
 
-  @keyframes dg-rail-hat-glow {
+  @keyframes dg-rail-bubble-glow {
     0%,
     100% {
-      box-shadow: 0 0 0 0 transparent;
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55);
     }
     50% {
-      box-shadow: 0 0 4px 1.5px
-        color-mix(in srgb, var(--rail-hat-glow) 55%, transparent);
+      box-shadow:
+        0 0 0 1px rgba(0, 0, 0, 0.55),
+        0 0 4px 1.5px
+          color-mix(in srgb, var(--rail-bubble-glow) 55%, transparent);
     }
   }
 </style>

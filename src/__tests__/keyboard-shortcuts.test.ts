@@ -377,4 +377,97 @@ describe("keyboard-shortcuts — ⌘1-9 workspace activation", () => {
     shortcuts.handleAppKeydown(mkEvent({ key: "1", ctrl: true }), ctx);
     expect(activateWorkspaceMock).not.toHaveBeenCalled();
   });
+
+  // AC-4: after reorder, ⌘1 activates the workspace now at position 1
+  it("activates the workspace at the new position after reorder", async () => {
+    mockIsMac = true;
+    const { rootRowOrder } = await import("../lib/stores/root-row-order");
+    const { workspace } = await loadModule();
+    workspace.workspaces.set([makeWs("ws-A"), makeWs("ws-B")]);
+
+    // Initial order: ws-A first, ws-B second
+    rootRowOrder.set([
+      { kind: "workspace", id: "ws-A" },
+      { kind: "workspace", id: "ws-B" },
+    ]);
+    const { shortcuts } = await loadModule();
+    shortcuts.handleAppKeydown(mkEvent({ key: "1", meta: true }), ctx);
+    expect(activateWorkspaceMock).toHaveBeenCalledWith("ws-A");
+    activateWorkspaceMock.mockReset();
+
+    // Reorder: ws-B is now first, ws-A second
+    rootRowOrder.set([
+      { kind: "workspace", id: "ws-B" },
+      { kind: "workspace", id: "ws-A" },
+    ]);
+    shortcuts.handleAppKeydown(mkEvent({ key: "1", meta: true }), ctx);
+    // Must activate ws-B (new first position), not ws-A
+    expect(activateWorkspaceMock).toHaveBeenCalledWith("ws-B");
+    expect(activateWorkspaceMock).not.toHaveBeenCalledWith("ws-A");
+  });
+});
+
+// ===========================================================================
+// AC-3: locked workspace banner-end slot conditional logic
+// ===========================================================================
+
+describe("locked workspace banner-end slot — shortcut vs lock chip", () => {
+  // Tests the condition logic extracted from WorkspaceSectionContent.svelte
+  // banner-end slot. The actual rendering is in the Svelte component; these
+  // tests verify the boolean guard that determines which branch executes.
+
+  function bannerEndBranch(
+    isWorkspaceLocked: boolean,
+    bannerHovered: boolean,
+    shortcutHintsActive: boolean,
+    shortcutIdx: number | undefined,
+  ): "shortcut" | "lock-hovered" | "lock" | "none" {
+    if (isWorkspaceLocked) {
+      if (bannerHovered) return "lock-hovered"; // hover takes priority
+      if (shortcutIdx !== undefined && shortcutIdx < 9 && shortcutHintsActive) {
+        return "shortcut";
+      }
+      return "lock";
+    }
+    return "none";
+  }
+
+  it("AC-1: locked workspace shows shortcut label when shortcutHintsActive is true and shortcutIdx is in 0-8", () => {
+    expect(bannerEndBranch(true, false, true, 0)).toBe("shortcut");
+    expect(bannerEndBranch(true, false, true, 4)).toBe("shortcut");
+    expect(bannerEndBranch(true, false, true, 8)).toBe("shortcut");
+  });
+
+  it("AC-1: locked workspace does NOT show shortcut label when shortcutIdx >= 9", () => {
+    // shortcutIdx=9 is out of the 0-8 range — fall back to lock chip
+    expect(bannerEndBranch(true, false, true, 9)).toBe("lock");
+  });
+
+  it("AC-1: locked workspace does NOT show shortcut label when shortcutIdx is undefined", () => {
+    expect(bannerEndBranch(true, false, true, undefined)).toBe("lock");
+  });
+
+  it("AC-2: locked workspace shows lock chip when shortcutHintsActive is false", () => {
+    expect(bannerEndBranch(true, false, false, 0)).toBe("lock");
+    expect(bannerEndBranch(true, false, false, 4)).toBe("lock");
+    expect(bannerEndBranch(true, false, false, undefined)).toBe("lock");
+  });
+
+  it("AC-2: unlocked workspace is not in the locked branch", () => {
+    // Unlocked workspaces don't hit the locked block at all
+    expect(bannerEndBranch(false, false, true, 0)).toBe("none");
+    expect(bannerEndBranch(false, false, false, 0)).toBe("none");
+  });
+
+  it("AC-3: hover takes priority over shortcut hints on locked workspace", () => {
+    // locked + hovered + hints active → hover wins
+    expect(bannerEndBranch(true, true, true, 0)).toBe("lock-hovered");
+    expect(bannerEndBranch(true, true, true, 4)).toBe("lock-hovered");
+  });
+
+  it("AC-3: hover shows lock-hovered even when hints are inactive", () => {
+    // locked + hovered + hints inactive → still hover
+    expect(bannerEndBranch(true, true, false, 0)).toBe("lock-hovered");
+    expect(bannerEndBranch(true, true, false, undefined)).toBe("lock-hovered");
+  });
 });

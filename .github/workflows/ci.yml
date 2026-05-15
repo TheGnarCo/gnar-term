@@ -32,7 +32,27 @@ jobs:
           node-version: lts/*
           cache: "npm"
 
-      - name: Install Rust stable
+      - name: Install Rust stable (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          # macos-latest ships Homebrew rustup whose cargo shim shadows the
+          # real cargo, and dtolnay/rust-toolchain has been unreliable on
+          # this image (PATH update intermittently doesn't apply). Do a
+          # clean explicit install instead.
+          brew uninstall --ignore-dependencies rustup-init 2>/dev/null || true
+          brew uninstall --ignore-dependencies rustup 2>/dev/null || true
+          rm -rf "$HOME/.cargo" "$HOME/.rustup"
+          curl --proto '=https' --tlsv1.2 --retry 10 --retry-connrefused -sSf https://sh.rustup.rs \
+            | sh -s -- -y --default-toolchain stable --profile minimal \
+                --component clippy --component rustfmt --no-modify-path
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          # Sanity check while we still trust this run
+          ls -la "$HOME/.cargo/bin"
+          "$HOME/.cargo/bin/cargo" --version
+          "$HOME/.cargo/bin/rustc" --version
+
+      - name: Install Rust stable (Linux)
+        if: runner.os == 'Linux'
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt

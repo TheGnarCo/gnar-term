@@ -171,20 +171,31 @@
   ></div>
 
   {#if showBubble}
-    <!-- Bot-status bubble: a small OS-style notification badge floating
-         above the rail. The bubble is absolutely positioned so its
-         presence never changes the row's layout height; it overlaps the
-         top edge of the rail by ~2px so it reads as "sitting on" the
-         rail rather than detached from it. A 1px dark outline gives it
-         the contrasting border OS notification badges use to separate
-         from their background. -->
+    <!-- Dome: a flat-bottomed semicircle rising from the top of the rail.
+         Absolutely positioned so its presence never changes row layout.
+         clip-path clips the bottom half so only the curved top is
+         visible. Width/height track railStripeWidth so it scales with
+         narrow (4px) and expanded (8px) rail modes. -->
     <div
       aria-hidden="true"
-      class="rail-bot-bubble"
+      class="dome"
       class:pulses={bubblePulses}
       style="
         --rail-bubble-glow: {bubbleColor};
         background: {bubbleColor};
+        width: {railStripeWidth};
+        height: {railStripeWidth};
+        clip-path: inset(0 0 50% 0);
+      "
+    ></div>
+    <!-- Seam: a 2px horizontal line at the dome's equator (diameter/2),
+         giving the visual impression of the dome meeting the rail. -->
+    <div
+      aria-hidden="true"
+      class="seam"
+      style="
+        top: calc({railStripeWidth} / 2);
+        width: {railStripeWidth};
       "
     ></div>
   {/if}
@@ -299,29 +310,32 @@
     display: block;
   }
 
-  /* OS-style notification bubble. Absolutely positioned so its presence
-     never contributes to row layout — the gap between workspaces is
-     identical whether the bubble paints or not. The bubble's CENTER
-     sits on the row's top-left corner: half the bubble (4px) protrudes
-     above the row and half hangs to the left of the rail, so the badge
-     reads as overlapping the corner rather than crowning the rail.
-     Same rule for narrow and expanded sidebar modes — the bubble's
-     position is relative to the 8px-wide grip, which is at the row's
-     left edge at every width. The box-shadow outline gives the bubble
-     its contrasting border so it stays discrete against any background. */
-  .rail-bot-bubble {
+  /* Dome: flat-bottomed semicircle at the top of the rail. clip-path
+     hides the lower half so only the curved arc is visible. Width/height
+     are set inline to track railStripeWidth. z-index: 2 keeps it above
+     the rail stripe in the same stacking context. */
+  .dome {
     position: absolute;
-    left: -4px;
-    top: -4px;
-    width: 8px;
-    height: 8px;
+    left: 0;
+    top: 0;
     border-radius: 50%;
+    clip-path: inset(0 0 50% 0);
+    pointer-events: none;
+    z-index: 2;
+  }
+  .dome.pulses {
+    animation: dg-dome-pulse 1.6s ease-in-out infinite;
+  }
+
+  /* Seam: 2px rule at the dome's equator. top is set inline to
+     calc(railStripeWidth / 2). z-index: 3 puts it above the dome. */
+  .seam {
+    position: absolute;
+    left: 0;
+    height: 2px;
+    background: rgba(0, 0, 0, 0.45);
     pointer-events: none;
     z-index: 3;
-    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55);
-  }
-  .rail-bot-bubble.pulses {
-    animation: dg-rail-bubble-glow 1.6s ease-in-out infinite;
   }
 
   .grip-chip {
@@ -335,6 +349,7 @@
     justify-content: center;
     border-radius: 3px;
     overflow: hidden;
+    z-index: 4;
   }
 
   .shortcut-chip {
@@ -368,16 +383,17 @@
     pointer-events: none;
   }
 
-  @keyframes dg-rail-bubble-glow {
+  @keyframes dg-dome-pulse {
     0%,
     100% {
-      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55);
+      filter: none;
     }
     50% {
-      box-shadow:
-        0 0 0 1px rgba(0, 0, 0, 0.55),
-        0 0 4px 1.5px
-          color-mix(in srgb, var(--rail-bubble-glow) 55%, transparent);
+      filter: brightness(1.25)
+        drop-shadow(
+          0 -3px 6px
+            color-mix(in srgb, var(--rail-bubble-glow) 65%, transparent)
+        );
     }
   }
 </style>

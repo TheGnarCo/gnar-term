@@ -75,9 +75,9 @@ describe("DragGrip", () => {
     expect(stripe!.style.width).toBe("4px");
   });
 
-  // AC-1: The .rail-bot-hat element is removed; a new .rail-bot-bubble
-  // takes its place when botStatus !== "none".
-  it("AC-1: renders the bot-status bubble in narrow (collapsed) mode", () => {
+  // AC-1: renders a .dome (not .rail-bot-bubble or .rail-bot-hat) when
+  // botStatus !== "none", in both narrow and expanded rail modes.
+  it("AC-1: renders the dome in narrow (collapsed) mode", () => {
     const { container } = render(DragGrip, {
       props: {
         theme: stubTheme,
@@ -87,19 +87,17 @@ describe("DragGrip", () => {
         botStatus: "thinking",
       },
     });
-    // Old cap shape must be gone.
+    // Old shapes must be gone.
     expect(container.querySelector(".rail-bot-hat")).toBeNull();
-    // New bubble must paint.
-    const bubble = container.querySelector(
-      ".rail-bot-bubble",
-    ) as HTMLElement | null;
-    expect(bubble).not.toBeNull();
+    expect(container.querySelector(".rail-bot-bubble")).toBeNull();
+    // Dome must paint.
+    const dome = container.querySelector(".dome") as HTMLElement | null;
+    expect(dome).not.toBeNull();
   });
 
-  // AC-5: The bubble has a circular silhouette (border-radius ≥ 50% of
-  // its short axis) — no rectangular cap shape, no bottom-divider
-  // gradient stripe.
-  it("AC-5: paints the bubble as a circle with a dark outline, no gradient divider", () => {
+  // AC-2: Dome has flat-bottom clip-path (inset(0 0 50% 0)) and circular
+  // border-radius. The clip-path is set inline so it's accessible in jsdom.
+  it("AC-2: dome has flat-bottom clip-path and circular border-radius, no gradient divider", () => {
     const { container } = render(DragGrip, {
       props: {
         theme: stubTheme,
@@ -109,74 +107,38 @@ describe("DragGrip", () => {
         botStatus: "thinking",
       },
     });
-    const bubble = container.querySelector(
-      ".rail-bot-bubble",
-    ) as HTMLElement | null;
-    expect(bubble).not.toBeNull();
-    // Circular silhouette — verified at source level because jsdom
-    // doesn't evaluate scoped Svelte styles. computed.borderRadius is
-    // always "" here, so a DOM-level assertion would be a tautology.
+    const dome = container.querySelector(".dome") as HTMLElement | null;
+    expect(dome).not.toBeNull();
+    // clip-path is set inline for testability.
+    expect(dome!.style.clipPath).toBe("inset(0 0 50% 0)");
+    // border-radius verified at source level (jsdom doesn't evaluate scoped styles).
     const sourceText = readFileSync(
       "src/lib/components/DragGrip.svelte",
       "utf-8",
     );
-    const ruleMatch = sourceText.match(/\.rail-bot-bubble\s*\{[^}]*\}/);
+    const ruleMatch = sourceText.match(/\.dome\s*\{[^}]*\}/);
     expect(ruleMatch).not.toBeNull();
     expect(ruleMatch![0]).toMatch(/border-radius:\s*50%/);
-    // No multi-stop gradient divider stripe (the old hat's hallmark).
-    const computed = window.getComputedStyle(bubble!);
-    const bg = (bubble!.style.background || "") + (computed.background || "");
+    // No multi-stop gradient divider stripe.
+    const computed = window.getComputedStyle(dome!);
+    const bg = (dome!.style.background || "") + (computed.background || "");
     expect(bg).not.toContain("linear-gradient");
   });
 
-  // AC-2: Bubble is absolutely positioned and visually overlaps the top
-  // edge of the row (its bounding box extends above the row by at least
-  // the bubble's radius). jsdom doesn't evaluate scoped Svelte styles,
-  // so we verify the rule at the source level — paired with the in-DOM
-  // presence checks in the other AC tests, this nails down both that
-  // the bubble is rendered AND that its CSS positions it above the row.
-  it("AC-2: positions the bubble above the row's top edge (source check)", () => {
+  // AC-2b: Dome is at left: 0; top: 0, anchored to the rail stripe top.
+  it("AC-2b: dome is anchored at the top of the rail (left: 0; top: 0)", () => {
     const source = readFileSync("src/lib/components/DragGrip.svelte", "utf-8");
-    const ruleMatch = source.match(/\.rail-bot-bubble\s*\{[^}]*\}/);
+    const ruleMatch = source.match(/\.dome\s*\{[^}]*\}/);
     expect(ruleMatch).not.toBeNull();
     const rule = ruleMatch![0];
     expect(rule).toMatch(/position:\s*absolute/);
-    // top must be negative — the bubble's box extends above the row top.
-    const topMatch = rule.match(/top:\s*(-?\d+(?:\.\d+)?)px/);
-    expect(topMatch).not.toBeNull();
-    expect(parseFloat(topMatch![1])).toBeLessThan(0);
+    expect(rule).toMatch(/left:\s*0/);
+    expect(rule).toMatch(/top:\s*0/);
   });
 
-  // AC-2b: Bubble is centered on the row's top-left corner — half above the
-  // row (top: -4px) and half left of the rail stripe (left: -4px), matching
-  // the bubble's 8x8 px size. Guards against a regression to the earlier
-  // "crowns the rail" position (left: 0; top: -6px) where assertions on
-  // top < 0 alone would still pass.
-  it("AC-2b: bubble is centered on the row's top-left corner (left: -4px; top: -4px)", () => {
-    const source = readFileSync("src/lib/components/DragGrip.svelte", "utf-8");
-    const ruleMatch = source.match(/\.rail-bot-bubble\s*\{[^}]*\}/);
-    expect(ruleMatch).not.toBeNull();
-    const rule = ruleMatch![0];
-    const leftMatch = rule.match(/left:\s*(-?\d+(?:\.\d+)?)px/);
-    const topMatch = rule.match(/top:\s*(-?\d+(?:\.\d+)?)px/);
-    const widthMatch = rule.match(/width:\s*(\d+(?:\.\d+)?)px/);
-    const heightMatch = rule.match(/height:\s*(\d+(?:\.\d+)?)px/);
-    expect(leftMatch).not.toBeNull();
-    expect(topMatch).not.toBeNull();
-    expect(widthMatch).not.toBeNull();
-    expect(heightMatch).not.toBeNull();
-    const left = parseFloat(leftMatch![1]);
-    const top = parseFloat(topMatch![1]);
-    const width = parseFloat(widthMatch![1]);
-    const height = parseFloat(heightMatch![1]);
-    // The bubble's center should sit on (0, 0) — the row's top-left corner.
-    expect(left).toBe(-width / 2);
-    expect(top).toBe(-height / 2);
-  });
-
-  // AC-4 (expanded mode): bubble still renders at every rail width and
+  // AC-4 (expanded mode): dome still renders at every rail width and
   // pulses when botStatus === "attention".
-  it("AC-4: renders the bubble in expanded (full-width) mode and pulses on attention", () => {
+  it("AC-4: renders the dome in expanded (full-width) mode and pulses on attention", () => {
     const { container } = render(DragGrip, {
       props: {
         theme: stubTheme,
@@ -186,15 +148,14 @@ describe("DragGrip", () => {
         botStatus: "attention",
       },
     });
-    const bubble = container.querySelector(
-      ".rail-bot-bubble",
-    ) as HTMLElement | null;
-    expect(bubble).not.toBeNull();
-    expect(bubble!.classList.contains("pulses")).toBe(true);
+    const dome = container.querySelector(".dome") as HTMLElement | null;
+    expect(dome).not.toBeNull();
+    expect(dome!.classList.contains("pulses")).toBe(true);
+    expect(container.querySelector(".rail-bot-bubble")).toBeNull();
   });
 
-  // AC-1 (none-state branch): no bubble when botStatus is "none".
-  it("AC-1: hides the bot-status bubble when botStatus is none", () => {
+  // AC-1 (none-state branch): no dome or bubble when botStatus is "none".
+  it("AC-1: hides the dome when botStatus is none", () => {
     const { container } = render(DragGrip, {
       props: {
         theme: stubTheme,
@@ -203,6 +164,7 @@ describe("DragGrip", () => {
         botStatus: "none",
       },
     });
+    expect(container.querySelector(".dome")).toBeNull();
     expect(container.querySelector(".rail-bot-bubble")).toBeNull();
     // Old hat must be gone too.
     expect(container.querySelector(".rail-bot-hat")).toBeNull();

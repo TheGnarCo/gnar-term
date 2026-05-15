@@ -32,20 +32,22 @@ jobs:
           node-version: lts/*
           cache: "npm"
 
-      - name: Remove Homebrew rustup shim (macOS)
+      - name: Reset Rust toolchain (macOS)
         if: runner.os == 'macOS'
         run: |
+          # macos-latest ships Homebrew rustup with a cargo shim on PATH and
+          # dangling symlinks under ~/.cargo/bin. Uninstall the brew formula
+          # and wipe ~/.cargo + ~/.rustup so dtolnay/rust-toolchain's
+          # "install rustup if needed" guard fires and bootstraps a clean
+          # toolchain via curl rustup.rs (which also adds it to GITHUB_PATH).
           brew uninstall --ignore-dependencies rustup-init 2>/dev/null || true
           brew uninstall --ignore-dependencies rustup 2>/dev/null || true
+          rm -rf "$HOME/.cargo" "$HOME/.rustup"
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
-
-      - name: Prepend cargo bin to PATH (macOS)
-        if: runner.os == 'macOS'
-        run: echo "${HOME}/.cargo/bin" >> "$GITHUB_PATH"
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2

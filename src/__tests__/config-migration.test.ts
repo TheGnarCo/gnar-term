@@ -465,3 +465,221 @@ describe("loadConfig — config path policy (gnar-term.json canonical)", () => {
     expect(cfg.theme).toBe("project-wins");
   });
 });
+
+describe("loadConfig — debug builds fall back to prod config dir", () => {
+  const HOME = "/home/test";
+  const DEV_CONFIG_DIR = `${HOME}/.config/gnar-term-dev`;
+  const PROD_CONFIG_DIR = `${HOME}/.config/gnar-term`;
+
+  beforeEach(async () => {
+    vi.mocked(invoke).mockReset();
+    const { resetConfigDirForTests, resetIsDebugBuildForTests } =
+      await import("../lib/services/service-helpers");
+    resetConfigDirForTests();
+    resetIsDebugBuildForTests();
+    resetConfigStateForTests();
+  });
+
+  function mockEnv(opts: {
+    debug: boolean;
+    configDir: string;
+    files: Record<string, string>;
+  }) {
+    vi.mocked(invoke).mockImplementation(
+      async (cmd: string, args?: unknown) => {
+        if (cmd === "get_home") return HOME;
+        if (cmd === "get_global_config_dir") return opts.configDir;
+        if (cmd === "is_debug_build") return opts.debug;
+        if (cmd === "ensure_dir") return null;
+        if (cmd === "read_file") {
+          const path = (args as { path: string }).path;
+          if (opts.files[path] !== undefined) return opts.files[path];
+          throw new Error(`ENOENT: ${path}`);
+        }
+        if (cmd === "write_file") return null;
+        return null;
+      },
+    );
+  }
+
+  it("debug build with empty dev dir loads prod gnar-term.json", async () => {
+    mockEnv({
+      debug: true,
+      configDir: DEV_CONFIG_DIR,
+      files: {
+        [`${PROD_CONFIG_DIR}/gnar-term.json`]: JSON.stringify({
+          theme: "prod-theme",
+          autoload: ["prod-ws"],
+        }),
+      },
+    });
+    const cfg = await loadConfig();
+    expect(cfg.theme).toBe("prod-theme");
+    expect(cfg.autoload).toEqual(["prod-ws"]);
+  });
+
+  it("debug build saves stay in dev dir even when prod config was loaded", async () => {
+    mockEnv({
+      debug: true,
+      configDir: DEV_CONFIG_DIR,
+      files: {
+        [`${PROD_CONFIG_DIR}/gnar-term.json`]: JSON.stringify({
+          theme: "prod-theme",
+        }),
+      },
+    });
+    await loadConfig();
+    await saveConfig({ theme: "changed-in-dev" });
+
+    const writes = vi
+      .mocked(invoke)
+      .mock.calls.filter(([cmd]) => cmd === "write_file")
+      .map(([, args]) => (args as { path: string }).path);
+    expect(writes).toContain(`${DEV_CONFIG_DIR}/gnar-term.json`);
+    expect(writes).not.toContain(`${PROD_CONFIG_DIR}/gnar-term.json`);
+  });
+
+  it("debug build prefers dev-dir gnar-term.json over prod when both exist", async () => {
+    mockEnv({
+      debug: true,
+      configDir: DEV_CONFIG_DIR,
+      files: {
+        [`${DEV_CONFIG_DIR}/gnar-term.json`]: JSON.stringify({
+          theme: "dev-wins",
+        }),
+        [`${PROD_CONFIG_DIR}/gnar-term.json`]: JSON.stringify({
+          theme: "prod-loses",
+        }),
+      },
+    });
+    const cfg = await loadConfig();
+    expect(cfg.theme).toBe("dev-wins");
+  });
+
+  it("release build does NOT fall back — prod path is already the canonical configDir", async () => {
+    // In release builds configDir === PROD_CONFIG_DIR, so the prod entry is
+    // already in the canonical candidate list. The fallback block must not
+    // run (and must not duplicate-write to gnar-term.json on save).
+    mockEnv({
+      debug: false,
+      configDir: PROD_CONFIG_DIR,
+      files: {
+        [`${PROD_CONFIG_DIR}/gnar-term.json`]: JSON.stringify({
+          theme: "release",
+        }),
+      },
+    });
+    const cfg = await loadConfig();
+    expect(cfg.theme).toBe("release");
+
+    await saveConfig({ theme: "release2" });
+    const writes = vi
+      .mocked(invoke)
+      .mock.calls.filter(([cmd]) => cmd === "write_file")
+      .map(([, args]) => (args as { path: string }).path);
+    expect(writes).toContain(`${PROD_CONFIG_DIR}/gnar-term.json`);
+  });
+});
+
+describe("loadState — debug builds fall back to prod state.json", () => {
+  const HOME = "/home/test";
+  const DEV_CONFIG_DIR = `${HOME}/.config/gnar-term-dev`;
+  const PROD_CONFIG_DIR = `${HOME}/.config/gnar-term`;
+
+  beforeEach(async () => {
+    vi.mocked(invoke).mockReset();
+    const { resetConfigDirForTests, resetIsDebugBuildForTests } =
+      await import("../lib/services/service-helpers");
+    resetConfigDirForTests();
+    resetIsDebugBuildForTests();
+    resetConfigStateForTests();
+  });
+
+  function mockEnv(opts: {
+    debug: boolean;
+    configDir: string;
+    files: Record<string, string>;
+  }) {
+    vi.mocked(invoke).mockImplementation(
+      async (cmd: string, args?: unknown) => {
+        if (cmd === "get_home") return HOME;
+        if (cmd === "get_global_config_dir") return opts.configDir;
+        if (cmd === "is_debug_build") return opts.debug;
+        if (cmd === "ensure_dir") return null;
+        if (cmd === "read_file") {
+          const path = (args as { path: string }).path;
+          if (opts.files[path] !== undefined) return opts.files[path];
+          throw new Error(`ENOENT: ${path}`);
+        }
+        if (cmd === "write_file") return null;
+        return null;
+      },
+    );
+  }
+
+  it("debug build with no dev state.json reads prod state.json", async () => {
+    const { loadState } = await import("../lib/config");
+    mockEnv({
+      debug: true,
+      configDir: DEV_CONFIG_DIR,
+      files: {
+        [`${PROD_CONFIG_DIR}/state.json`]: JSON.stringify({
+          workspaces: [
+            {
+              name: "from-prod",
+              layout: { pane: { surfaces: [{ type: "terminal" }] } },
+            },
+          ],
+        }),
+      },
+    });
+    const state = await loadState();
+    expect(state.workspaces).toHaveLength(1);
+    expect(state.workspaces![0].name).toBe("from-prod");
+  });
+
+  it("debug build prefers dev state.json when both exist", async () => {
+    const { loadState } = await import("../lib/config");
+    mockEnv({
+      debug: true,
+      configDir: DEV_CONFIG_DIR,
+      files: {
+        [`${DEV_CONFIG_DIR}/state.json`]: JSON.stringify({
+          workspaces: [
+            { name: "from-dev", layout: { pane: { surfaces: [] } } },
+          ],
+        }),
+        [`${PROD_CONFIG_DIR}/state.json`]: JSON.stringify({
+          workspaces: [
+            { name: "from-prod", layout: { pane: { surfaces: [] } } },
+          ],
+        }),
+      },
+    });
+    const state = await loadState();
+    expect(state.workspaces).toHaveLength(1);
+    expect(state.workspaces![0].name).toBe("from-dev");
+  });
+
+  it("release build does NOT fall back to a different path", async () => {
+    const { loadState } = await import("../lib/config");
+    mockEnv({
+      debug: false,
+      configDir: PROD_CONFIG_DIR,
+      files: {
+        [`${PROD_CONFIG_DIR}/state.json`]: JSON.stringify({
+          workspaces: [{ name: "release", layout: { pane: { surfaces: [] } } }],
+        }),
+      },
+    });
+    const state = await loadState();
+    expect(state.workspaces![0].name).toBe("release");
+
+    // Only one read path attempted (no fallback dance).
+    const reads = vi
+      .mocked(invoke)
+      .mock.calls.filter(([cmd]) => cmd === "read_file")
+      .map(([, args]) => (args as { path: string }).path);
+    expect(reads).toEqual([`${PROD_CONFIG_DIR}/state.json`]);
+  });
+});

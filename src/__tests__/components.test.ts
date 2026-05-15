@@ -2734,7 +2734,7 @@ describe("PreviewSurface link interception", () => {
 });
 
 describe("terminal link handling", () => {
-  it("plain URL link click dispatches open-preview pendingAction; Cmd/Ctrl-click escapes to open_url", async () => {
+  it("plain HTTP URL link click opens in system browser; Cmd/Ctrl-click also opens in system browser", async () => {
     const { invoke: invokeMock } = await import("@tauri-apps/api/core");
     const invokeMockFn = vi.mocked(invokeMock);
     invokeMockFn.mockClear();
@@ -2804,24 +2804,18 @@ describe("terminal link handling", () => {
     expect(capturedLinks).toBeDefined();
     expect(capturedLinks!.length).toBeGreaterThan(0);
 
-    // Plain click → preview surface via pendingAction; no open_url invoke.
-    const openUrlCallsBefore = invokeMockFn.mock.calls.filter(
-      (c) => c[0] === "open_url",
-    ).length;
+    // Plain click on HTTP URL → system browser directly; no pendingAction.
     capturedLinks![0].activate(
       new MouseEvent("click"),
       "https://example.com/path",
     );
-    expect(get(pendingAction)).toEqual({
-      type: "open-preview",
-      target: "https://example.com/path",
+    expect(invokeMockFn).toHaveBeenCalledWith("open_url", {
+      url: "https://example.com/path",
     });
-    expect(
-      invokeMockFn.mock.calls.filter((c) => c[0] === "open_url").length,
-    ).toBe(openUrlCallsBefore);
+    expect(get(pendingAction)).toBeNull();
 
-    // Cmd-click → escapes to system browser.
-    pendingAction.set(null);
+    // Cmd-click → also system browser.
+    invokeMockFn.mockClear();
     capturedLinks![0].activate(
       new MouseEvent("click", { metaKey: true }),
       "https://example.com/path",
@@ -2832,14 +2826,13 @@ describe("terminal link handling", () => {
     expect(get(pendingAction)).toBeNull();
   });
 
-  it("OSC 8 linkHandler is wired and dispatches open-preview by default; Cmd-click escapes to open_url", async () => {
+  it("OSC 8 linkHandler is wired and opens HTTP URLs in system browser; Cmd-click also opens in system browser", async () => {
     // Regression: xterm.js's default OSC 8 handler calls window.confirm
     // before navigating. Tauri remaps window.confirm to plugin:dialog|confirm,
     // which is not granted in capabilities — so the click rejects with
     // "dialog.confirm not allowed. Command not found" and the URL never opens.
-    // We override linkHandler in Terminal options to bypass that path AND
-    // to route plain clicks into the preview surface (Cmd-click escapes
-    // to the system browser via open_url).
+    // We override linkHandler in Terminal options to bypass that path and
+    // route HTTP URLs directly to open_url (system browser).
     const { invoke: invokeMock } = await import("@tauri-apps/api/core");
     const invokeMockFn = vi.mocked(invokeMock);
     invokeMockFn.mockClear();
@@ -2874,24 +2867,18 @@ describe("terminal link handling", () => {
     // open_url enforces the actual scheme allowlist on the Rust side.
     expect(options.linkHandler!.allowNonHttpProtocols).toBe(true);
 
-    // Plain click → preview dispatch via pendingAction.
-    const openUrlCallsBefore = invokeMockFn.mock.calls.filter(
-      (c) => c[0] === "open_url",
-    ).length;
+    // Plain click on HTTP URL → system browser directly; no pendingAction.
     options.linkHandler!.activate(
       new MouseEvent("click"),
       "https://github.com/foo/bar/pull/1",
     );
-    expect(get(pendingAction)).toEqual({
-      type: "open-preview",
-      target: "https://github.com/foo/bar/pull/1",
+    expect(invokeMockFn).toHaveBeenCalledWith("open_url", {
+      url: "https://github.com/foo/bar/pull/1",
     });
-    expect(
-      invokeMockFn.mock.calls.filter((c) => c[0] === "open_url").length,
-    ).toBe(openUrlCallsBefore);
+    expect(get(pendingAction)).toBeNull();
 
-    // Cmd-click → escape to system browser.
-    pendingAction.set(null);
+    // Cmd-click → also system browser.
+    invokeMockFn.mockClear();
     options.linkHandler!.activate(
       new MouseEvent("click", { metaKey: true }),
       "https://github.com/foo/bar/pull/1",

@@ -706,7 +706,12 @@ function createUrlLinkProvider(terminal: Terminal) {
           text: url,
           decorations: { pointerCursor: true, underline: true },
           activate(event: MouseEvent, text: string) {
-            if (event.metaKey || event.ctrlKey) {
+            if (
+              event.metaKey ||
+              event.ctrlKey ||
+              text.startsWith("http://") ||
+              text.startsWith("https://")
+            ) {
               void invoke("open_url", { url: text }).catch((err) =>
                 console.warn("[terminal-service] open_url failed:", err),
               );
@@ -1070,7 +1075,12 @@ export async function createTerminalSurface(
     // browser via open_url.
     linkHandler: {
       activate(event, text) {
-        if (event.metaKey || event.ctrlKey) {
+        if (
+          event.metaKey ||
+          event.ctrlKey ||
+          text.startsWith("http://") ||
+          text.startsWith("https://")
+        ) {
           void invoke("open_url", { url: text }).catch((err) =>
             console.warn("[terminal-service] open_url failed:", err),
           );

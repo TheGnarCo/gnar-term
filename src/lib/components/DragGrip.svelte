@@ -130,17 +130,17 @@
   // 4px policy).
   $: railStripeWidth = narrowRail ? "4px" : "8px";
   $: dotsRender = alwaysShowDots && !narrowRail;
-  // Bubble renders at every rail width — bot status is the one signal
+  // Dome renders at every rail width — bot status is the one signal
   // we always surface on the rail itself so notification visibility
   // doesn't depend on whether the sidebar is collapsed.
-  $: showBubble = botStatus !== "none";
-  $: bubbleColor =
+  $: showDome = botStatus !== "none";
+  $: domeColor =
     botStatus === "attention"
       ? warningColor
       : botStatus === "thinking"
         ? successColor
         : mutedColor;
-  $: bubblePulses = botStatus === "attention";
+  $: domePulses = botStatus === "attention";
 </script>
 
 <!-- The grip is the rail's hover target. Hover state is `:hover`-driven
@@ -170,7 +170,7 @@
     style="width: {railStripeWidth}; background: {effectiveColor}; opacity: {railOpacity};"
   ></div>
 
-  {#if showBubble}
+  {#if showDome}
     <!-- Dome: a flat-bottomed semicircle rising from the top of the rail.
          Absolutely positioned so its presence never changes row layout.
          clip-path clips the bottom half so only the curved top is
@@ -179,10 +179,10 @@
     <div
       aria-hidden="true"
       class="dome"
-      class:pulses={bubblePulses}
+      class:pulses={domePulses}
       style="
-        --rail-bubble-glow: {bubbleColor};
-        background: {bubbleColor};
+        --rail-dome-glow: {domeColor};
+        background: {domeColor};
         width: {railStripeWidth};
         height: {railStripeWidth};
         clip-path: inset(0 0 50% 0);
@@ -310,16 +310,15 @@
     display: block;
   }
 
-  /* Dome: flat-bottomed semicircle at the top of the rail. clip-path
-     hides the lower half so only the curved arc is visible. Width/height
-     are set inline to track railStripeWidth. z-index: 2 keeps it above
-     the rail stripe in the same stacking context. */
+  /* Dome: flat-bottomed semicircle at the top of the rail. clip-path is
+     set inline (not here) for jsdom testability — scoped CSS isn't applied
+     in jsdom. Width/height are also inline to track railStripeWidth.
+     z-index: 2 keeps it above the rail stripe in the same stacking context. */
   .dome {
     position: absolute;
     left: 0;
     top: 0;
     border-radius: 50%;
-    clip-path: inset(0 0 50% 0);
     pointer-events: none;
     z-index: 2;
   }
@@ -391,8 +390,7 @@
     50% {
       filter: brightness(1.25)
         drop-shadow(
-          0 -3px 6px
-            color-mix(in srgb, var(--rail-bubble-glow) 65%, transparent)
+          0 -3px 6px color-mix(in srgb, var(--rail-dome-glow) 65%, transparent)
         );
     }
   }

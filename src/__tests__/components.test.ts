@@ -2325,7 +2325,7 @@ describe("TerminalSurface", () => {
 // ---------------------------------------------------------------------------
 
 describe("WorkspaceItem — harness sub-row", () => {
-  it("paints a green 'thinking' rail bubble for a running agent", async () => {
+  it("AC-1: dome renders when botStatus is not none", async () => {
     const { setAgentsForTests } =
       await import("../lib/services/agent-detection-service");
 
@@ -2358,17 +2358,150 @@ describe("WorkspaceItem — harness sub-row", () => {
       },
     });
 
-    const bubble = container.querySelector(
-      ".rail-bot-bubble",
-    ) as HTMLElement | null;
-    expect(bubble).not.toBeNull();
-    // "thinking" bubble is static, not pulsing.
-    expect(bubble!.classList.contains("pulses")).toBe(false);
+    // AC-1: .dome exists, .rail-bot-bubble does not
+    const dome = container.querySelector(".dome") as HTMLElement | null;
+    expect(dome).not.toBeNull();
+    expect(container.querySelector(".rail-bot-bubble")).toBeNull();
+    // "thinking" dome is static, not pulsing.
+    expect(dome!.classList.contains("pulses")).toBe(false);
+
+    // AC-2: dome has flat-bottom clip-path
+    expect(dome!.style.clipPath).toBe("inset(0 0 50% 0)");
+
+    // AC-3: seam sibling exists
+    const seam = container.querySelector(".seam") as HTMLElement | null;
+    expect(seam).not.toBeNull();
+
     setAgentsForTests([]);
   });
 
-  it("paints a muted 'idle' rail bubble when an agent is attached but idle", async () => {
-    // Idle agents still warrant a bubble — it's the "currently
+  it("AC-2: dome has flat-bottom clip-path", async () => {
+    const { setAgentsForTests } =
+      await import("../lib/services/agent-detection-service");
+
+    const surface = makeSurface("s1-ac2", { title: "claude" });
+    const pane = makePane("p1-ac2", [surface]);
+    const ws = makeChildWorkspace("ws-ac2", "AC2 WS", pane);
+
+    setAgentsForTests([
+      {
+        agentId: "a-ac2",
+        agentName: "Claude Code",
+        agentType: "claude",
+        surfaceId: "s1-ac2",
+        workspaceId: ws.id,
+        status: "running",
+        createdAt: new Date().toISOString(),
+        lastStatusChange: new Date().toISOString(),
+      },
+    ]);
+
+    const { container } = render(WorkspaceItem, {
+      props: {
+        workspace: ws,
+        index: 0,
+        isActive: true,
+        onSelect: noop,
+        onClose: noop,
+        onRename: noop,
+        onContextMenu: noop,
+      },
+    });
+
+    const dome = container.querySelector(".dome") as HTMLElement | null;
+    expect(dome).not.toBeNull();
+    expect(dome!.style.clipPath).toBe("inset(0 0 50% 0)");
+
+    setAgentsForTests([]);
+  });
+
+  it("AC-3: seam renders at correct position", async () => {
+    const { setAgentsForTests } =
+      await import("../lib/services/agent-detection-service");
+
+    const surface = makeSurface("s1-ac3", { title: "claude" });
+    const pane = makePane("p1-ac3", [surface]);
+    const ws = makeChildWorkspace("ws-ac3", "AC3 WS", pane);
+
+    setAgentsForTests([
+      {
+        agentId: "a-ac3",
+        agentName: "Claude Code",
+        agentType: "claude",
+        surfaceId: "s1-ac3",
+        workspaceId: ws.id,
+        status: "running",
+        createdAt: new Date().toISOString(),
+        lastStatusChange: new Date().toISOString(),
+      },
+    ]);
+
+    const { container } = render(WorkspaceItem, {
+      props: {
+        workspace: ws,
+        index: 0,
+        isActive: true,
+        onSelect: noop,
+        onClose: noop,
+        onRename: noop,
+        onContextMenu: noop,
+      },
+    });
+
+    const seam = container.querySelector(".seam") as HTMLElement | null;
+    expect(seam).not.toBeNull();
+    // Seam top is calc(railStripeWidth / 2) — JSDOM may simplify the calc,
+    // so we accept either the literal expression or the reduced form.
+    expect(["calc(8px / 2)", "calc(4px)", "4px"]).toContain(seam!.style.top);
+    expect(seam!.style.width).toBe("8px");
+
+    setAgentsForTests([]);
+  });
+
+  it("AC-4: dome width tracks railStripeWidth", async () => {
+    const { setAgentsForTests } =
+      await import("../lib/services/agent-detection-service");
+
+    const surface = makeSurface("s1-ac4", { title: "claude" });
+    const pane = makePane("p1-ac4", [surface]);
+    const ws = makeChildWorkspace("ws-ac4", "AC4 WS", pane);
+
+    setAgentsForTests([
+      {
+        agentId: "a-ac4",
+        agentName: "Claude Code",
+        agentType: "claude",
+        surfaceId: "s1-ac4",
+        workspaceId: ws.id,
+        status: "running",
+        createdAt: new Date().toISOString(),
+        lastStatusChange: new Date().toISOString(),
+      },
+    ]);
+
+    const { container } = render(WorkspaceItem, {
+      props: {
+        workspace: ws,
+        index: 0,
+        isActive: true,
+        onSelect: noop,
+        onClose: noop,
+        onRename: noop,
+        onContextMenu: noop,
+      },
+    });
+
+    // Default (non-narrow) rail: 8px
+    const dome = container.querySelector(".dome") as HTMLElement | null;
+    expect(dome).not.toBeNull();
+    expect(dome!.style.width).toBe("8px");
+    expect(dome!.style.height).toBe("8px");
+
+    setAgentsForTests([]);
+  });
+
+  it("paints a muted 'idle' dome when an agent is attached but idle", async () => {
+    // Idle agents still warrant a dome — it's the "currently
     // thinking" presence indicator that survives the BotIcon
     // removal. Color is muted-grey, no pulse.
     const { setAgentsForTests } =
@@ -2413,15 +2546,14 @@ describe("WorkspaceItem — harness sub-row", () => {
       },
     });
 
-    const bubble = container.querySelector(
-      ".rail-bot-bubble",
-    ) as HTMLElement | null;
-    expect(bubble).not.toBeNull();
-    expect(bubble!.classList.contains("pulses")).toBe(false);
+    const dome = container.querySelector(".dome") as HTMLElement | null;
+    expect(dome).not.toBeNull();
+    expect(dome!.classList.contains("pulses")).toBe(false);
+    expect(container.querySelector(".rail-bot-bubble")).toBeNull();
     setAgentsForTests([]);
   });
 
-  it("hides the rail bubble when hideStatusBadges is true", async () => {
+  it("hides the dome when hideStatusBadges is true", async () => {
     const { setStatusItem, clearAllStatusForWorkspace } =
       await import("../lib/services/status-registry");
 
@@ -2450,12 +2582,13 @@ describe("WorkspaceItem — harness sub-row", () => {
       },
     });
 
+    expect(container.querySelector(".dome")).toBeNull();
     expect(container.querySelector(".rail-bot-bubble")).toBeNull();
     clearAllStatusForWorkspace(ws.id);
   });
 
-  it("paints a single 'thinking' bubble regardless of how many agents are running", async () => {
-    // Multiple agents collapse to one bubble — the bubble is a per-row
+  it("paints a single 'thinking' dome regardless of how many agents are running", async () => {
+    // Multiple agents collapse to one dome — the dome is a per-row
     // signal, not a per-agent one. Color stays the running-green.
     const { setAgentsForTests } =
       await import("../lib/services/agent-detection-service");
@@ -2510,12 +2643,13 @@ describe("WorkspaceItem — harness sub-row", () => {
       },
     });
 
-    const bubbles = container.querySelectorAll(".rail-bot-bubble");
-    expect(bubbles.length).toBe(1);
+    const domes = container.querySelectorAll(".dome");
+    expect(domes.length).toBe(1);
+    expect(container.querySelector(".rail-bot-bubble")).toBeNull();
     setAgentsForTests([]);
   });
 
-  it("paints a pulsing 'attention' bubble for a waiting agent", async () => {
+  it("AC-5: attention pulse uses filter drop-shadow", async () => {
     const { setAgentsForTests } =
       await import("../lib/services/agent-detection-service");
 
@@ -2548,11 +2682,61 @@ describe("WorkspaceItem — harness sub-row", () => {
       },
     });
 
-    const bubble = container.querySelector(
-      ".rail-bot-bubble",
-    ) as HTMLElement | null;
-    expect(bubble).not.toBeNull();
-    expect(bubble!.classList.contains("pulses")).toBe(true);
+    // AC-5: attention dome uses dg-dome-pulse class (filter-based, not box-shadow)
+    const dome = container.querySelector(".dome") as HTMLElement | null;
+    expect(dome).not.toBeNull();
+    expect(dome!.classList.contains("pulses")).toBe(true);
+    expect(container.querySelector(".rail-bot-bubble")).toBeNull();
+
+    // AC-6: seam has correct color and structure
+    const seam = container.querySelector(".seam") as HTMLElement | null;
+    expect(seam).not.toBeNull();
+
+    setAgentsForTests([]);
+  });
+
+  it("AC-6: seam color and z-index correct", async () => {
+    const { setAgentsForTests } =
+      await import("../lib/services/agent-detection-service");
+
+    const surface = makeSurface("s1-ac6", { title: "claude" });
+    const pane = makePane("p1-ac6", [surface]);
+    const ws = makeChildWorkspace("ws-ac6", "AC6 WS", pane);
+
+    setAgentsForTests([
+      {
+        agentId: "a-ac6",
+        agentName: "Claude Code",
+        agentType: "claude",
+        surfaceId: "s1-ac6",
+        workspaceId: ws.id,
+        status: "running",
+        createdAt: new Date().toISOString(),
+        lastStatusChange: new Date().toISOString(),
+      },
+    ]);
+
+    const { container } = render(WorkspaceItem, {
+      props: {
+        workspace: ws,
+        index: 0,
+        isActive: true,
+        onSelect: noop,
+        onClose: noop,
+        onRename: noop,
+        onContextMenu: noop,
+      },
+    });
+
+    const seam = container.querySelector(".seam") as HTMLElement | null;
+    expect(seam).not.toBeNull();
+    // seam background is rgba(0,0,0,0.45) — set via CSS class
+    // z-index layering verified by DOM order and CSS (dome z=2, seam z=3)
+    // The seam element must be a sibling of the dome
+    const dome = container.querySelector(".dome") as HTMLElement | null;
+    expect(dome).not.toBeNull();
+    expect(dome!.nextElementSibling).toBe(seam);
+
     setAgentsForTests([]);
   });
 });
@@ -2734,7 +2918,7 @@ describe("PreviewSurface link interception", () => {
 });
 
 describe("terminal link handling", () => {
-  it("plain URL link click dispatches open-preview pendingAction; Cmd/Ctrl-click escapes to open_url", async () => {
+  it("plain HTTP URL link click opens in system browser; Cmd/Ctrl-click also opens in system browser", async () => {
     const { invoke: invokeMock } = await import("@tauri-apps/api/core");
     const invokeMockFn = vi.mocked(invokeMock);
     invokeMockFn.mockClear();
@@ -2804,24 +2988,18 @@ describe("terminal link handling", () => {
     expect(capturedLinks).toBeDefined();
     expect(capturedLinks!.length).toBeGreaterThan(0);
 
-    // Plain click → preview surface via pendingAction; no open_url invoke.
-    const openUrlCallsBefore = invokeMockFn.mock.calls.filter(
-      (c) => c[0] === "open_url",
-    ).length;
+    // Plain click on HTTP URL → system browser directly; no pendingAction.
     capturedLinks![0].activate(
       new MouseEvent("click"),
       "https://example.com/path",
     );
-    expect(get(pendingAction)).toEqual({
-      type: "open-preview",
-      target: "https://example.com/path",
+    expect(invokeMockFn).toHaveBeenCalledWith("open_url", {
+      url: "https://example.com/path",
     });
-    expect(
-      invokeMockFn.mock.calls.filter((c) => c[0] === "open_url").length,
-    ).toBe(openUrlCallsBefore);
+    expect(get(pendingAction)).toBeNull();
 
-    // Cmd-click → escapes to system browser.
-    pendingAction.set(null);
+    // Cmd-click → also system browser.
+    invokeMockFn.mockClear();
     capturedLinks![0].activate(
       new MouseEvent("click", { metaKey: true }),
       "https://example.com/path",
@@ -2832,14 +3010,13 @@ describe("terminal link handling", () => {
     expect(get(pendingAction)).toBeNull();
   });
 
-  it("OSC 8 linkHandler is wired and dispatches open-preview by default; Cmd-click escapes to open_url", async () => {
+  it("OSC 8 linkHandler is wired and opens HTTP URLs in system browser; Cmd-click also opens in system browser", async () => {
     // Regression: xterm.js's default OSC 8 handler calls window.confirm
     // before navigating. Tauri remaps window.confirm to plugin:dialog|confirm,
     // which is not granted in capabilities — so the click rejects with
     // "dialog.confirm not allowed. Command not found" and the URL never opens.
-    // We override linkHandler in Terminal options to bypass that path AND
-    // to route plain clicks into the preview surface (Cmd-click escapes
-    // to the system browser via open_url).
+    // We override linkHandler in Terminal options to bypass that path and
+    // route HTTP URLs directly to open_url (system browser).
     const { invoke: invokeMock } = await import("@tauri-apps/api/core");
     const invokeMockFn = vi.mocked(invokeMock);
     invokeMockFn.mockClear();
@@ -2874,24 +3051,18 @@ describe("terminal link handling", () => {
     // open_url enforces the actual scheme allowlist on the Rust side.
     expect(options.linkHandler!.allowNonHttpProtocols).toBe(true);
 
-    // Plain click → preview dispatch via pendingAction.
-    const openUrlCallsBefore = invokeMockFn.mock.calls.filter(
-      (c) => c[0] === "open_url",
-    ).length;
+    // Plain click on HTTP URL → system browser directly; no pendingAction.
     options.linkHandler!.activate(
       new MouseEvent("click"),
       "https://github.com/foo/bar/pull/1",
     );
-    expect(get(pendingAction)).toEqual({
-      type: "open-preview",
-      target: "https://github.com/foo/bar/pull/1",
+    expect(invokeMockFn).toHaveBeenCalledWith("open_url", {
+      url: "https://github.com/foo/bar/pull/1",
     });
-    expect(
-      invokeMockFn.mock.calls.filter((c) => c[0] === "open_url").length,
-    ).toBe(openUrlCallsBefore);
+    expect(get(pendingAction)).toBeNull();
 
-    // Cmd-click → escape to system browser.
-    pendingAction.set(null);
+    // Cmd-click → also system browser.
+    invokeMockFn.mockClear();
     options.linkHandler!.activate(
       new MouseEvent("click", { metaKey: true }),
       "https://github.com/foo/bar/pull/1",

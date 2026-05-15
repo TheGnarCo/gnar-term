@@ -571,22 +571,40 @@
 
       <svelte:fragment slot="banner-end" let:bannerHovered>
         {#if isWorkspaceLocked}
-          <div style="display: flex; align-items: center; gap: 2px;">
-            {#if bannerHovered}
+          {#if bannerHovered}
+            <div style="display: flex; align-items: center; gap: 2px;">
               <SidebarChipButton
                 variant="settings"
                 title="Workspace Settings"
                 idleColor={workspaceHex}
                 onClick={() => void openWorkspaceSettingsTab(workspace!.id)}
               />
-            {/if}
-            <SidebarChipButton
-              variant="lock"
-              title="Unlock Workspace"
-              idleColor={workspaceHex}
-              onClick={() => void handleUnlockWorkspace()}
-            />
-          </div>
+              <SidebarChipButton
+                variant="lock"
+                title="Unlock Workspace"
+                idleColor={workspaceHex}
+                onClick={() => void handleUnlockWorkspace()}
+              />
+            </div>
+          {:else if shortcutIdx !== undefined && shortcutIdx < 9 && $shortcutHintsActive}
+            <span
+              aria-hidden="true"
+              style="
+                font-size: 10px; font-weight: 700; padding: 2px 5px;
+                border-radius: 4px; background: {workspaceHex};
+                color: {headerFg}; white-space: nowrap; pointer-events: none;
+              ">{modLabel}{shortcutIdx + 1}</span
+            >
+          {:else}
+            <div style="display: flex; align-items: center; gap: 2px;">
+              <SidebarChipButton
+                variant="lock"
+                title="Unlock Workspace"
+                idleColor={workspaceHex}
+                onClick={() => void handleUnlockWorkspace()}
+              />
+            </div>
+          {/if}
         {:else if bannerHovered}
           <div style="display: flex; align-items: center; gap: 2px;">
             <SidebarChipButton

@@ -6,6 +6,7 @@
   import WorkspaceSectionContent from "../lib/components/WorkspaceSectionContent.svelte";
 
   export let rootWorkspaceId: string;
+  export let shortcutIdx: number | undefined = undefined;
 
   setContext(EXTENSION_API_KEY, {
     theme: writable(themes["github-dark"]),
@@ -15,6 +16,7 @@
 
 <WorkspaceSectionContent
   {rootWorkspaceId}
+  {shortcutIdx}
   containerBlockId=""
   onGripMouseDown={() => {}}
 />

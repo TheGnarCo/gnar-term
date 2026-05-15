@@ -11,11 +11,22 @@
  *
  * Runtime state:
  *   ~/.config/gnar-term/state.json      (written on quit, restored on launch)
+ *
+ * Debug builds (`npm run dev`, `tauri build --debug`) use
+ * `~/.config/gnar-term-dev/` for both config and state so dev runs cannot
+ * clobber a user's real install. On first launch the dev dir is empty,
+ * which would otherwise hide the user's prod config — so `loadConfig` and
+ * `loadState` fall back to reading the prod paths when the dev dir has no
+ * equivalent. Writes always stay in the dev dir.
  */
 
 import { invoke } from "@tauri-apps/api/core";
 import { writable, type Readable } from "svelte/store";
-import { getHome, getConfigDir } from "./services/service-helpers";
+import {
+  getHome,
+  getConfigDir,
+  isDebugBuild,
+} from "./services/service-helpers";
 import type { ThemeDef } from "./theme-data";
 import { migrateAgentsConfig, type AgentPreset } from "./agents-config";
 
@@ -396,7 +407,11 @@ export async function loadConfig(
     }
   }
 
-  const [home, configDir] = await Promise.all([getHome(), getConfigDir()]);
+  const [home, configDir, debug] = await Promise.all([
+    getHome(),
+    getConfigDir(),
+    isDebugBuild(),
+  ]);
 
   // Try per-project config first (higher priority), then global. Each
   // entry is `{ read, writeForward? }`: `read` is the file we try to
@@ -418,6 +433,32 @@ export async function loadConfig(
       writeForward: `${configDir}/gnar-term.json`,
     },
   ];
+
+  // Debug builds (`npm run dev`, `tauri build --debug`) read state and
+  // config from `~/.config/gnar-term-dev/` to keep dev runs isolated from
+  // the user's real prod install. That isolation is desirable for writes
+  // — we never want a dev run to clobber the prod config — but a brand-new
+  // dev dir means the user's existing prod `gnar-term.json` is invisible,
+  // and `npm run dev` boots into an empty default workspace instead of
+  // honoring their autoload/theme/commands. Fix: when nothing matched in
+  // the dev dir, fall back to reading the prod paths. `writeForward` is
+  // pinned to the dev `configDir` so the next save still lands in the
+  // dev dir — prod stays untouched.
+  if (debug) {
+    const prodConfigDir = `${home}/.config/gnar-term`;
+    if (prodConfigDir !== configDir) {
+      candidates.push(
+        {
+          read: `${prodConfigDir}/gnar-term.json`,
+          writeForward: `${configDir}/gnar-term.json`,
+        },
+        {
+          read: `${prodConfigDir}/cmux.json`,
+          writeForward: `${configDir}/gnar-term.json`,
+        },
+      );
+    }
+  }
 
   for (const { read, writeForward } of candidates) {
     // Read and parse are split so JSON.parse failures (file present but
@@ -517,17 +558,37 @@ export function resetConfigStateForTests(): void {
 }
 
 export async function loadState(): Promise<AppState> {
-  const configDir = await getConfigDir();
-  const path = `${configDir}/state.json`;
+  const [configDir, home, debug] = await Promise.all([
+    getConfigDir(),
+    getHome(),
+    isDebugBuild(),
+  ]);
+  const primary = `${configDir}/state.json`;
+  // Read candidates in priority order: dev dir first, then prod dir as a
+  // read-only fallback for debug builds. Writes always target `primary`.
+  // This mirrors the loadConfig fallback so a fresh dev install picks up
+  // the user's real session instead of booting empty.
+  const candidates: string[] = [primary];
+  if (debug) {
+    const prodPath = `${home}/.config/gnar-term/state.json`;
+    if (prodPath !== primary) candidates.push(prodPath);
+  }
+
   // Split read from parse so a corrupt state.json surfaces loudly instead
   // of looking like "no state file" — the latter triggers auto-default
   // Terminal which would then overwrite the user's persisted session on
   // the next saveState.
   _stateLoadCorrupt = false;
-  let content: string;
-  try {
-    content = await invoke<string>("read_file", { path });
-  } catch {
+  let content: string | null = null;
+  for (const path of candidates) {
+    try {
+      content = await invoke<string>("read_file", { path });
+      break;
+    } catch {
+      continue;
+    }
+  }
+  if (content === null) {
     _appState = {};
     _appStateStore.set(_appState);
     return _appState;
@@ -537,7 +598,7 @@ export async function loadState(): Promise<AppState> {
   } catch (err) {
     _stateLoadCorrupt = true;
     console.warn(
-      `[state] Failed to parse ${path}; refusing to overwrite until it is repaired. Falling back to empty state for this session.`,
+      `[state] Failed to parse state.json; refusing to overwrite until it is repaired. Falling back to empty state for this session.`,
       err,
     );
     _appState = {};

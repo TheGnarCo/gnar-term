@@ -418,10 +418,12 @@ describe("locked workspace banner-end slot — shortcut vs lock chip", () => {
 
   function bannerEndBranch(
     isWorkspaceLocked: boolean,
+    bannerHovered: boolean,
     shortcutHintsActive: boolean,
     shortcutIdx: number | undefined,
-  ): "shortcut" | "lock" | "none" {
+  ): "shortcut" | "lock-hovered" | "lock" | "none" {
     if (isWorkspaceLocked) {
+      if (bannerHovered) return "lock-hovered"; // hover takes priority
       if (shortcutIdx !== undefined && shortcutIdx < 9 && shortcutHintsActive) {
         return "shortcut";
       }
@@ -431,29 +433,41 @@ describe("locked workspace banner-end slot — shortcut vs lock chip", () => {
   }
 
   it("AC-1: locked workspace shows shortcut label when shortcutHintsActive is true and shortcutIdx is in 0-8", () => {
-    expect(bannerEndBranch(true, true, 0)).toBe("shortcut");
-    expect(bannerEndBranch(true, true, 4)).toBe("shortcut");
-    expect(bannerEndBranch(true, true, 8)).toBe("shortcut");
+    expect(bannerEndBranch(true, false, true, 0)).toBe("shortcut");
+    expect(bannerEndBranch(true, false, true, 4)).toBe("shortcut");
+    expect(bannerEndBranch(true, false, true, 8)).toBe("shortcut");
   });
 
   it("AC-1: locked workspace does NOT show shortcut label when shortcutIdx >= 9", () => {
     // shortcutIdx=9 is out of the 0-8 range — fall back to lock chip
-    expect(bannerEndBranch(true, true, 9)).toBe("lock");
+    expect(bannerEndBranch(true, false, true, 9)).toBe("lock");
   });
 
   it("AC-1: locked workspace does NOT show shortcut label when shortcutIdx is undefined", () => {
-    expect(bannerEndBranch(true, true, undefined)).toBe("lock");
+    expect(bannerEndBranch(true, false, true, undefined)).toBe("lock");
   });
 
   it("AC-2: locked workspace shows lock chip when shortcutHintsActive is false", () => {
-    expect(bannerEndBranch(true, false, 0)).toBe("lock");
-    expect(bannerEndBranch(true, false, 4)).toBe("lock");
-    expect(bannerEndBranch(true, false, undefined)).toBe("lock");
+    expect(bannerEndBranch(true, false, false, 0)).toBe("lock");
+    expect(bannerEndBranch(true, false, false, 4)).toBe("lock");
+    expect(bannerEndBranch(true, false, false, undefined)).toBe("lock");
   });
 
   it("AC-2: unlocked workspace is not in the locked branch", () => {
     // Unlocked workspaces don't hit the locked block at all
-    expect(bannerEndBranch(false, true, 0)).toBe("none");
-    expect(bannerEndBranch(false, false, 0)).toBe("none");
+    expect(bannerEndBranch(false, false, true, 0)).toBe("none");
+    expect(bannerEndBranch(false, false, false, 0)).toBe("none");
+  });
+
+  it("AC-3: hover takes priority over shortcut hints on locked workspace", () => {
+    // locked + hovered + hints active → hover wins
+    expect(bannerEndBranch(true, true, true, 0)).toBe("lock-hovered");
+    expect(bannerEndBranch(true, true, true, 4)).toBe("lock-hovered");
+  });
+
+  it("AC-3: hover shows lock-hovered even when hints are inactive", () => {
+    // locked + hovered + hints inactive → still hover
+    expect(bannerEndBranch(true, true, false, 0)).toBe("lock-hovered");
+    expect(bannerEndBranch(true, true, false, undefined)).toBe("lock-hovered");
   });
 });

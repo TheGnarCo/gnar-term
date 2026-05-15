@@ -571,7 +571,22 @@
 
       <svelte:fragment slot="banner-end" let:bannerHovered>
         {#if isWorkspaceLocked}
-          {#if shortcutIdx !== undefined && shortcutIdx < 9 && $shortcutHintsActive}
+          {#if bannerHovered}
+            <div style="display: flex; align-items: center; gap: 2px;">
+              <SidebarChipButton
+                variant="settings"
+                title="Workspace Settings"
+                idleColor={workspaceHex}
+                onClick={() => void openWorkspaceSettingsTab(workspace!.id)}
+              />
+              <SidebarChipButton
+                variant="lock"
+                title="Unlock Workspace"
+                idleColor={workspaceHex}
+                onClick={() => void handleUnlockWorkspace()}
+              />
+            </div>
+          {:else if shortcutIdx !== undefined && shortcutIdx < 9 && $shortcutHintsActive}
             <span
               aria-hidden="true"
               style="
@@ -582,14 +597,6 @@
             >
           {:else}
             <div style="display: flex; align-items: center; gap: 2px;">
-              {#if bannerHovered}
-                <SidebarChipButton
-                  variant="settings"
-                  title="Workspace Settings"
-                  idleColor={workspaceHex}
-                  onClick={() => void openWorkspaceSettingsTab(workspace!.id)}
-                />
-              {/if}
               <SidebarChipButton
                 variant="lock"
                 title="Unlock Workspace"

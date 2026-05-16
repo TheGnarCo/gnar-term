@@ -17,6 +17,7 @@ mod git_worktree;
 pub mod mcp_bridge;
 pub mod mcp_register;
 mod pty;
+mod terminal_engine;
 
 use file_watch::{unwatch_claude_file, unwatch_file, watch_claude_file, watch_file};
 use fs_commands::{

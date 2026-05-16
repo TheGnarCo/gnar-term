@@ -1,6 +1,9 @@
 //! `AlacrittyEngine` — concrete `TerminalEngine` impl backed by
 //! `alacritty_terminal::Term` + `vte::ansi::Processor`.
 
+use std::collections::VecDeque;
+use std::sync::{Arc, Mutex};
+
 use alacritty_terminal::event::{Event, EventListener};
 use alacritty_terminal::grid::Dimensions;
 use alacritty_terminal::term::{Config, TermDamage, TermMode};
@@ -41,28 +44,46 @@ impl Dimensions for TermSize {
 
 // ─── Event listener ──────────────────────────────────────────────────────────
 
-/// A minimal `EventListener` that buffers `Event`s for Phase 2 consumption.
+/// An `EventListener` that buffers `Event`s emitted by `alacritty_terminal::Term`.
 ///
-/// Phase 1 does not surface these events to callers; the buffer exists so
-/// Phase 2 can plumb title changes, bell signals, etc. without an API break.
+/// `send_event` takes `&self` (immutable), so interior mutability via
+/// `Arc<Mutex<VecDeque<Event>>>` is required. The `Arc` lets `AlacrittyEngine`
+/// hold a separate handle to the same queue for draining.
+///
+/// # Thread-safety note
+///
+/// `alacritty_terminal::Term` calls `send_event` synchronously during VTE
+/// processing on the same thread that calls `Processor::advance`. The `Mutex`
+/// guard is held for the single `push_back` call, then immediately released —
+/// there is no concurrent writer, so contention is impossible in practice.
+/// The `Arc` handle on `AlacrittyEngine` side is also accessed from the same
+/// thread. No deadlock or race is possible.
 pub struct MyListener {
-    /// Buffered events from the last parse cycle.
-    ///
-    /// Phase 2 will drain this via a dedicated method.
-    #[allow(dead_code)] // Phase 2 will consume these
-    events: Vec<Event>,
+    events: Arc<Mutex<VecDeque<Event>>>,
 }
 
 impl MyListener {
-    fn new() -> Self {
-        Self { events: Vec::new() }
+    fn new() -> (Self, Arc<Mutex<VecDeque<Event>>>) {
+        let queue = Arc::new(Mutex::new(VecDeque::new()));
+        let listener = Self {
+            events: Arc::clone(&queue),
+        };
+        (listener, queue)
     }
 }
 
 impl EventListener for MyListener {
-    fn send_event(&self, _event: Event) {
-        // Phase 1: intentionally dropped.
-        // Phase 2: replace with interior-mutability push into `events`.
+    fn send_event(&self, event: Event) {
+        match self.events.lock() {
+            Ok(mut guard) => guard.push_back(event),
+            Err(poisoned) => {
+                // A poisoned mutex means another thread panicked while holding
+                // the lock — extremely unlikely in our single-threaded use, but
+                // we recover rather than panic the PTY reader thread.
+                log::debug!("[alacritty_engine] event queue mutex poisoned; recovering");
+                poisoned.into_inner().push_back(event);
+            }
+        }
     }
 }
 
@@ -117,6 +138,8 @@ pub struct AlacrittyEngine {
     processor: Processor,
     cols: u16,
     rows: u16,
+    /// Shared queue with `MyListener`; used to drain events after each `feed`.
+    event_queue: Arc<Mutex<VecDeque<Event>>>,
 }
 
 impl AlacrittyEngine {
@@ -126,13 +149,49 @@ impl AlacrittyEngine {
             cols: cols as usize,
             lines: rows as usize,
         };
-        let term = Term::new(Config::default(), &size, MyListener::new());
+        let (listener, event_queue) = MyListener::new();
+        let term = Term::new(Config::default(), &size, listener);
         let processor = Processor::new();
         Self {
             term,
             processor,
             cols,
             rows,
+            event_queue,
+        }
+    }
+
+    /// Drain all buffered events emitted since the last call (or since construction).
+    ///
+    /// Each call to `feed` may cause `alacritty_terminal::Term` to invoke
+    /// `MyListener::send_event` one or more times. Those events accumulate in the
+    /// shared queue until this method is called.
+    ///
+    /// # `PtyWrite` events
+    ///
+    /// `Event::PtyWrite` carries a response string that the terminal expects to be
+    /// written back to the PTY (e.g., a color-query response). **Callers are
+    /// responsible for routing these bytes to the PTY writer.** Dropping them
+    /// causes the querying program to hang indefinitely waiting for a response.
+    ///
+    /// Full PTY write-back routing (cross-component plumbing with `AppState.ptys`)
+    /// is deferred to a follow-up cycle. This method surfaces the events so they
+    /// are no longer silently lost.
+    ///
+    /// # Other events
+    ///
+    /// Non-PtyWrite events (`Bell`, `Title`, `Exit`, etc.) are logged at debug
+    /// level by `PtyBridge::feed_and_emit` and otherwise passed through to the
+    /// caller; they do not cause programs to hang.
+    pub fn drain_events(&self) -> Vec<Event> {
+        match self.event_queue.lock() {
+            Ok(mut guard) => guard.drain(..).collect(),
+            Err(poisoned) => {
+                log::debug!(
+                    "[alacritty_engine] event queue mutex poisoned during drain; recovering"
+                );
+                poisoned.into_inner().drain(..).collect()
+            }
         }
     }
 

@@ -160,10 +160,15 @@ pub(crate) struct AppState {
     pub(crate) watch_flags: Mutex<HashMap<u32, Arc<AtomicBool>>>,
     /// Per-pane Alacritty engine bridges, keyed by `pty_id`.
     ///
+    /// Wrapped in `Arc` so the PTY reader thread can hold a clone of the mutex
+    /// without needing a `'static` reference to `AppState`. The reader thread
+    /// uses the `Arc` clone to call `bridge.feed_and_emit(data)` after
+    /// forwarding bytes to the xterm.js channel.
+    ///
     /// An entry is present only after `attach_alacritty_engine` is called
     /// for that pane. The existing xterm.js code path (`spawn_pty` /
     /// `write_pty` / `resize_pty`) does not touch this map.
-    pub(crate) bridges: Mutex<HashMap<u32, PtyBridge>>,
+    pub(crate) bridges: Arc<Mutex<HashMap<u32, PtyBridge>>>,
 }
 
 #[derive(Clone, Serialize)]
@@ -340,6 +345,13 @@ function __gnarterm_report_cwd --on-event fish_prompt\n\
         );
     }
 
+    // Clone the bridges Arc so the reader thread can feed the Alacritty engine
+    // when a bridge is attached. The reader thread MUST NOT hold both `ptys`
+    // and `bridges` simultaneously to avoid potential deadlocks — here we only
+    // ever lock `bridges` briefly for the feed, and we never lock `ptys` in
+    // the reader path.
+    let bridges_arc = Arc::clone(&state.bridges);
+
     // Spawn reader thread — forwards PTY output to frontend
     let app_handle = app.clone();
     let id = pty_id;
@@ -432,11 +444,28 @@ function __gnarterm_report_cwd --on-event fish_prompt\n\
                         }
                     }
 
+                    // xterm.js path FIRST — preserves byte-identical existing
+                    // behaviour. The Alacritty bridge feed is additive and must
+                    // not affect the xterm.js channel's error handling.
                     if on_output
                         .send(InvokeResponseBody::Raw(data.to_vec()))
                         .is_err()
                     {
                         break;
+                    }
+
+                    // Alacritty bridge feed (additive, after xterm.js path).
+                    // Lock bridges briefly; if no bridge is attached this is
+                    // a hash-map lookup that returns None — essentially free.
+                    // Never hold bridges and ptys simultaneously (lock ordering
+                    // rule: we hold neither ptys nor any other lock here).
+                    if let Ok(mut bridges) = bridges_arc.lock() {
+                        if let Some(bridge) = bridges.get_mut(&id) {
+                            // feed_and_emit returns () — errors (channel send
+                            // failures) are already handled inside the bridge
+                            // via log::debug! and silently discarded.
+                            bridge.feed_and_emit(data);
+                        }
                     }
                 }
                 Err(_) => {
@@ -499,6 +528,16 @@ pub(crate) async fn resize_pty(
 /// Kill a PTY
 #[tauri::command]
 pub(crate) async fn kill_pty(state: tauri::State<'_, AppState>, pty_id: u32) -> Result<(), String> {
+    // Safety net: remove any attached Alacritty bridge so the per-pane engine
+    // is freed even when `detach_alacritty_engine` was not called explicitly
+    // (e.g. process exit before frontend teardown, test helpers that skip detach).
+    // Lock is acquired and released before touching `ptys` to avoid holding both
+    // mutexes simultaneously.
+    {
+        let mut bridges = state.bridges.lock().map_err(|e| e.to_string())?;
+        bridges.remove(&pty_id);
+    }
+
     let mut ptys = state.ptys.lock().map_err(|e| e.to_string())?;
     if let Some(pty) = ptys.remove(&pty_id) {
         // Ensure the reader thread isn't blocked on the condvar
@@ -991,7 +1030,7 @@ mod tests {
         let state = AppState {
             ptys: Mutex::new(HashMap::new()),
             watch_flags: Mutex::new(HashMap::new()),
-            bridges: Mutex::new(HashMap::new()),
+            bridges: Arc::new(Mutex::new(HashMap::new())),
         };
 
         let pty_system = native_pty_system();
@@ -1128,7 +1167,7 @@ mod tests {
         let state = AppState {
             ptys: Mutex::new(HashMap::new()),
             watch_flags: Mutex::new(HashMap::new()),
-            bridges: Mutex::new(HashMap::new()),
+            bridges: Arc::new(Mutex::new(HashMap::new())),
         };
 
         let pty_system = native_pty_system();
@@ -1195,7 +1234,7 @@ mod tests {
         let state = AppState {
             ptys: Mutex::new(HashMap::new()),
             watch_flags: Mutex::new(HashMap::new()),
-            bridges: Mutex::new(HashMap::new()),
+            bridges: Arc::new(Mutex::new(HashMap::new())),
         };
 
         let pty_system = native_pty_system();
@@ -1274,7 +1313,7 @@ mod tests {
         let state = AppState {
             ptys: Mutex::new(HashMap::new()),
             watch_flags: Mutex::new(HashMap::new()),
-            bridges: Mutex::new(HashMap::new()),
+            bridges: Arc::new(Mutex::new(HashMap::new())),
         };
 
         let pty_system = native_pty_system();

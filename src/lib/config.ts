@@ -564,6 +564,24 @@ export function getWorkspaceCommands(): CommandDef[] {
   return (_config.commands || []).filter((c) => c.workspace);
 }
 
+/**
+ * Map the normalized terminal engine selection to the corresponding Svelte
+ * component name used in PaneView.
+ *
+ * Extracted as a pure function so PaneView's dispatch logic can be
+ * unit-tested without a DOM or Svelte rendering environment.
+ *
+ * @returns `"AlacrittyTerminalSurface"` when engine is `"alacritty"`,
+ *          `"TerminalSurface"` for `"xterm"` or any other value.
+ */
+export function selectTerminalComponent(
+  engine: "xterm" | "alacritty",
+): "TerminalSurface" | "AlacrittyTerminalSurface" {
+  return engine === "alacritty"
+    ? "AlacrittyTerminalSurface"
+    : "TerminalSurface";
+}
+
 // --- Runtime state ---
 
 let _appState: AppState = {};

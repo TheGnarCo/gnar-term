@@ -75,7 +75,9 @@ function resolveColor(color: ColorIndex): string {
   if (idx < 16) return ANSI_PALETTE_16[idx] ?? "#ffffff";
   // Indices 16–255: xterm-256 color cube + grayscale ramp.
   // Phase 1 placeholder — full 256-color expansion is cycle-7 work.
-  return `color(display-p3 0 0 0)`; // TODO(cycle-7): full 256-color cube
+  // Use "#000000" instead of display-p3 syntax: display-p3 is not supported
+  // by all canvas implementations (notably older WebKitGTK on Linux).
+  return "#000000"; // TODO(cycle-7): full 256-color cube
 }
 
 // ─── Renderer options ─────────────────────────────────────────────────────────
@@ -118,6 +120,11 @@ export class Renderer {
     this.cellHeight = opts.cellHeight;
     this.normalFont = `${opts.fontSize}px ${opts.fontFamily}`;
     this.boldFont = `bold ${opts.fontSize}px ${opts.fontFamily}`;
+    // Set textBaseline to "top" so fillText y-coordinates align to the cell
+    // top edge (row * cellHeight). The canvas default is "alphabetic" baseline,
+    // which offsets glyphs upward by the font's ascender height and misaligns
+    // them relative to background fillRects that start at row * cellHeight.
+    this.ctx.textBaseline = "top";
   }
 
   // ── Public API ─────────────────────────────────────────────────────────────

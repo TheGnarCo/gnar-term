@@ -27,6 +27,7 @@ tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 url = "2"
 tauri-plugin-http = "2.5.9"
+log = "0.4"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6.4"

@@ -23,6 +23,7 @@
   import { onMount, onDestroy } from "svelte";
   import { invoke, Channel } from "@tauri-apps/api/core";
   import { Renderer } from "./alacritty-renderer";
+  import { encodeKey } from "./alacritty-key-encoder";
   import type {
     TerminalChannelMessage,
     GridSnapshot,
@@ -39,14 +40,16 @@
   let canvasEl: HTMLCanvasElement;
   let renderer: Renderer | undefined;
   let channel: Channel<TerminalChannelMessage> | undefined;
+  let resizeObserver: ResizeObserver | undefined;
 
   /**
    * Track current grid dimensions so we can detect resizes in diffs.
    * On resize (diff rows/cols differ from snapshot), we need a fresh snapshot.
-   * For Phase 1 we log a warning; requesting a fresh snapshot is cycle-6 work.
    */
   let currentCols = 80;
   let currentRows = 24;
+  let cellWidth = 8;
+  let cellHeight = 16.8;
 
   // ─── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -59,8 +62,13 @@
 
     // Measure cell dimensions using the chosen font.
     ctx.font = `${fontSize}px ${fontFamily}`;
-    const cellWidth = ctx.measureText("M").width;
-    const cellHeight = fontSize * 1.2;
+    // Set textBaseline to "top" so fillText y-coordinates align to the cell
+    // top edge (row * cellHeight). The canvas default is "alphabetic" baseline,
+    // which would shift glyphs upward by the font's ascender height and cause
+    // off-by-one rendering relative to background fillRects.
+    ctx.textBaseline = "top";
+    cellWidth = ctx.measureText("M").width;
+    cellHeight = fontSize * 1.2;
 
     // Size canvas to default grid dimensions; will be resized on first snapshot.
     canvasEl.width = currentCols * cellWidth;
@@ -73,6 +81,37 @@
       cellWidth,
       cellHeight,
     });
+
+    // Wire canvas resize → engine resize so the Alacritty engine stays in sync
+    // with the actual canvas dimensions. On resize, recalculate cols × rows and
+    // invoke resize_alacritty_engine, which reflows the engine and emits a fresh
+    // Snapshot (see AlacrittyTerminalSurface comment on snapshot-on-resize).
+    resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        if (width > 0 && height > 0) {
+          const newCols = Math.max(1, Math.floor(width / cellWidth));
+          const newRows = Math.max(1, Math.floor(height / cellHeight));
+          if (newCols !== currentCols || newRows !== currentRows) {
+            currentCols = newCols;
+            currentRows = newRows;
+            canvasEl.width = newCols * cellWidth;
+            canvasEl.height = newRows * cellHeight;
+            invoke("resize_alacritty_engine", {
+              ptyId,
+              cols: newCols,
+              rows: newRows,
+            }).catch((err) => {
+              console.error(
+                "[AlacrittyTerminalSurface] resize_alacritty_engine failed:",
+                err,
+              );
+            });
+          }
+        }
+      }
+    });
+    resizeObserver.observe(canvasEl);
 
     channel = new Channel<TerminalChannelMessage>();
 
@@ -98,12 +137,29 @@
         // diff
         const diff = msg.value;
         if (diff.rows !== currentRows || diff.cols !== currentCols) {
-          // TODO(cycle-6): request a fresh snapshot on resize rather than
-          // continuing with stale dimensions.
-          console.warn(
-            "[AlacrittyTerminalSurface] grid resize detected in diff; " +
-              "fresh snapshot request not yet implemented (cycle-6).",
+          // The diff's grid dimensions differ from our current canvas dimensions.
+          // Painting with stale dimensions would corrupt the display — skip this
+          // diff and trigger a fresh snapshot by re-requesting the engine resize
+          // so we re-sync on the next message.
+          console.error(
+            "[AlacrittyTerminalSurface] grid resize mismatch in diff " +
+              `(got ${diff.cols}x${diff.rows}, expected ${currentCols}x${currentRows}); ` +
+              "skipping paintDiff and requesting fresh snapshot.",
           );
+          // Re-sync: ask the engine to emit a fresh Snapshot at the current
+          // canvas dimensions so the renderer can repaint from scratch.
+          invoke("resize_alacritty_engine", {
+            ptyId,
+            cols: currentCols,
+            rows: currentRows,
+          }).catch((err) => {
+            console.error(
+              "[AlacrittyTerminalSurface] resize_alacritty_engine failed during re-sync:",
+              err,
+            );
+          });
+          // Do NOT call paintDiff with stale dimensions.
+          return;
         }
         renderer.paintDiff(diff);
         renderer.paintCursor(diff.cursor);
@@ -113,10 +169,10 @@
     try {
       await invoke("attach_alacritty_engine", { ptyId, channel });
     } catch (err) {
-      // cycle-4 may not have implemented attach_alacritty_engine yet.
-      // Log and continue so the component renders without crashing the app.
-      console.warn(
-        "[AlacrittyTerminalSurface] attach_alacritty_engine not available:",
+      // attach_alacritty_engine failed — this is unexpected and means the
+      // component will not receive any terminal data. Log as error.
+      console.error(
+        "[AlacrittyTerminalSurface] attach_alacritty_engine failed:",
         err,
       );
     }
@@ -125,14 +181,15 @@
   });
 
   onDestroy(() => {
-    // cycle-4 added detach_alacritty_engine; invoke it if available.
-    // If cycle-4 did not add it, the channel simply stops receiving messages.
-    // TODO(cycle-6): confirm detach_alacritty_engine API surface with cycle-4's
-    // manifest and add a runtime guard if the command may be absent.
+    // Stop observing canvas resize events.
+    resizeObserver?.disconnect();
+    resizeObserver = undefined;
+
+    // Detach the Alacritty engine bridge, releasing backend memory.
     if (ptyId >= 0) {
       invoke("detach_alacritty_engine", { ptyId }).catch((err) => {
-        console.warn(
-          "[AlacrittyTerminalSurface] detach_alacritty_engine:",
+        console.error(
+          "[AlacrittyTerminalSurface] detach_alacritty_engine failed:",
           err,
         );
       });
@@ -142,47 +199,7 @@
   });
 
   // ─── Keyboard handling ─────────────────────────────────────────────────────
-
-  /**
-   * Encode a KeyboardEvent to a PTY byte sequence.
-   *
-   * Phase 1 coverage (cycle-5):
-   *   - Printable ASCII (event.key.length === 1)
-   *   - Enter → CR (\r)
-   *   - Backspace → DEL (\x7f)
-   *   - Tab → \t
-   *   - Arrow keys → CSI sequences
-   *
-   * TODO(cycle-7/phase-2): Add full xterm key encoding:
-   *   - Ctrl+letter sequences (\x01–\x1a)
-   *   - Alt/Meta combos (ESC prefix)
-   *   - F1–F12 (SS3 / CSI ~ sequences)
-   *   - Shift+arrow, Ctrl+arrow modifier combos
-   *   - Home, End, Insert, Delete, Page Up/Down
-   *   - Numpad keys
-   */
-  function encodeKey(e: KeyboardEvent): string | null {
-    switch (e.key) {
-      case "Enter":
-        return "\r";
-      case "Backspace":
-        return "\x7f";
-      case "Tab":
-        return "\t";
-      case "ArrowUp":
-        return "\x1b[A";
-      case "ArrowDown":
-        return "\x1b[B";
-      case "ArrowRight":
-        return "\x1b[C";
-      case "ArrowLeft":
-        return "\x1b[D";
-      default:
-        // Printable ASCII / UTF-8 (single grapheme cluster from keyboard)
-        if (e.key.length === 1) return e.key;
-        return null;
-    }
-  }
+  // encodeKey is imported from alacritty-key-encoder.ts for testability.
 
   function handleKeydown(e: KeyboardEvent): void {
     const data = encodeKey(e);

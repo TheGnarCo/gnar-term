@@ -51,7 +51,12 @@ pub(crate) async fn attach_alacritty_engine(
         // platforms the query is a no-op and returns Err).
         match pty.master_pty.get_size() {
             Ok(sz) => (sz.cols, sz.rows),
-            Err(_) => (80, 24),
+            Err(e) => {
+                log::warn!(
+                    "[attach_alacritty_engine] get_size failed for pty_id={pty_id}: {e}; defaulting to 80x24"
+                );
+                (80, 24)
+            }
         }
     };
 
@@ -80,6 +85,24 @@ pub(crate) async fn feed_alacritty_engine(
     if let Some(bridge) = bridges.get_mut(&pty_id) {
         bridge.feed_and_emit(&bytes);
     }
+    Ok(())
+}
+
+/// Detach the Alacritty engine from `pty_id`, releasing the bridge entry.
+///
+/// This is the explicit teardown path for the bridge: removing the entry drops
+/// the `PtyBridge` (and its `AlacrittyEngine`), freeing per-pane memory.
+/// Call this from the frontend when a pane is closed or navigated away from.
+///
+/// `kill_pty` also removes the bridge entry as a safety net for non-detach
+/// shutdown paths (e.g. process exit before frontend cleanup).
+#[tauri::command]
+pub(crate) async fn detach_alacritty_engine(
+    state: tauri::State<'_, AppState>,
+    pty_id: u32,
+) -> Result<(), String> {
+    let mut bridges = state.bridges.lock().map_err(|e| e.to_string())?;
+    bridges.remove(&pty_id);
     Ok(())
 }
 

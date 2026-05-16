@@ -281,6 +281,27 @@ fn cursor_visibility_serde_roundtrip_hidden_cursor() {
     assert_eq!(decoded.cursor.col, 7);
 }
 
+// ─── ColorIndex wire-contract: Rgb serialises as array ───────────────────────
+
+/// Asserts that `ColorIndex::Rgb(255, 128, 0)` serialises to JSON containing
+/// `"kind":"Rgb"` and `"value":[255,128,0]` (an array, not an object).
+/// This locks the TypeScript discriminated-union contract: the TS side
+/// pattern-matches on `color.kind === "Rgb"` and destructures
+/// `const [r, g, b] = color.value`, so an object shape would silently break it.
+#[test]
+fn wire_format_rgb_color_index_serialises_as_array() {
+    let color = ColorIndex::Rgb(255, 128, 0);
+    let json = serde_json::to_string(&color).expect("serialize ColorIndex::Rgb");
+    assert!(
+        json.contains("\"kind\":\"Rgb\""),
+        "expected '\"kind\":\"Rgb\"' in ColorIndex JSON, got: {json}"
+    );
+    assert!(
+        json.contains("\"value\":[255,128,0]"),
+        "expected '\"value\":[255,128,0]' (array) in ColorIndex JSON, got: {json}"
+    );
+}
+
 // ─── Wire-contract key-shape tests ────────────────────────────────────────────
 
 /// Asserts specific `snake_case` JSON field names to lock the on-wire shape

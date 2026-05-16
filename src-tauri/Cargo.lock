@@ -1737,6 +1737,7 @@ dependencies = [
  "alacritty_terminal",
  "clap",
  "libc",
+ "log",
  "objc2",
  "objc2-app-kit",
  "objc2-foundation",

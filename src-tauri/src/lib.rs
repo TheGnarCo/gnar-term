@@ -248,7 +248,7 @@ pub fn run() {
         .manage(AppState {
             ptys: Mutex::new(HashMap::new()),
             watch_flags: Mutex::new(HashMap::new()),
-            bridges: Mutex::new(HashMap::new()),
+            bridges: std::sync::Arc::new(Mutex::new(HashMap::new())),
         })
         .manage(cli_args)
         .invoke_handler(tauri::generate_handler![
@@ -312,7 +312,8 @@ pub fn run() {
             git_status_ops::git_status_short_batch,
             alacritty_commands::attach_alacritty_engine,
             alacritty_commands::feed_alacritty_engine,
-            alacritty_commands::resize_alacritty_engine
+            alacritty_commands::resize_alacritty_engine,
+            alacritty_commands::detach_alacritty_engine
         ])
         .setup(|app| {
             // Set window title from CLI --title flag

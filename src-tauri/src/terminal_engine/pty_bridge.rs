@@ -163,10 +163,7 @@ impl PtyBridge {
         // the pane or navigated away). Swallow — the bridge continues to
         // maintain engine state until the caller drops the bridge entry.
         self.sink.send(msg).map_err(|e| {
-            // In production this would go to tracing::debug! but we keep the
-            // dep-graph clean by using eprintln in debug builds only.
-            #[cfg(debug_assertions)]
-            eprintln!("[pty_bridge] sink send error (receiver dropped?): {e}");
+            log::debug!("[pty_bridge] sink send error (receiver dropped?): {e}");
             e
         })
     }

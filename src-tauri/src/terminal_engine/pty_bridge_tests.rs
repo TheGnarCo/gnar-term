@@ -214,6 +214,66 @@ fn snapshot_rows_data_length_matches_viewport_rows() {
     drop(bridge);
 }
 
+/// cached/viewport/dimensions/bridge: after `resize_and_emit` the diff emitted by
+/// the next `feed_and_emit` carries the new dimensions — confirms cached fields
+/// on `PtyBridge` stay consistent with the engine's actual viewport.
+///
+/// This test guards against drift: if a future code path mutates the engine's
+/// size without updating `PtyBridge::cols`/`rows`, the diff payload would carry
+/// stale dimensions and the renderer would silently display the wrong geometry.
+///
+/// The "snapshot dimensions == diff dimensions" assertion is the backstop: the
+/// resize Snapshot is built directly from the engine (ground truth) while the
+/// subsequent Diff is built from the cached fields. If they diverge, both
+/// assertions will catch it.
+#[test]
+fn cached_viewport_dims_survive_resize_and_match_diff_payload() {
+    let (mut bridge, sink) = make_bridge(80, 24);
+
+    // Resize to a distinct geometry.
+    bridge.resize_and_emit(120, 40);
+
+    // Capture the snapshot emitted by resize — this is the engine's ground
+    // truth for the new dimensions.
+    let msgs_after_resize = sink.messages();
+    let resize_snapshot = match msgs_after_resize.last().expect("must have messages") {
+        TerminalChannelMessage::Snapshot(snap) => snap.clone(),
+        TerminalChannelMessage::Diff(other) => {
+            panic!("Expected Snapshot from resize, got Diff {other:?}")
+        }
+    };
+    assert_eq!(resize_snapshot.cols, 120);
+    assert_eq!(resize_snapshot.rows, 40);
+
+    // Now feed a byte — triggers feed_and_emit, which builds a GridDiff from
+    // the cached cols/rows fields (NOT another snapshot call).
+    let count_before = sink.messages().len();
+    bridge.feed_and_emit(b"x");
+
+    let msgs = sink.messages();
+    let new_msgs = &msgs[count_before..];
+    assert!(
+        !new_msgs.is_empty(),
+        "Expected a Diff after feed post-resize"
+    );
+    match &new_msgs[0] {
+        TerminalChannelMessage::Diff(diff) => {
+            // Cached fields must match the engine's snapshot dimensions.
+            assert_eq!(
+                diff.cols, resize_snapshot.cols,
+                "Diff.cols (from cache) must equal resize Snapshot.cols (engine ground truth)"
+            );
+            assert_eq!(
+                diff.rows, resize_snapshot.rows,
+                "Diff.rows (from cache) must equal resize Snapshot.rows (engine ground truth)"
+            );
+        }
+        TerminalChannelMessage::Snapshot(other) => {
+            panic!("Expected Diff after feed, got Snapshot {other:?}");
+        }
+    }
+}
+
 /// attach/cursor: initial snapshot contains a cursor position.
 #[test]
 fn attach_snapshot_contains_cursor_position() {

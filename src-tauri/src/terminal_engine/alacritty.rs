@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 use alacritty_terminal::event::{Event, EventListener};
 use alacritty_terminal::grid::{Dimensions, Scroll};
 use alacritty_terminal::term::color::Colors;
-use alacritty_terminal::term::{Config, TermDamage};
+use alacritty_terminal::term::{Config, Osc52, TermDamage};
 use alacritty_terminal::vte::ansi::{Color, CursorShape, NamedColor, Processor};
 use alacritty_terminal::Term;
 
@@ -179,13 +179,22 @@ pub struct AlacrittyEngine {
 
 impl AlacrittyEngine {
     /// Construct a new engine with an `cols × rows` viewport.
+    ///
+    /// OSC 52 is configured to `CopyPaste` so both store (program → clipboard)
+    /// and load (clipboard → program) sequences are honoured. The default
+    /// `OnlyCopy` would silently drop `ClipboardLoad` events, preventing
+    /// clipboard-read operations (e.g. `nvim` paste via OSC 52) from working.
     pub fn new(cols: u16, rows: u16) -> Self {
         let size = TermSize {
             cols: cols as usize,
             lines: rows as usize,
         };
         let (listener, event_queue) = MyListener::new();
-        let term = Term::new(Config::default(), &size, listener);
+        let config = Config {
+            osc52: Osc52::CopyPaste,
+            ..Config::default()
+        };
+        let term = Term::new(config, &size, listener);
         let processor = Processor::new();
         Self {
             term,

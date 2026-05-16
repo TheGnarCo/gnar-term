@@ -19,7 +19,12 @@ import type {
   Cell,
   ColorIndex,
 } from "../types/terminal-ipc";
-import { ATTR_BOLD, ATTR_UNDERLINE, ATTR_INVERSE } from "../types/terminal-ipc";
+import {
+  ATTR_BOLD,
+  ATTR_ITALIC,
+  ATTR_UNDERLINE,
+  ATTR_INVERSE,
+} from "../types/terminal-ipc";
 
 // ─── Default 16-color ANSI palette ────────────────────────────────────────────
 //
@@ -57,12 +62,27 @@ const ANSI_PALETTE_16: readonly string[] = [
 
 // ─── Color resolver ───────────────────────────────────────────────────────────
 
+// xterm 256-color cube channel value table.
+// The 6 levels (0–5) map to: 0→0, 1→95, 2→135, 3→175, 4→215, 5→255.
+const CUBE_CHANNEL = [0, 95, 135, 175, 215, 255] as const;
+
+/**
+ * Convert an integer 0–255 to a two-digit lowercase hex string.
+ * e.g. 0 → "00", 128 → "80", 255 → "ff".
+ */
+function hex2(n: number): string {
+  return n.toString(16).padStart(2, "0");
+}
+
 /**
  * Resolve a `ColorIndex` to a CSS color string.
  *
- * - `Indexed(0..15)` → canonical ANSI palette entry above.
- * - `Indexed(16..255)` → passed through as a xterm-256 fallback string
- *   (cycle-7 can expand to the full 256-color cube).
+ * - `Indexed(0..15)` → canonical ANSI palette entry (`ANSI_PALETTE_16`).
+ * - `Indexed(16..231)` → xterm 6×6×6 RGB cube.
+ *   Index = 16 + 36·r + 6·g + b, where r, g, b ∈ {0..5}.
+ *   Channel values: 0→0, 1→95, 2→135, 3→175, 4→215, 5→255.
+ * - `Indexed(232..255)` → 24-step grayscale ramp.
+ *   value = 8 + 10·(i − 232), from #080808 to #eeeeee.
  * - `Rgb(r,g,b)` → `"rgb(r,g,b)"` (direct pass-through).
  */
 function resolveColor(color: ColorIndex): string {
@@ -73,11 +93,19 @@ function resolveColor(color: ColorIndex): string {
   // Indexed
   const idx = color.value;
   if (idx < 16) return ANSI_PALETTE_16[idx] ?? "#ffffff";
-  // Indices 16–255: xterm-256 color cube + grayscale ramp.
-  // Phase 1 placeholder — full 256-color expansion is cycle-7 work.
-  // Use "#000000" instead of display-p3 syntax: display-p3 is not supported
-  // by all canvas implementations (notably older WebKitGTK on Linux).
-  return "#000000"; // TODO(cycle-7): full 256-color cube
+  if (idx < 232) {
+    // 6×6×6 RGB cube: indices 16–231
+    // The three channel indices are always in [0,5] given idx in [16,231],
+    // so CUBE_CHANNEL lookups cannot be undefined — assert to satisfy TS.
+    const i = idx - 16;
+    const r = CUBE_CHANNEL[Math.floor(i / 36)] ?? 0;
+    const g = CUBE_CHANNEL[Math.floor((i % 36) / 6)] ?? 0;
+    const b = CUBE_CHANNEL[i % 6] ?? 0;
+    return `#${hex2(r)}${hex2(g)}${hex2(b)}`;
+  }
+  // Grayscale ramp: indices 232–255 → value = 8 + 10*(i-232)
+  const gray = 8 + 10 * (idx - 232);
+  return `#${hex2(gray)}${hex2(gray)}${hex2(gray)}`;
 }
 
 // ─── Renderer options ─────────────────────────────────────────────────────────
@@ -107,10 +135,14 @@ export class Renderer {
   private readonly cellWidth: number;
   private readonly cellHeight: number;
 
-  /** Normal (non-bold) font string, rebuilt on construction. */
+  /** Normal (non-bold, non-italic) font string, rebuilt on construction. */
   private readonly normalFont: string;
   /** Bold font string. */
   private readonly boldFont: string;
+  /** Italic font string. */
+  private readonly italicFont: string;
+  /** Bold + italic font string. */
+  private readonly boldItalicFont: string;
 
   constructor(opts: RendererOptions) {
     this.ctx = opts.ctx;
@@ -120,6 +152,8 @@ export class Renderer {
     this.cellHeight = opts.cellHeight;
     this.normalFont = `${opts.fontSize}px ${opts.fontFamily}`;
     this.boldFont = `bold ${opts.fontSize}px ${opts.fontFamily}`;
+    this.italicFont = `italic ${opts.fontSize}px ${opts.fontFamily}`;
+    this.boldItalicFont = `italic bold ${opts.fontSize}px ${opts.fontFamily}`;
     // Set textBaseline to "top" so fillText y-coordinates align to the cell
     // top edge (row * cellHeight). The canvas default is "alphabetic" baseline,
     // which offsets glyphs upward by the font's ascender height and misaligns
@@ -184,9 +218,6 @@ export class Renderer {
    *   1. Background fill (full cell rect).
    *   2. Text glyph (with font/color adjusted for attrs).
    *   3. Underline line (1px fillRect at cell baseline) if ATTR_UNDERLINE.
-   *
-   * ATTR_ITALIC: skipped in Phase 1 — italic font loading is not guaranteed
-   * in the webview.  TODO(cycle-7/phase-2): load italic font face and apply.
    */
   private _paintCell(cell: Cell, row: number, col: number): void {
     const x = col * this.cellWidth;
@@ -203,8 +234,18 @@ export class Renderer {
     this.ctx.fillStyle = bgColor;
     this.ctx.fillRect(x, y, this.cellWidth, this.cellHeight);
 
-    // 2. Font — bold variant if ATTR_BOLD
-    this.ctx.font = cell.attrs & ATTR_BOLD ? this.boldFont : this.normalFont;
+    // 2. Font — select variant based on bold/italic attrs
+    const isBold = !!(cell.attrs & ATTR_BOLD);
+    const isItalic = !!(cell.attrs & ATTR_ITALIC);
+    if (isBold && isItalic) {
+      this.ctx.font = this.boldItalicFont;
+    } else if (isBold) {
+      this.ctx.font = this.boldFont;
+    } else if (isItalic) {
+      this.ctx.font = this.italicFont;
+    } else {
+      this.ctx.font = this.normalFont;
+    }
 
     // 3. Glyph
     this.ctx.fillStyle = fgColor;

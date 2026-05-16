@@ -97,6 +97,11 @@
             currentRows = newRows;
             canvasEl.width = newCols * cellWidth;
             canvasEl.height = newRows * cellHeight;
+            // Canvas dimension assignment resets ctx state (HTML spec
+            // §4.12.5.1). Restore textBaseline so subsequent paints from
+            // the existing renderer keep glyph alignment.
+            ctx.textBaseline = "top";
+            ctx.font = `${fontSize}px ${fontFamily}`;
             invoke("resize_alacritty_engine", {
               ptyId,
               cols: newCols,
@@ -121,17 +126,20 @@
         const snap = msg.value as GridSnapshot;
         currentCols = snap.cols;
         currentRows = snap.rows;
-        // Resize canvas to match the actual grid
-        const r = new Renderer({
+        // Resize the canvas FIRST, then construct the Renderer. Canvas
+        // dimension assignment resets ctx state (HTML spec §4.12.5.1),
+        // so any Renderer constructed before this would have its
+        // textBaseline / font wiped. Constructing after the resize lets
+        // the constructor's ctx setup be the last write before paint.
+        canvasEl.width = snap.cols * cellWidth;
+        canvasEl.height = snap.rows * cellHeight;
+        renderer = new Renderer({
           ctx,
           fontFamily,
           fontSize,
           cellWidth,
           cellHeight,
         });
-        canvasEl.width = snap.cols * cellWidth;
-        canvasEl.height = snap.rows * cellHeight;
-        renderer = r;
         renderer.paintSnapshot(snap);
       } else {
         // diff
@@ -207,7 +215,7 @@
     e.preventDefault();
     // Match existing xterm.js convention: invoke('write_pty', { ptyId, data })
     invoke("write_pty", { ptyId, data }).catch((err) => {
-      console.warn("[AlacrittyTerminalSurface] write_pty failed:", err);
+      console.error("[AlacrittyTerminalSurface] write_pty failed:", err);
     });
   }
 </script>

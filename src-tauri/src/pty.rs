@@ -459,12 +459,23 @@ function __gnarterm_report_cwd --on-event fish_prompt\n\
                     // a hash-map lookup that returns None — essentially free.
                     // Never hold bridges and ptys simultaneously (lock ordering
                     // rule: we hold neither ptys nor any other lock here).
-                    if let Ok(mut bridges) = bridges_arc.lock() {
-                        if let Some(bridge) = bridges.get_mut(&id) {
-                            // feed_and_emit returns () — errors (channel send
-                            // failures) are already handled inside the bridge
-                            // via log::debug! and silently discarded.
-                            bridge.feed_and_emit(data);
+                    match bridges_arc.lock() {
+                        Ok(mut bridges) => {
+                            if let Some(bridge) = bridges.get_mut(&id) {
+                                // feed_and_emit returns () — channel send
+                                // failures are logged inside the bridge via
+                                // log::debug! and otherwise silently dropped.
+                                bridge.feed_and_emit(data);
+                            }
+                        }
+                        Err(e) => {
+                            // Poisoned mutex — another thread panicked while
+                            // holding the bridges lock. Without a log this
+                            // would silently kill all future bridge feeds.
+                            log::error!(
+                                "[pty reader] bridges mutex poisoned for pty_id={id}: {e}; \
+                                 Alacritty engine will receive no further data for this pane"
+                            );
                         }
                     }
                 }

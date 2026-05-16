@@ -6,14 +6,16 @@ use std::sync::{Arc, Mutex};
 
 use alacritty_terminal::event::{Event, EventListener};
 use alacritty_terminal::grid::Dimensions;
-use alacritty_terminal::term::{Config, TermDamage, TermMode};
-use alacritty_terminal::vte::ansi::{Color, NamedColor, Processor};
+use alacritty_terminal::term::color::Colors;
+use alacritty_terminal::term::{Config, TermDamage};
+use alacritty_terminal::vte::ansi::{Color, CursorShape, NamedColor, Processor};
 use alacritty_terminal::Term;
 
 use super::trait_def::TerminalEngine;
 use super::types::{
-    Cell, ColorIndex, CursorPos, DirtyRect, GridSnapshot, RowData, ATTR_BOLD, ATTR_INVERSE,
-    ATTR_ITALIC, ATTR_UNDERLINE,
+    Cell, ColorIndex, CursorPos, CursorShapeTag, DirtyRect, GridSnapshot, RowData, ATTR_BOLD,
+    ATTR_DIM, ATTR_HIDDEN, ATTR_INVERSE, ATTR_ITALIC, ATTR_STRIKEOUT, ATTR_UNDERLINE,
+    ATTR_WIDE_CHAR,
 };
 
 // ─── Size helper ─────────────────────────────────────────────────────────────
@@ -127,6 +129,19 @@ fn map_color(color: Color) -> ColorIndex {
     }
 }
 
+// ─── Cursor shape mapping ─────────────────────────────────────────────────────
+
+/// Map `alacritty_terminal::vte::ansi::CursorShape` to our `CursorShapeTag`.
+fn map_cursor_shape(shape: CursorShape) -> CursorShapeTag {
+    match shape {
+        CursorShape::Block => CursorShapeTag::Block,
+        CursorShape::Underline => CursorShapeTag::Underline,
+        CursorShape::Beam => CursorShapeTag::Beam,
+        CursorShape::HollowBlock => CursorShapeTag::HollowBlock,
+        CursorShape::Hidden => CursorShapeTag::Hidden,
+    }
+}
+
 // ─── AlacrittyEngine ─────────────────────────────────────────────────────────
 
 /// `TerminalEngine` implementation wrapping `alacritty_terminal::Term`.
@@ -159,6 +174,18 @@ impl AlacrittyEngine {
             rows,
             event_queue,
         }
+    }
+
+    /// Expose the terminal's color table for use by event consumers (e.g. `PtyBridge`
+    /// routing `ColorRequest` events).
+    ///
+    /// `alacritty_terminal::Term::colors()` returns a reference to the internal
+    /// `Colors` array (269 slots: ANSI 0-15, 256-color cube, grayscale ramp,
+    /// plus named slots for Foreground/Background/Cursor etc.). Each slot is
+    /// `Option<Rgb>` — `None` means the color was never explicitly set and the
+    /// terminal-emulator should fall back to a default.
+    pub fn colors(&self) -> &Colors {
+        self.term.colors()
     }
 
     /// Drain all buffered events emitted since the last call (or since construction).
@@ -196,6 +223,9 @@ impl AlacrittyEngine {
     }
 
     /// Map a row of alacritty `Cell`s into a `RowData`.
+    ///
+    /// Cycle-12: added `ATTR_DIM`, `ATTR_HIDDEN`, `ATTR_STRIKEOUT`, `ATTR_WIDE_CHAR`
+    /// and zero-width combining mark preservation in `Cell::ch`.
     fn map_row(&self, line_idx: alacritty_terminal::index::Line) -> RowData {
         use alacritty_terminal::term::cell::Flags;
 
@@ -217,9 +247,36 @@ impl AlacrittyEngine {
                 if acell.flags.contains(Flags::ITALIC) {
                     attrs |= ATTR_ITALIC;
                 }
+                if acell.flags.contains(Flags::DIM) {
+                    attrs |= ATTR_DIM;
+                }
+                if acell.flags.contains(Flags::HIDDEN) {
+                    attrs |= ATTR_HIDDEN;
+                }
+                if acell.flags.contains(Flags::STRIKEOUT) {
+                    attrs |= ATTR_STRIKEOUT;
+                }
+                if acell.flags.contains(Flags::WIDE_CHAR) {
+                    attrs |= ATTR_WIDE_CHAR;
+                }
+
+                // Build the cell character, appending any zero-width combining marks.
+                // alacritty_terminal stores combining diacritics in `acell.zerowidth()`.
+                // Dropping them (as `acell.c.to_string()` did) loses grapheme clusters
+                // like "e\u{0301}" → "é".
+                let ch = if let Some(zw) = acell.zerowidth() {
+                    let mut s = String::with_capacity(4 + zw.len() * 4);
+                    s.push(acell.c);
+                    for &c in zw {
+                        s.push(c);
+                    }
+                    s
+                } else {
+                    acell.c.to_string()
+                };
 
                 Cell {
-                    ch: acell.c.to_string(),
+                    ch,
                     fg: map_color(acell.fg),
                     bg: map_color(acell.bg),
                     attrs,
@@ -316,12 +373,32 @@ impl TerminalEngine for AlacrittyEngine {
     }
 
     fn cursor_position(&self) -> CursorPos {
-        let grid = self.term.grid();
-        let point = grid.cursor.point;
-        let visible = self.term.mode().contains(TermMode::SHOW_CURSOR);
-        // `point.line` is 0-based within the viewport for normal (non-scrolled) state.
-        let row = point.line.0.max(0) as u16;
-        let col = point.column.0 as u16;
-        CursorPos { row, col, visible }
+        // `Term::renderable_content()` is the public API that produces a
+        // `RenderableContent` carrying a `RenderableCursor`. The cursor inside
+        // correctly handles vi-mode, cursor style overrides, and visibility in
+        // one place (audit recommendation F-3). Specifically, it sets
+        // `shape = CursorShape::Hidden` when `SHOW_CURSOR` mode is off outside
+        // vi-mode — which replaces the manual `mode().contains(TermMode::SHOW_CURSOR)`
+        // check we previously performed.
+        //
+        // `RenderableCursor::new` is private; the public access path is via
+        // `Term::renderable_content()`.
+        let content = self.term.renderable_content();
+        let rc = content.cursor;
+
+        let row = rc.point.line.0.max(0) as u16;
+        let col = rc.point.column.0 as u16;
+
+        let shape = map_cursor_shape(rc.shape);
+        // `visible` is derived from shape for backwards-compatibility with renderers
+        // that test `pos.visible` without inspecting `shape`.
+        let visible = shape != CursorShapeTag::Hidden;
+
+        CursorPos {
+            row,
+            col,
+            visible,
+            shape,
+        }
     }
 }

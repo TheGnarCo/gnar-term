@@ -37,7 +37,10 @@
 //! operating; the caller can decide to drop the bridge when they detect the
 //! channel is gone via a separate signal (e.g. pane close).
 
+use std::io::Write;
+
 use alacritty_terminal::event::Event;
+use alacritty_terminal::vte::ansi::Rgb;
 
 use super::alacritty::AlacrittyEngine;
 use super::ipc::GridDiff;
@@ -99,9 +102,30 @@ impl MessageSink for TauriChannelSink {
 
 /// Per-pane bridge that owns an [`AlacrittyEngine`] and emits
 /// [`TerminalChannelMessage`] payloads to a [`MessageSink`].
+///
+/// # PTY writer (cycle-12)
+///
+/// `pty_writer` is an optional writer for sending response bytes back to the
+/// PTY (e.g., OSC color-query responses). When `Some`, the bridge routes
+/// `Event::PtyWrite` and `Event::ColorRequest` bytes through it.
+///
+/// ## Dual-writer invariant
+///
+/// Production callers (see `alacritty_commands.rs::attach_alacritty_engine`)
+/// pass a writer obtained via `MasterPty::take_writer()`. This is *independent*
+/// of the `PtyInstance::writer` stored in `AppState.ptys`. Both writers are
+/// independent file-descriptor handles to the same PTY master; the kernel
+/// multiplexes concurrent writes correctly. The `PtyInstance` writer is used for
+/// normal keystroke forwarding (`write_pty`); the bridge writer is used only for
+/// terminal-protocol responses (OSC queries etc.).
 pub struct PtyBridge {
     engine: AlacrittyEngine,
     sink: Box<dyn MessageSink>,
+    /// Optional writer for routing response bytes back to the PTY.
+    ///
+    /// `None` in test mode (no PTY to write to). `Some` in production when
+    /// the bridge is created via `attach_alacritty_engine`.
+    pty_writer: Option<Box<dyn Write + Send>>,
     /// Cached viewport width — updated in `new` and `resize_and_emit`.
     ///
     /// Avoids calling `engine.snapshot()` (O(rows × cols)) on every
@@ -115,11 +139,24 @@ impl PtyBridge {
     /// Create a new bridge, size the engine to `cols × rows`, and emit the
     /// initial `Snapshot` to the sink.
     ///
+    /// ## Arguments
+    ///
+    /// - `cols`, `rows` — initial viewport dimensions.
+    /// - `sink` — message channel to the frontend.
+    /// - `pty_writer` — optional writer for PTY response bytes (OSC query
+    ///   responses etc.). Pass `None` in tests; pass
+    ///   `Some(pty.master_pty.take_writer()?)` in production.
+    ///
     /// The initial full-damage produced by `AlacrittyEngine::new` is consumed
     /// by calling `reset_damage` before any caller-driven `feed_and_emit`
     /// calls, so the first diff won't include the entire blank viewport as
     /// dirty rects (which would double the data volume needlessly).
-    pub fn new(cols: u16, rows: u16, sink: Box<dyn MessageSink>) -> Self {
+    pub fn new(
+        cols: u16,
+        rows: u16,
+        sink: Box<dyn MessageSink>,
+        pty_writer: Option<Box<dyn Write + Send>>,
+    ) -> Self {
         let mut engine = AlacrittyEngine::new(cols, rows);
         // Discard the initial full-damage so the first real diff is clean.
         engine.reset_damage();
@@ -128,6 +165,7 @@ impl PtyBridge {
         let bridge = Self {
             engine,
             sink,
+            pty_writer,
             cols,
             rows,
         };
@@ -144,12 +182,25 @@ impl PtyBridge {
     /// still emitted so the renderer can update cursor position.
     ///
     /// After computing the diff, all buffered events from `AlacrittyEngine` are
-    /// drained and logged. `Event::PtyWrite` events carry response bytes that
-    /// should be written back to the PTY (e.g., OSC color-query responses); they
-    /// are logged here but **not yet routed to the PTY writer**. Full write-back
-    /// routing requires cross-component plumbing with `AppState.ptys` and is
-    /// deferred to a follow-up cycle. The drain prevents silent event loss —
-    /// the queue is cleared so it does not grow unboundedly.
+    /// drained and routed:
+    ///
+    /// - `Event::PtyWrite(text)` → `pty_writer.write_all(text.as_bytes())`.
+    ///   Programs that issue OSC queries expect this response; without it they
+    ///   hang indefinitely. (Previously the TODO: pty-write-routing deferral.)
+    ///
+    /// - `Event::ColorRequest(index, formatter)` → looks up `engine.colors()[index]`;
+    ///   if `Some(rgb)`, calls `formatter(rgb)` to produce the response string and
+    ///   writes it through `pty_writer`. If `None`, a sane default Rgb is computed
+    ///   (see inline comment) and used as the fallback.
+    ///
+    /// - `Event::ClipboardLoad` / `Event::ClipboardStore` → logged at `warn!` with
+    ///   a TODO; OSC 52 clipboard plumbing is deferred to a future cycle.
+    ///   // TODO(clipboard-osc52): route OSC 52 via tauri-plugin-clipboard or arboard.
+    ///
+    /// - All other events → `log::debug!`.
+    ///
+    /// If `pty_writer` is `None` (test mode), `PtyWrite` and `ColorRequest` are
+    /// logged at debug level only — no panic.
     pub fn feed_and_emit(&mut self, bytes: &[u8]) {
         self.engine.feed(bytes);
         let dirty = self.engine.damage();
@@ -162,23 +213,75 @@ impl PtyBridge {
         };
         let _ = self.emit(TerminalChannelMessage::Diff(diff));
 
-        // Drain and log all events emitted during this parse cycle.
-        // TODO(pty-write-routing): PtyWrite bytes must be written back to the
-        // PTY to unblock programs that issue OSC queries. Implement in the
-        // follow-up cycle that adds a pty_write_sink to PtyBridge.
+        // Drain and route all events emitted during this parse cycle.
         for event in self.engine.drain_events() {
-            match &event {
-                Event::PtyWrite(text) => {
-                    log::debug!(
-                        "[alacritty_engine] PtyWrite ({} bytes): buffered — \
-                         routing to PTY writer deferred (see TODO pty-write-routing)",
-                        text.len()
+            match event {
+                Event::PtyWrite(ref text) => {
+                    self.write_to_pty(text.as_bytes(), "PtyWrite");
+                }
+                Event::ColorRequest(index, ref formatter) => {
+                    // Look up the color in the engine's color table.
+                    // Falls back to a default Rgb when the slot is None:
+                    //   - Indices 0-15: conventional ANSI palette defaults are not
+                    //     stored in the color table unless explicitly set; we use
+                    //     white (Rgb {r:255,g:255,b:255}) as a safe default because
+                    //     terminals without a config typically show a bright foreground.
+                    //   - Named slots (256=Foreground, 257=Background, 258=Cursor):
+                    //     use white / black / white respectively.
+                    //   - 256-color cube / grayscale: use white as a conservative default.
+                    // The exact color used here matters only for programs that parse the
+                    // query response; the critical correctness goal is to send *a* response
+                    // so the program doesn't hang.
+                    let colors = self.engine.colors();
+                    let rgb = colors[index].unwrap_or(
+                        // Named background slot (index 257) → black; everything else → white.
+                        if index == 257 {
+                            Rgb { r: 0, g: 0, b: 0 }
+                        } else {
+                            Rgb {
+                                r: 255,
+                                g: 255,
+                                b: 255,
+                            }
+                        },
+                    );
+                    let response = formatter(rgb);
+                    self.write_to_pty(response.as_bytes(), "ColorRequest");
+                }
+                Event::ClipboardLoad(_, _) | Event::ClipboardStore(_, _) => {
+                    // TODO(clipboard-osc52): route OSC 52 via tauri-plugin-clipboard or arboard.
+                    log::warn!(
+                        "[alacritty_engine] clipboard event received but not yet routed \
+                         (see TODO clipboard-osc52)"
                     );
                 }
                 other => {
                     log::debug!("[alacritty_engine] event: {other:?}");
                 }
             }
+        }
+    }
+
+    /// Write `data` to `pty_writer` if present; log at debug on success,
+    /// warn on I/O error. No-op (debug log only) when `pty_writer` is `None`.
+    fn write_to_pty(&mut self, data: &[u8], label: &str) {
+        if let Some(ref mut writer) = self.pty_writer {
+            match writer.write_all(data).and_then(|()| writer.flush()) {
+                Ok(()) => {
+                    log::debug!(
+                        "[alacritty_engine] {label}: wrote {} bytes to pty_writer",
+                        data.len()
+                    );
+                }
+                Err(e) => {
+                    log::warn!("[alacritty_engine] {label}: failed to write to pty_writer: {e}");
+                }
+            }
+        } else {
+            log::debug!(
+                "[alacritty_engine] {label}: no pty_writer (test mode), {} bytes discarded",
+                data.len()
+            );
         }
     }
 

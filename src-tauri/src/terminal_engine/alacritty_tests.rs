@@ -1,10 +1,10 @@
-//! Unit tests for `AlacrittyEngine` covering AC-2 and AC-6.
+//! Unit tests for `AlacrittyEngine` covering AC-2, AC-6, and cycle-12 additions.
 
 #[cfg(test)]
 mod tests {
     use crate::terminal_engine::alacritty::AlacrittyEngine;
     use crate::terminal_engine::trait_def::TerminalEngine;
-    use crate::terminal_engine::types::ATTR_BOLD;
+    use crate::terminal_engine::types::{CursorShapeTag, ATTR_BOLD};
     use alacritty_terminal::event::Event;
 
     // ─── helpers ─────────────────────────────────────────────────────────────
@@ -136,6 +136,53 @@ mod tests {
         assert!(
             second.is_empty(),
             "expected empty queue after drain, got: {second:?}"
+        );
+    }
+
+    // ─── Cycle-12 tests: cursor shape + combining marks ───────────────────────
+
+    /// Fresh engine cursor must have Block shape.
+    #[test]
+    fn cursor_shape_block_on_fresh_init() {
+        let engine = engine_80x24();
+        let pos = engine.cursor_position();
+        assert_eq!(
+            pos.shape,
+            CursorShapeTag::Block,
+            "fresh engine cursor shape must be Block, got: {:?}",
+            pos.shape
+        );
+    }
+
+    /// Hidden cursor should reflect Hidden shape; visible cursor must not.
+    #[test]
+    fn cursor_shape_visible_consistency_with_show_cursor_mode() {
+        let engine = engine_80x24();
+        let pos = engine.cursor_position();
+        // By default, SHOW_CURSOR mode is set → visible == true, shape != Hidden.
+        assert!(pos.visible, "fresh engine cursor should be visible");
+        assert_ne!(
+            pos.shape,
+            CursorShapeTag::Hidden,
+            "visible cursor must not have Hidden shape"
+        );
+    }
+
+    /// Feeding a base char followed by a combining diacritic mark results in a
+    /// Cell whose `ch` field contains both codepoints (the base + the combining mark).
+    #[test]
+    fn zerowidth_combining_marks_preserved_in_cell() {
+        let mut engine = engine_80x24();
+        // 'e' (U+0065) followed by combining acute (U+0301) forms é.
+        // Feed as raw UTF-8 bytes to the engine.
+        engine.feed("e\u{0301}".as_bytes());
+        let snap = engine.snapshot();
+        let cell = &snap.rows_data[0].cells[0];
+        // The cell character must include both the base and the combining mark.
+        assert!(
+            cell.ch.contains('\u{0301}'),
+            "expected combining acute (U+0301) preserved in cell.ch, got: {:?}",
+            cell.ch
         );
     }
 

@@ -24,6 +24,9 @@ import {
   ATTR_ITALIC,
   ATTR_UNDERLINE,
   ATTR_INVERSE,
+  ATTR_DIM,
+  ATTR_HIDDEN,
+  ATTR_STRIKEOUT,
 } from "../types/terminal-ipc";
 
 // ─── Default 16-color ANSI palette ────────────────────────────────────────────
@@ -106,6 +109,41 @@ function resolveColor(color: ColorIndex): string {
   // Grayscale ramp: indices 232–255 → value = 8 + 10*(i-232)
   const gray = 8 + 10 * (idx - 232);
   return `#${hex2(gray)}${hex2(gray)}${hex2(gray)}`;
+}
+
+// ─── Dim color helper ─────────────────────────────────────────────────────────
+
+/**
+ * Parse a CSS color string to `[r, g, b]` (values 0–255).
+ *
+ * Handles:
+ * - `#rrggbb` hex strings (6-digit lowercase, as produced by `resolveColor`).
+ * - `rgb(r,g,b)` strings.
+ *
+ * Returns `[255, 255, 255]` as a safe fallback for unrecognised formats.
+ */
+function parseCssRgb(color: string): [number, number, number] {
+  if (color.startsWith("#") && color.length === 7) {
+    const r = parseInt(color.slice(1, 3), 16);
+    const g = parseInt(color.slice(3, 5), 16);
+    const b = parseInt(color.slice(5, 7), 16);
+    return [r, g, b];
+  }
+  // rgb(r,g,b)
+  const m = color.match(/rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/);
+  if (m) {
+    return [parseInt(m[1]!), parseInt(m[2]!), parseInt(m[3]!)];
+  }
+  return [255, 255, 255];
+}
+
+/**
+ * Darken a CSS color by multiplying each channel by 0.6 (DIM attribute).
+ * Returns a new `rgb(r,g,b)` string.
+ */
+function dimColor(color: string): string {
+  const [r, g, b] = parseCssRgb(color);
+  return `rgb(${Math.round(r * 0.6)},${Math.round(g * 0.6)},${Math.round(b * 0.6)})`;
 }
 
 // ─── Renderer options ─────────────────────────────────────────────────────────
@@ -198,15 +236,45 @@ export class Renderer {
   }
 
   /**
-   * Block cursor: filled rect at `pos` in the foreground color (default
-   * white). Only renders when `pos.visible === true`.
+   * Draw the cursor at `pos`.
+   *
+   * Shape dispatch (cycle-12):
+   * - `block`        — filled rect covering the full cell (previous behaviour).
+   * - `beam`         — 2px vertical bar at the cell left edge.
+   * - `underline`    — 1px horizontal bar at the cell bottom.
+   * - `hollow_block` — strokeRect outline of the cell rect.
+   * - `hidden`       — no render (also gated by `pos.visible`).
+   *
+   * Renders nothing when `pos.visible === false`.
    */
   paintCursor(pos: CursorPos): void {
     if (!pos.visible) return;
     const x = pos.col * this.cellWidth;
     const y = pos.row * this.cellHeight;
+    const kind = pos.shape?.kind ?? "block";
+
     this.ctx.fillStyle = "#ffffff";
-    this.ctx.fillRect(x, y, this.cellWidth, this.cellHeight);
+
+    switch (kind) {
+      case "block":
+        this.ctx.fillRect(x, y, this.cellWidth, this.cellHeight);
+        break;
+      case "beam":
+        // Thin vertical bar: 2px wide, full cell height.
+        this.ctx.fillRect(x, y, 2, this.cellHeight);
+        break;
+      case "underline":
+        // 1px horizontal bar at the cell bottom.
+        this.ctx.fillRect(x, y + this.cellHeight - 1, this.cellWidth, 1);
+        break;
+      case "hollow_block":
+        // Outline-only rect. strokeStyle inherits from fillStyle default.
+        this.ctx.strokeRect(x, y, this.cellWidth, this.cellHeight);
+        break;
+      case "hidden":
+        // No render.
+        break;
+    }
   }
 
   // ── Private helpers ────────────────────────────────────────────────────────
@@ -218,6 +286,12 @@ export class Renderer {
    *   1. Background fill (full cell rect).
    *   2. Text glyph (with font/color adjusted for attrs).
    *   3. Underline line (1px fillRect at cell baseline) if ATTR_UNDERLINE.
+   *   4. Strikeout line (1px fillRect at cell midline) if ATTR_STRIKEOUT.
+   *
+   * Cycle-12 attribute additions:
+   * - ATTR_DIM    — multiply fg color channels by 0.6 (darken).
+   * - ATTR_HIDDEN — set fg = bg before drawing (invisible glyph).
+   * - ATTR_STRIKEOUT — 1px line through the cell midline.
    */
   private _paintCell(cell: Cell, row: number, col: number): void {
     const x = col * this.cellWidth;
@@ -228,6 +302,16 @@ export class Renderer {
     let bgColor = resolveColor(cell.bg);
     if (cell.attrs & ATTR_INVERSE) {
       [fgColor, bgColor] = [bgColor, fgColor];
+    }
+
+    // ATTR_DIM: darken the foreground by multiplying each RGB channel by 0.6.
+    if (cell.attrs & ATTR_DIM) {
+      fgColor = dimColor(fgColor);
+    }
+
+    // ATTR_HIDDEN: suppress the glyph by setting fg = bg (makes text invisible).
+    if (cell.attrs & ATTR_HIDDEN) {
+      fgColor = bgColor;
     }
 
     // 1. Background fill
@@ -258,6 +342,13 @@ export class Renderer {
       const underlineY = y + this.fontSize - 1;
       this.ctx.fillStyle = fgColor;
       this.ctx.fillRect(x, underlineY, this.cellWidth, 1);
+    }
+
+    // 5. Strikeout (1px rect through the cell midline)
+    if (cell.attrs & ATTR_STRIKEOUT) {
+      const strikeY = y + Math.floor(this.cellHeight / 2);
+      this.ctx.fillStyle = fgColor;
+      this.ctx.fillRect(x, strikeY, this.cellWidth, 1);
     }
   }
 }

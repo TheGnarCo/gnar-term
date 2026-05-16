@@ -2,7 +2,7 @@
 //!
 //! These tests verify that `GridSnapshot` and `GridDiff` survive a JSON
 //! encode → decode round-trip with structural equality, and that specific
-//! snake_case JSON keys are emitted to lock the on-wire shape.
+//! `snake_case` JSON keys are emitted to lock the on-wire shape.
 
 use crate::terminal_engine::ipc::{GridDiff, GridSnapshot};
 use crate::terminal_engine::types::{
@@ -92,7 +92,7 @@ fn gridsnapshot_serde_roundtrip_preserves_cells_and_cursor() {
 
 // ─── GridDiff round-trips ─────────────────────────────────────────────────────
 
-/// GridDiff with an empty dirty list (resize-only notification).
+/// `GridDiff` with an empty dirty list (resize-only notification).
 #[test]
 fn griddiff_serde_roundtrip_empty_dirty() {
     let diff = GridDiff {
@@ -115,7 +115,7 @@ fn griddiff_serde_roundtrip_empty_dirty() {
     assert_eq!(decoded.cursor, diff.cursor);
 }
 
-/// GridDiff with a single DirtyRect spanning a partial row.
+/// `GridDiff` with a single `DirtyRect` spanning a partial row.
 #[test]
 fn griddiff_serde_roundtrip_one_dirty_rect() {
     let diff = GridDiff {
@@ -178,7 +178,7 @@ fn griddiff_serde_roundtrip_one_dirty_rect() {
     assert_eq!(decoded.cursor, diff.cursor);
 }
 
-/// GridDiff with multiple DirtyRects across different rows.
+/// `GridDiff` with multiple `DirtyRect`s across different rows.
 #[test]
 fn griddiff_serde_roundtrip_multiple_rects_across_rows() {
     let diff = GridDiff {
@@ -283,7 +283,7 @@ fn cursor_visibility_serde_roundtrip_hidden_cursor() {
 
 // ─── Wire-contract key-shape tests ────────────────────────────────────────────
 
-/// Asserts specific snake_case JSON field names to lock the on-wire shape
+/// Asserts specific `snake_case` JSON field names to lock the on-wire shape
 /// so that TS consumers don't silently break on field renames.
 #[test]
 fn wire_contract_json_keys_are_snake_case() {

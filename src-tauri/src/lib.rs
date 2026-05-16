@@ -30,6 +30,7 @@ use pty::{
     get_all_pty_cwds, get_pty_cwd, get_pty_pid, get_pty_title, kill_pty, pause_pty, resize_pty,
     resume_pty, spawn_pty, write_pty, AppState,
 };
+mod alacritty_commands;
 // Re-export validation helpers used by sibling modules (commands.rs,
 // file_utils.rs, file_watch.rs) via the historical `crate::validate_*`
 // paths. `global_config_dir` is used directly in `run()` below.
@@ -247,6 +248,7 @@ pub fn run() {
         .manage(AppState {
             ptys: Mutex::new(HashMap::new()),
             watch_flags: Mutex::new(HashMap::new()),
+            bridges: Mutex::new(HashMap::new()),
         })
         .manage(cli_args)
         .invoke_handler(tauri::generate_handler![
@@ -307,7 +309,10 @@ pub fn run() {
             gh_commands::gh_view_pr,
             git_status_ops::git_rev_parse_toplevel,
             git_status_ops::git_status_short,
-            git_status_ops::git_status_short_batch
+            git_status_ops::git_status_short_batch,
+            alacritty_commands::attach_alacritty_engine,
+            alacritty_commands::feed_alacritty_engine,
+            alacritty_commands::resize_alacritty_engine
         ])
         .setup(|app| {
             // Set window title from CLI --title flag

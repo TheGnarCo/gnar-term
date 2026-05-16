@@ -10,14 +10,19 @@
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
-import { Renderer } from "./alacritty-renderer";
+import { Renderer, resolveColor } from "./alacritty-renderer";
 import type {
   GridSnapshot,
   GridDiff,
   CursorPos,
   Cell,
 } from "../types/terminal-ipc";
-import { ATTR_BOLD, ATTR_UNDERLINE, ATTR_INVERSE } from "../types/terminal-ipc";
+import {
+  ATTR_BOLD,
+  ATTR_UNDERLINE,
+  ATTR_INVERSE,
+  ATTR_ITALIC,
+} from "../types/terminal-ipc";
 
 // ─── MockContext ───────────────────────────────────────────────────────────────
 
@@ -465,5 +470,173 @@ describe("Renderer (canvas-2d alacritty renderer)", () => {
     const texts = mock.calls.filter((c) => c.method === "fillText");
     // Only the 3 dirty cells are painted — not all 800 grid cells
     expect(texts).toHaveLength(3);
+  });
+
+  // ── 256-color palette: 16-color regression guard ──────────────────────────
+
+  it("indexed color 0-15 palette: indices 0-15 produce correct hex colors (regression guard)", () => {
+    const expected = [
+      "#000000", // 0 black
+      "#800000", // 1 dark red
+      "#008000", // 2 dark green
+      "#808000", // 3 dark yellow
+      "#000080", // 4 dark blue
+      "#800080", // 5 dark magenta
+      "#008080", // 6 dark cyan
+      "#c0c0c0", // 7 light gray
+      "#808080", // 8 dark gray
+      "#ff0000", // 9 bright red
+      "#00ff00", // 10 bright green
+      "#ffff00", // 11 bright yellow
+      "#0000ff", // 12 bright blue
+      "#ff00ff", // 13 bright magenta
+      "#00ffff", // 14 bright cyan
+      "#ffffff", // 15 white
+    ];
+    for (let i = 0; i < 16; i++) {
+      expect(resolveColor({ kind: "Indexed", value: i }), `index ${i}`).toBe(
+        expected[i],
+      );
+    }
+  });
+
+  // ── 256-color palette cube: xterm 6x6x6 cube ─────────────────────────────
+
+  it("indexed color cube: Indexed(16) resolves to #000000 (cube origin)", () => {
+    expect(resolveColor({ kind: "Indexed", value: 16 })).toBe("#000000");
+  });
+
+  it("indexed color cube: Indexed(196) resolves to #ff0000 (cube r=5 g=0 b=0)", () => {
+    // 16 + 36*5 + 6*0 + 0 = 16 + 180 = 196
+    expect(resolveColor({ kind: "Indexed", value: 196 })).toBe("#ff0000");
+  });
+
+  it("indexed color cube: Indexed(231) resolves to #ffffff (cube max r=5 g=5 b=5)", () => {
+    // 16 + 36*5 + 6*5 + 5 = 16 + 180 + 30 + 5 = 231
+    expect(resolveColor({ kind: "Indexed", value: 231 })).toBe("#ffffff");
+  });
+
+  it("indexed color cube: Indexed(46) resolves to #00ff00 (cube r=0 g=5 b=0)", () => {
+    // 16 + 36*0 + 6*5 + 0 = 16 + 30 = 46
+    expect(resolveColor({ kind: "Indexed", value: 46 })).toBe("#00ff00");
+  });
+
+  // ── 256-color palette: grayscale ramp ─────────────────────────────────────
+
+  it("indexed color grayscale: Indexed(232) resolves to #080808 (grayscale ramp start)", () => {
+    expect(resolveColor({ kind: "Indexed", value: 232 })).toBe("#080808");
+  });
+
+  it("indexed color grayscale: Indexed(255) resolves to #eeeeee (grayscale ramp end)", () => {
+    expect(resolveColor({ kind: "Indexed", value: 255 })).toBe("#eeeeee");
+  });
+
+  it("indexed color grayscale: Indexed(244) resolves to a known mid-gray (#808080)", () => {
+    // value = 8 + 10*(244-232) = 8 + 10*12 = 128 = 0x80 → #808080
+    expect(resolveColor({ kind: "Indexed", value: 244 })).toBe("#808080");
+  });
+
+  // ── italic SGR rendering ───────────────────────────────────────────────────
+
+  it("SGR italic: no attrs produces a font string without bold or italic", () => {
+    const diff: GridDiff = {
+      rows: 1,
+      cols: 5,
+      cursor: makeCursor(0, 0, false),
+      dirty: [
+        {
+          row: 0,
+          col_start: 0,
+          col_end: 1,
+          cells: [makeCell("N", 7, 0, 0)],
+        },
+      ],
+    };
+    renderer.paintDiff(diff);
+    const fontSets = mock.calls
+      .filter((c) => c.method === "set font")
+      .map((c) => c.args[0] as string);
+    expect(fontSets.length).toBeGreaterThan(0);
+    const fontStr = fontSets[fontSets.length - 1];
+    expect(fontStr).not.toContain("bold");
+    expect(fontStr).not.toContain("italic");
+  });
+
+  it("SGR italic: ATTR_ITALIC sets a font string that contains italic", () => {
+    const diff: GridDiff = {
+      rows: 1,
+      cols: 5,
+      cursor: makeCursor(0, 0, false),
+      dirty: [
+        {
+          row: 0,
+          col_start: 0,
+          col_end: 1,
+          cells: [makeCell("I", 7, 0, ATTR_ITALIC)],
+        },
+      ],
+    };
+    renderer.paintDiff(diff);
+    const fontSets = mock.calls
+      .filter((c) => c.method === "set font")
+      .map((c) => c.args[0] as string);
+    const italicFont = fontSets.find((f) => f.includes("italic"));
+    expect(italicFont).toBeDefined();
+    // italic font set must precede fillText for "I"
+    const italicSetIdx = mock.calls.findIndex(
+      (c) =>
+        c.method === "set font" && (c.args[0] as string).includes("italic"),
+    );
+    const textIdx = mock.calls.findIndex(
+      (c) => c.method === "fillText" && c.args[0] === "I",
+    );
+    expect(italicSetIdx).toBeLessThan(textIdx);
+  });
+
+  it("SGR bold+italic: ATTR_BOLD|ATTR_ITALIC sets a font string containing both bold and italic", () => {
+    const diff: GridDiff = {
+      rows: 1,
+      cols: 5,
+      cursor: makeCursor(0, 0, false),
+      dirty: [
+        {
+          row: 0,
+          col_start: 0,
+          col_end: 1,
+          cells: [makeCell("X", 7, 0, ATTR_BOLD | ATTR_ITALIC)],
+        },
+      ],
+    };
+    renderer.paintDiff(diff);
+    const fontSets = mock.calls
+      .filter((c) => c.method === "set font")
+      .map((c) => c.args[0] as string);
+    const boldItalicFont = fontSets.find(
+      (f) => f.includes("bold") && f.includes("italic"),
+    );
+    expect(boldItalicFont).toBeDefined();
+  });
+
+  it("SGR bold only: ATTR_BOLD sets bold but not italic", () => {
+    const diff: GridDiff = {
+      rows: 1,
+      cols: 5,
+      cursor: makeCursor(0, 0, false),
+      dirty: [
+        {
+          row: 0,
+          col_start: 0,
+          col_end: 1,
+          cells: [makeCell("B", 7, 0, ATTR_BOLD)],
+        },
+      ],
+    };
+    renderer.paintDiff(diff);
+    const fontSets = mock.calls
+      .filter((c) => c.method === "set font")
+      .map((c) => c.args[0] as string);
+    const boldFont = fontSets.find((f) => f.includes("bold"));
+    expect(boldFont).toBeDefined();
+    expect(boldFont).not.toContain("italic");
   });
 });

@@ -2,7 +2,7 @@
 //!
 //! Verifies that the layers built in cycles 2–4 compose cleanly end-to-end:
 //!
-//! - cycle-2: `AlacrittyEngine` (feed → damage → cursor_position)
+//! - cycle-2: `AlacrittyEngine` (feed → damage → `cursor_position`)
 //! - cycle-3: IPC wire-format types (`GridDiff`, serde Serialize/Deserialize)
 //! - cycle-4: `TerminalChannelMessage` / `PtyBridge` (serde Serialize, channel
 //!   payload shape with `kind`/`value` tags)

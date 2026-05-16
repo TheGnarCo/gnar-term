@@ -5,6 +5,7 @@
   import { workspaces } from "../stores/workspace";
   import TabBar from "./TabBar.svelte";
   import TerminalSurface from "./TerminalSurface.svelte";
+  import AlacrittyTerminalSurface from "./AlacrittyTerminalSurface.svelte";
   import PreviewSurface from "./PreviewSurface.svelte";
   import RestoreCommandPrompt from "./RestoreCommandPrompt.svelte";
   import EmptySurface from "./EmptySurface.svelte";
@@ -25,6 +26,7 @@
     dismissPane,
     relaunchPane,
   } from "../services/pane-service";
+  import { configStore } from "../config";
   import { closeWorkspace } from "../services/workspace-runtime-service";
   import CloseButton from "./CloseButton.svelte";
 
@@ -342,12 +344,25 @@
 
   {#each pane.surfaces as surface (surface.id)}
     {#if isTerminalSurface(surface)}
-      <TerminalSurface
-        {surface}
-        visible={surface.id === pane.activeSurfaceId}
-        cwd={surface.cwd}
-        bind:userScrolledUp={scrollState[surface.id]}
-      />
+      {#if $configStore.terminalEngine === "alacritty"}
+        <!-- Phase 1: AlacrittyTerminalSurface does not yet implement a `visible`
+             prop — visibility is handled via CSS display toggle on the wrapper,
+             matching the registry-surface pattern in this file. -->
+        <div
+          style="display: {surface.id === pane.activeSurfaceId
+            ? 'flex'
+            : 'none'}; flex: 1; min-width: 0; min-height: 0; flex-direction: column;"
+        >
+          <AlacrittyTerminalSurface ptyId={surface.ptyId} />
+        </div>
+      {:else}
+        <TerminalSurface
+          {surface}
+          visible={surface.id === pane.activeSurfaceId}
+          cwd={surface.cwd}
+          bind:userScrolledUp={scrollState[surface.id]}
+        />
+      {/if}
     {:else if isRegistrySurface(surface)}
       <!-- Wrap registry surfaces in a visibility container so inactive
              tabs stay mounted (preserve component state) but invisible.

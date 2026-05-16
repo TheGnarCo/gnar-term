@@ -102,6 +102,13 @@ impl MessageSink for TauriChannelSink {
 pub struct PtyBridge {
     engine: AlacrittyEngine,
     sink: Box<dyn MessageSink>,
+    /// Cached viewport width — updated in `new` and `resize_and_emit`.
+    ///
+    /// Avoids calling `engine.snapshot()` (O(rows × cols)) on every
+    /// `feed_and_emit` just to read two `u16` values.
+    cols: u16,
+    /// Cached viewport height — updated in `new` and `resize_and_emit`.
+    rows: u16,
 }
 
 impl PtyBridge {
@@ -118,7 +125,12 @@ impl PtyBridge {
         engine.reset_damage();
 
         let snapshot = engine.snapshot();
-        let bridge = Self { engine, sink };
+        let bridge = Self {
+            engine,
+            sink,
+            cols,
+            rows,
+        };
 
         // Emit initial snapshot. If the sink is already gone (test double that
         // returns Err, or receiver already dropped), swallow silently.
@@ -142,10 +154,9 @@ impl PtyBridge {
         self.engine.feed(bytes);
         let dirty = self.engine.damage();
         let cursor = self.engine.cursor_position();
-        let (cols, rows) = self.viewport_dims();
         let diff = GridDiff {
-            rows,
-            cols,
+            rows: self.rows,
+            cols: self.cols,
             dirty,
             cursor,
         };
@@ -177,6 +188,10 @@ impl PtyBridge {
     /// the entire grid on resize, which can change every cell's position. The
     /// renderer must discard its current grid and repaint from scratch.
     pub fn resize_and_emit(&mut self, cols: u16, rows: u16) {
+        // Update cached dims before resize so they're consistent with the
+        // engine's state once `engine.resize` returns.
+        self.cols = cols;
+        self.rows = rows;
         self.engine.resize(cols, rows);
         // After resize, reset damage so the next feed produces a clean diff
         // rather than a diff that redundantly covers the full reflow.
@@ -195,10 +210,5 @@ impl PtyBridge {
             log::debug!("[pty_bridge] sink send error (receiver dropped?): {e}");
             e
         })
-    }
-
-    fn viewport_dims(&self) -> (u16, u16) {
-        let snap = self.engine.snapshot();
-        (snap.cols, snap.rows)
     }
 }

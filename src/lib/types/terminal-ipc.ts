@@ -7,14 +7,18 @@
  * Any change to the Rust serde field names or enum variants requires a
  * matching update here.
  *
- * # attrs bitfield layout (used in Cell.attrs)
+ * # attrs bitfield layout (used in Cell.attrs) — cycle-12 extended
  *
- * | Bit | Constant         | Meaning              |
- * |-----|------------------|----------------------|
- * |  0  | ATTR_BOLD        | Bold text            |
- * |  1  | ATTR_UNDERLINE   | Underlined text      |
- * |  2  | ATTR_INVERSE     | Reverse video        |
- * |  3  | ATTR_ITALIC      | Italic text          |
+ * | Bit | Constant          | Meaning                   |
+ * |-----|-------------------|---------------------------|
+ * |  0  | ATTR_BOLD         | Bold text                 |
+ * |  1  | ATTR_UNDERLINE    | Underlined text           |
+ * |  2  | ATTR_INVERSE      | Reverse video             |
+ * |  3  | ATTR_ITALIC       | Italic text               |
+ * |  4  | ATTR_DIM          | Dim / half-bright text    |
+ * |  5  | ATTR_HIDDEN       | Concealed / invisible     |
+ * |  6  | ATTR_STRIKEOUT    | Strikethrough             |
+ * |  7  | ATTR_WIDE_CHAR    | Wide (East Asian) glyph   |
  */
 
 // ─── Attribute bitfield constants ─────────────────────────────────────────────
@@ -27,6 +31,14 @@ export const ATTR_UNDERLINE = 2 as const;
 export const ATTR_INVERSE = 4 as const;
 /** Italic text attribute bit. */
 export const ATTR_ITALIC = 8 as const;
+/** Dim / half-bright text attribute bit (cycle-12). */
+export const ATTR_DIM = 16 as const;
+/** Concealed / invisible text attribute bit (cycle-12). */
+export const ATTR_HIDDEN = 32 as const;
+/** Strikethrough text attribute bit (cycle-12). */
+export const ATTR_STRIKEOUT = 64 as const;
+/** Wide (East Asian) character attribute bit (cycle-12). */
+export const ATTR_WIDE_CHAR = 128 as const;
 
 // ─── Color ────────────────────────────────────────────────────────────────────
 
@@ -74,16 +86,38 @@ export interface RowData {
   cells: Cell[];
 }
 
+// ─── CursorShapeTag ───────────────────────────────────────────────────────────
+
+/**
+ * Cursor shape discriminated union — mirrors the Rust `CursorShapeTag` enum.
+ *
+ * Serde emits `{ "kind": "block" }`, `{ "kind": "beam" }`, etc.
+ * (snake_case, tag-only — no `content` field).
+ */
+export type CursorShapeTag =
+  | { kind: "block" }
+  | { kind: "beam" }
+  | { kind: "underline" }
+  | { kind: "hollow_block" }
+  | { kind: "hidden" };
+
 // ─── CursorPos ────────────────────────────────────────────────────────────────
 
-/** Terminal cursor position and visibility. */
+/**
+ * Terminal cursor position, visibility, and shape.
+ *
+ * `visible` equals `shape.kind !== "hidden"` and is kept for backwards
+ * compatibility with renderers that do not inspect `shape`.
+ */
 export interface CursorPos {
   /** Zero-based viewport row. */
   row: number;
   /** Zero-based viewport column. */
   col: number;
-  /** `true` when the cursor is currently visible (`SHOW_CURSOR` mode). */
+  /** `true` when the cursor is currently visible. Equals `shape.kind !== "hidden"`. */
   visible: boolean;
+  /** Cursor rendering shape (cycle-12). */
+  shape: CursorShapeTag;
 }
 
 // ─── DirtyRect ────────────────────────────────────────────────────────────────

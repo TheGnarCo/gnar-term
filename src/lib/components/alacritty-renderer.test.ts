@@ -22,6 +22,9 @@ import {
   ATTR_UNDERLINE,
   ATTR_INVERSE,
   ATTR_ITALIC,
+  ATTR_DIM,
+  ATTR_HIDDEN,
+  ATTR_STRIKEOUT,
 } from "../types/terminal-ipc";
 
 // ─── MockContext ───────────────────────────────────────────────────────────────
@@ -111,8 +114,13 @@ function makeCell(ch: string, fg = 7, bg = 0, attrs = 0): Cell {
   };
 }
 
-function makeCursor(row: number, col: number, visible = true): CursorPos {
-  return { row, col, visible };
+function makeCursor(
+  row: number,
+  col: number,
+  visible = true,
+  shape: CursorPos["shape"] = { kind: "block" },
+): CursorPos {
+  return { row, col, visible, shape };
 }
 
 function makeSnapshot(
@@ -638,5 +646,157 @@ describe("Renderer (canvas-2d alacritty renderer)", () => {
     const boldFont = fontSets.find((f) => f.includes("bold"));
     expect(boldFont).toBeDefined();
     expect(boldFont).not.toContain("italic");
+  });
+
+  // ── cursor shape (Phase-2 Theme 3) ────────────────────────────────────────
+
+  it("cursor shape beam renders a thin vertical bar (fillRect with narrow width)", () => {
+    renderer.paintCursor(makeCursor(0, 0, true, { kind: "beam" }));
+    const rects = mock.calls.filter((c) => c.method === "fillRect");
+    // Beam cursor: a narrow vertical bar, width << cellWidth (8px in tests).
+    const beamRect = rects.find((r) => {
+      const args = r.args as number[];
+      const w = args[2] ?? 0;
+      const h = args[3] ?? 0;
+      // Width should be 1-2px (thin beam), height should be full cell height (17px)
+      return w <= 2 && h >= 14;
+    });
+    expect(beamRect).toBeDefined();
+  });
+
+  it("cursor shape underline renders a 1px bar at cell bottom (fillRect with height=1)", () => {
+    renderer.paintCursor(makeCursor(0, 0, true, { kind: "underline" }));
+    const rects = mock.calls.filter((c) => c.method === "fillRect");
+    // Underline cursor: 1px tall at the cell bottom.
+    const underlineRect = rects.find((r) => {
+      const [, , , h] = r.args as number[];
+      return h === 1;
+    });
+    expect(underlineRect).toBeDefined();
+  });
+
+  it("cursor shape hollow_block uses strokeRect not fillRect for outline", () => {
+    renderer.paintCursor(makeCursor(0, 0, true, { kind: "hollow_block" }));
+    const strokeRects = mock.calls.filter((c) => c.method === "strokeRect");
+    expect(strokeRects.length).toBeGreaterThan(0);
+  });
+
+  it("cursor shape hidden produces no canvas operations", () => {
+    renderer.paintCursor(makeCursor(0, 0, false, { kind: "hidden" }));
+    // visible=false already gates painting; hidden shape confirms no ops.
+    expect(mock.calls).toHaveLength(0);
+  });
+
+  it("cursor shape block produces a fillRect (existing behavior preserved)", () => {
+    renderer.paintCursor(makeCursor(0, 0, true, { kind: "block" }));
+    const rects = mock.calls.filter((c) => c.method === "fillRect");
+    expect(rects.length).toBeGreaterThan(0);
+  });
+
+  // ── attribute coverage (Phase-2 Theme 4) ──────────────────────────────────
+
+  it("attribute dim darkens foreground color (globalAlpha set < 1 or color darkened)", () => {
+    const diff: GridDiff = {
+      rows: 1,
+      cols: 5,
+      cursor: makeCursor(0, 0, false),
+      dirty: [
+        {
+          row: 0,
+          col_start: 0,
+          col_end: 1,
+          cells: [makeCell("D", 15, 0, ATTR_DIM)],
+        },
+      ],
+    };
+    renderer.paintDiff(diff);
+    // DIM: fg color should be set to a value that is NOT the full-bright color.
+    // We check that the fillStyle for text is not the full-bright palette white #ffffff.
+    // (The exact value depends on implementation — just not the original bright color.)
+    const styleChanges = mock.calls
+      .filter((c) => c.method === "set fillStyle")
+      .map((c) => c.args[0] as string);
+    // Must have had at least some color set for the text
+    expect(styleChanges.length).toBeGreaterThan(0);
+    // The full-bright fg (index 15 = #ffffff) must NOT be used for the glyph
+    // (it should be dimmed). We find the fillStyle set just before fillText.
+    const fillTextIdx = mock.calls.findIndex(
+      (c) => c.method === "fillText" && c.args[0] === "D",
+    );
+    expect(fillTextIdx).toBeGreaterThan(-1);
+    // Walk backwards from fillText to find the last "set fillStyle" before it.
+    let lastFgStyle = "";
+    for (let i = fillTextIdx - 1; i >= 0; i--) {
+      if (mock.calls[i]?.method === "set fillStyle") {
+        lastFgStyle = mock.calls[i]!.args[0] as string;
+        break;
+      }
+    }
+    // The dimmed color must differ from the full-bright palette entry for index 15.
+    expect(lastFgStyle).not.toBe("#ffffff");
+  });
+
+  it("attribute hidden suppresses glyph by setting fg=bg before drawing", () => {
+    // fg=15 (white #ffffff), bg=0 (black #000000). With HIDDEN, fg should = bg.
+    const diff: GridDiff = {
+      rows: 1,
+      cols: 5,
+      cursor: makeCursor(0, 0, false),
+      dirty: [
+        {
+          row: 0,
+          col_start: 0,
+          col_end: 1,
+          cells: [makeCell("H", 15, 0, ATTR_HIDDEN)],
+        },
+      ],
+    };
+    renderer.paintDiff(diff);
+    const styleChanges = mock.calls
+      .filter((c) => c.method === "set fillStyle")
+      .map((c) => c.args[0] as string);
+    // bg=black #000000 must appear (for background fill).
+    // Then fg for text must also be #000000 (same as bg), making it invisible.
+    const bgColor = "#000000";
+    expect(styleChanges).toContain(bgColor);
+    // Find the style set just before fillText for "H"
+    const fillTextIdx = mock.calls.findIndex(
+      (c) => c.method === "fillText" && c.args[0] === "H",
+    );
+    expect(fillTextIdx).toBeGreaterThan(-1);
+    let lastFgStyle = "";
+    for (let i = fillTextIdx - 1; i >= 0; i--) {
+      if (mock.calls[i]?.method === "set fillStyle") {
+        lastFgStyle = mock.calls[i]!.args[0] as string;
+        break;
+      }
+    }
+    expect(lastFgStyle).toBe(bgColor);
+  });
+
+  it("attribute strikeout adds a 1px fillRect through cell midline", () => {
+    const diff: GridDiff = {
+      rows: 1,
+      cols: 5,
+      cursor: makeCursor(0, 0, false),
+      dirty: [
+        {
+          row: 0,
+          col_start: 0,
+          col_end: 1,
+          cells: [makeCell("S", 7, 0, ATTR_STRIKEOUT)],
+        },
+      ],
+    };
+    renderer.paintDiff(diff);
+    const rects = mock.calls.filter(
+      (c) => c.method === "fillRect" || c.method === "strokeRect",
+    );
+    // Strikeout: 1px horizontal line through the cell midline.
+    const strikeRect = rects.find((r) => {
+      const [, , , h] = r.args as number[];
+      return h === 1;
+    });
+    expect(strikeRect).toBeDefined();
   });
 });

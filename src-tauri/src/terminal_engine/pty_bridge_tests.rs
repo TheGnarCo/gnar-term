@@ -1,17 +1,25 @@
-//! Unit tests for the PTY <-> engine bridge (cycle-4).
+//! Unit tests for the PTY <-> engine bridge (cycle-4, cycle-12).
 //!
 //! These tests drive `PtyBridge` directly without spawning a real PTY.
 //! A `TestSink` records all emitted `TerminalChannelMessage` payloads so
 //! assertions can inspect the emitted stream without a live Tauri Channel.
+//!
+//! Cycle-12 additions:
+//! - `TestWriter`: a `Write + Send` impl backed by `Arc<Mutex<Vec<u8>>>` used
+//!   to verify that `PtyWrite` and `ColorRequest` events route bytes back to
+//!   the PTY writer.
+
+use std::io::Write;
+use std::sync::{Arc, Mutex};
 
 use super::pty_bridge::{MessageSink, PtyBridge, TerminalChannelMessage};
 
-// ─── Test double ─────────────────────────────────────────────────────────────
+// ─── TestSink ─────────────────────────────────────────────────────────────────
 
 /// A `MessageSink` implementation that accumulates emitted messages into a Vec.
 #[derive(Default, Clone)]
 struct TestSink {
-    messages: std::sync::Arc<std::sync::Mutex<Vec<TerminalChannelMessage>>>,
+    messages: Arc<Mutex<Vec<TerminalChannelMessage>>>,
 }
 
 impl TestSink {
@@ -31,12 +39,57 @@ impl MessageSink for TestSink {
     }
 }
 
+// ─── TestWriter ───────────────────────────────────────────────────────────────
+
+/// A `Write + Send` implementation that accumulates all written bytes.
+///
+/// Backed by `Arc<Mutex<Vec<u8>>>` so the test can clone a handle and inspect
+/// the written bytes after `PtyBridge` has dropped its reference.
+#[derive(Clone, Default)]
+struct TestWriter {
+    buf: Arc<Mutex<Vec<u8>>>,
+}
+
+impl TestWriter {
+    fn new() -> Self {
+        Self::default()
+    }
+
+    /// Return a copy of all bytes written so far.
+    fn written(&self) -> Vec<u8> {
+        self.buf.lock().unwrap().clone()
+    }
+}
+
+impl Write for TestWriter {
+    fn write(&mut self, data: &[u8]) -> std::io::Result<usize> {
+        self.buf.lock().unwrap().extend_from_slice(data);
+        Ok(data.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
 // ─── Helper constructors ─────────────────────────────────────────────────────
 
 fn make_bridge(cols: u16, rows: u16) -> (PtyBridge, TestSink) {
     let sink = TestSink::new();
-    let bridge = PtyBridge::new(cols, rows, Box::new(sink.clone()));
+    let bridge = PtyBridge::new(cols, rows, Box::new(sink.clone()), None);
     (bridge, sink)
+}
+
+fn make_bridge_with_writer(cols: u16, rows: u16) -> (PtyBridge, TestSink, TestWriter) {
+    let sink = TestSink::new();
+    let writer = TestWriter::new();
+    let bridge = PtyBridge::new(
+        cols,
+        rows,
+        Box::new(sink.clone()),
+        Some(Box::new(writer.clone())),
+    );
+    (bridge, sink, writer)
 }
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
@@ -183,7 +236,7 @@ fn pty_channel_drop_does_not_panic() {
         }
     }
 
-    let mut bridge = PtyBridge::new(80, 24, Box::new(DroppedSink));
+    let mut bridge = PtyBridge::new(80, 24, Box::new(DroppedSink), None);
     // Even though the first send fails (DroppedSink returns Err), construction
     // must not panic. Further operations also must not panic.
     bridge.feed_and_emit(b"hello");
@@ -272,6 +325,48 @@ fn cached_viewport_dims_survive_resize_and_match_diff_payload() {
             panic!("Expected Diff after feed, got Snapshot {other:?}");
         }
     }
+}
+
+// ─── Cycle-12: pty_write routing tests ───────────────────────────────────────
+
+/// Feeding when `pty_writer` is None produces no panic — the bridge must degrade gracefully.
+#[test]
+fn pty_write_event_no_panic_without_writer() {
+    let (mut bridge, _sink) = make_bridge(80, 24);
+    // OSC foreground-color query; alacritty emits a ColorRequest for this.
+    // With no pty_writer, the bridge must log and continue — no panic.
+    bridge.feed_and_emit(b"\x1b]10;?\x07");
+    // Reaching here = pass.
+}
+
+/// When a `pty_writer` is present and the engine emits a `ColorRequest`,
+/// the bridge must write response bytes to it. Trigger OSC 10 foreground-color
+/// query and assert SOMETHING was written (response bytes are non-empty).
+#[test]
+fn pty_write_event_routed_to_writer() {
+    let (mut bridge, _sink, writer) = make_bridge_with_writer(80, 24);
+    // OSC 10;?BEL — foreground color query.
+    bridge.feed_and_emit(b"\x1b]10;?\x07");
+    let written = writer.written();
+    assert!(
+        !written.is_empty(),
+        "expected response bytes written to pty_writer after ColorRequest, got empty"
+    );
+}
+
+/// The bytes written for a `ColorRequest` must contain the OSC escape
+/// response shape (`\x1b]` prefix).
+#[test]
+fn color_request_response_shape_contains_osc_prefix() {
+    let (mut bridge, _sink, writer) = make_bridge_with_writer(80, 24);
+    // OSC 10;?BEL — foreground color query.
+    bridge.feed_and_emit(b"\x1b]10;?\x07");
+    let written = writer.written();
+    // The response must start with ESC ] (OSC opener) — standard color response.
+    assert!(
+        written.starts_with(b"\x1b]"),
+        "expected response to start with OSC ESC ] (\\x1b]), got: {written:?}"
+    );
 }
 
 /// attach/cursor: initial snapshot contains a cursor position.

@@ -14,10 +14,10 @@
    *     `invoke('write_pty', …)`.
    *   - On destroy: detach from the engine.
    *
-   * Keyboard handling (Phase 1 / cycle-5):
-   *   Covers printable ASCII, Enter, Backspace, Tab, and arrow keys.
-   *   Fuller key handling (F-keys, Ctrl sequences, alt-codes, modifier combos)
-   *   is cycle-7 / Phase 2 work — flagged with TODO below.
+   * Keyboard handling (Phase 2 / cycle-12):
+   *   Covers printable ASCII, Enter, Backspace, Tab, arrow keys, F1–F12,
+   *   Home/End/PageUp/PageDown/Insert/Delete, Ctrl+letter combos, Alt-prefix,
+   *   and modifier-encoded sequences (Ctrl+arrow, Shift+arrow, etc.).
    */
 
   import { onMount, onDestroy } from "svelte";

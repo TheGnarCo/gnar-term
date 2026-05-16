@@ -60,10 +60,37 @@ pub(crate) async fn attach_alacritty_engine(
         }
     };
 
+    // Acquire a second, independent writer handle for the PTY so the bridge
+    // can route terminal-protocol responses (OSC color queries etc.) back to
+    // the PTY without contending with the normal keystroke writer stored in
+    // `PtyInstance::writer`.
+    //
+    // Dual-writer invariant: `MasterPty::take_writer()` returns a fresh,
+    // independent file-descriptor handle each time it is called. The kernel
+    // multiplexes concurrent writes to the same PTY master correctly. The
+    // `PtyInstance::writer` continues to be used for `write_pty` keystrokes;
+    // this bridge writer is used only for terminal-protocol response bytes.
+    let bridge_writer: Option<Box<dyn std::io::Write + Send>> = {
+        let ptys = state.ptys.lock().map_err(|e| e.to_string())?;
+        let pty = ptys
+            .get(&pty_id)
+            .ok_or_else(|| format!("PTY {pty_id} not found for writer acquisition"))?;
+        match pty.master_pty.take_writer() {
+            Ok(w) => Some(w),
+            Err(e) => {
+                log::warn!(
+                    "[attach_alacritty_engine] take_writer failed for pty_id={pty_id}: {e}; \
+                     color queries will not be responded to"
+                );
+                None
+            }
+        }
+    };
+
     let sink = TauriChannelSink::new(channel);
     // PtyBridge::new emits the initial Snapshot synchronously — ordering
     // invariant is satisfied before this function returns.
-    let bridge = PtyBridge::new(cols, rows, Box::new(sink));
+    let bridge = PtyBridge::new(cols, rows, Box::new(sink), bridge_writer);
 
     let mut bridges = state.bridges.lock().map_err(|e| e.to_string())?;
     bridges.insert(pty_id, bridge);

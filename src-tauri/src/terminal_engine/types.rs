@@ -5,6 +5,26 @@
 //! `ColorIndex` uses an adjacently-tagged serde representation (`tag = "kind"`,
 //! `content = "value"`) so the TypeScript side receives a clean discriminated
 //! union: `{ kind: "Indexed", value: number } | { kind: "Rgb", value: [number, number, number] }`.
+//!
+//! Cycle-12 additions:
+//! - `CursorShapeTag` enum and `CursorPos::shape` field (Theme 3).
+//! - `ATTR_DIM`, `ATTR_HIDDEN`, `ATTR_STRIKEOUT`, `ATTR_WIDE_CHAR` (Theme 4).
+//!
+//! # Attribute bitfield layout (cycle-12 extended, u8 — 8 bits total)
+//!
+//! | Bit | Constant          | Meaning                  |
+//! |-----|-------------------|--------------------------|
+//! |  0  | `ATTR_BOLD`       | Bold text                |
+//! |  1  | `ATTR_UNDERLINE`  | Underlined text          |
+//! |  2  | `ATTR_INVERSE`    | Reverse video            |
+//! |  3  | `ATTR_ITALIC`     | Italic text              |
+//! |  4  | `ATTR_DIM`        | Dim / half-bright text   |
+//! |  5  | `ATTR_HIDDEN`     | Concealed / invisible    |
+//! |  6  | `ATTR_STRIKEOUT`  | Strikethrough            |
+//! |  7  | `ATTR_WIDE_CHAR`  | Wide (East Asian) glyph  |
+//!
+//! The `u8` ceiling (8 bits) is intentional for Phase 2. If more attributes are
+//! needed in future phases, widen to `u16` and update the TS mirror accordingly.
 
 // ─── Attribute bitfield constants ─────────────────────────────────────────────
 
@@ -16,6 +36,14 @@ pub const ATTR_UNDERLINE: u8 = 2;
 pub const ATTR_INVERSE: u8 = 4;
 /// Italic text attribute bit.
 pub const ATTR_ITALIC: u8 = 8;
+/// Dim / half-bright text attribute bit (cycle-12).
+pub const ATTR_DIM: u8 = 16;
+/// Concealed / invisible text attribute bit (cycle-12).
+pub const ATTR_HIDDEN: u8 = 32;
+/// Strikethrough text attribute bit (cycle-12).
+pub const ATTR_STRIKEOUT: u8 = 64;
+/// Wide (East Asian) character attribute bit (cycle-12).
+pub const ATTR_WIDE_CHAR: u8 = 128;
 
 // ─── Color ────────────────────────────────────────────────────────────────────
 
@@ -104,15 +132,53 @@ pub struct DirtyRect {
     pub cells: Vec<Cell>,
 }
 
+// ─── CursorShapeTag ───────────────────────────────────────────────────────────
+
+/// Cursor shape, mirroring `alacritty_terminal::vte::ansi::CursorShape`.
+///
+/// # Serde representation
+///
+/// Uses `tag = "kind"` with `rename_all = "snake_case"` so the on-wire JSON is
+/// `{ "kind": "block" }`, `{ "kind": "beam" }`, etc. — matching the TypeScript
+/// `CursorPos.shape` union type.
+///
+/// The `Hidden` variant corresponds to the cursor being invisible (i.e.
+/// `SHOW_CURSOR` mode is off outside vi-mode, or the cursor style is
+/// `CursorShape::Hidden`). `CursorPos::visible` is set to `false` when
+/// `shape == Hidden` for backwards-compatibility with the existing renderer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum CursorShapeTag {
+    /// Filled block — the default cursor style.
+    Block,
+    /// Thin vertical bar (I-beam).
+    Beam,
+    /// Underscore / horizontal bar.
+    Underline,
+    /// Hollow block outline.
+    HollowBlock,
+    /// Invisible cursor.
+    Hidden,
+}
+
 // ─── CursorPos ────────────────────────────────────────────────────────────────
 
-/// Terminal cursor position and visibility.
+/// Terminal cursor position, visibility, and shape.
+///
+/// Cycle-12 extends this with a `shape` field (see `CursorShapeTag`).
+/// `visible` remains for backwards-compatibility: it equals
+/// `shape != CursorShapeTag::Hidden`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct CursorPos {
     /// Zero-based viewport row.
     pub row: u16,
     /// Zero-based viewport column.
     pub col: u16,
-    /// `true` when the cursor is currently visible (`SHOW_CURSOR` mode).
+    /// `true` when the cursor is currently visible.
+    ///
+    /// Equals `shape != CursorShapeTag::Hidden`. Kept for backwards-compatibility
+    /// with existing renderers that test `pos.visible` without inspecting shape.
     pub visible: bool,
+    /// Cursor rendering shape (cycle-12).
+    pub shape: CursorShapeTag,
 }

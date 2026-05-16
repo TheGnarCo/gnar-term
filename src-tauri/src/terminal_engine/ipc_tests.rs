@@ -6,7 +6,7 @@
 
 use crate::terminal_engine::ipc::{GridDiff, GridSnapshot};
 use crate::terminal_engine::types::{
-    Cell, ColorIndex, CursorPos, DirtyRect, RowData, ATTR_BOLD, ATTR_UNDERLINE,
+    Cell, ColorIndex, CursorPos, CursorShapeTag, DirtyRect, RowData, ATTR_BOLD, ATTR_UNDERLINE,
 };
 
 // ─── GridSnapshot round-trips ─────────────────────────────────────────────────
@@ -21,6 +21,7 @@ fn gridsnapshot_serde_roundtrip_preserves_cells_and_cursor() {
             row: 0,
             col: 1,
             visible: true,
+            shape: CursorShapeTag::Block,
         },
         rows_data: vec![
             RowData {
@@ -103,6 +104,7 @@ fn griddiff_serde_roundtrip_empty_dirty() {
             row: 0,
             col: 0,
             visible: true,
+            shape: CursorShapeTag::Block,
         },
     };
 
@@ -162,6 +164,7 @@ fn griddiff_serde_roundtrip_one_dirty_rect() {
             row: 5,
             col: 15,
             visible: true,
+            shape: CursorShapeTag::Block,
         },
     };
 
@@ -245,6 +248,7 @@ fn griddiff_serde_roundtrip_multiple_rects_across_rows() {
             row: 10,
             col: 21,
             visible: false,
+            shape: CursorShapeTag::Block,
         },
     };
 
@@ -259,6 +263,52 @@ fn griddiff_serde_roundtrip_multiple_rects_across_rows() {
     assert!(!decoded.cursor.visible);
 }
 
+// ─── Cycle-12: CursorPos.shape wire tests ─────────────────────────────────────
+
+/// `CursorPos` with a Block shape survives JSON encode → decode.
+/// The `shape` field must be present in the wire JSON.
+#[test]
+fn cursor_shape_wire_roundtrip_block() {
+    let cursor = CursorPos {
+        row: 1,
+        col: 2,
+        visible: true,
+        shape: CursorShapeTag::Block,
+    };
+    let json = serde_json::to_string(&cursor).expect("serialize CursorPos");
+    // The wire JSON must include the shape discriminant.
+    assert!(
+        json.contains("\"kind\""),
+        "expected shape 'kind' discriminant in CursorPos JSON, got: {json}"
+    );
+    assert!(
+        json.contains("\"block\""),
+        "expected 'block' shape value in CursorPos JSON, got: {json}"
+    );
+    let decoded: CursorPos = serde_json::from_str(&json).expect("deserialize CursorPos");
+    assert_eq!(decoded.shape, CursorShapeTag::Block);
+    assert_eq!(decoded.row, 1);
+    assert_eq!(decoded.col, 2);
+}
+
+/// Beam shape survives round-trip.
+#[test]
+fn cursor_shape_wire_roundtrip_beam() {
+    let cursor = CursorPos {
+        row: 0,
+        col: 0,
+        visible: true,
+        shape: CursorShapeTag::Beam,
+    };
+    let json = serde_json::to_string(&cursor).expect("serialize CursorPos beam");
+    assert!(
+        json.contains("\"beam\""),
+        "expected 'beam' in CursorPos JSON, got: {json}"
+    );
+    let decoded: CursorPos = serde_json::from_str(&json).expect("deserialize CursorPos beam");
+    assert_eq!(decoded.shape, CursorShapeTag::Beam);
+}
+
 /// Cursor visibility survives round-trip when `visible = false`.
 #[test]
 fn cursor_visibility_serde_roundtrip_hidden_cursor() {
@@ -270,6 +320,7 @@ fn cursor_visibility_serde_roundtrip_hidden_cursor() {
             row: 3,
             col: 7,
             visible: false,
+            shape: CursorShapeTag::Block,
         },
     };
 
@@ -315,6 +366,7 @@ fn wire_contract_json_keys_are_snake_case() {
             row: 0,
             col: 0,
             visible: true,
+            shape: CursorShapeTag::Block,
         },
         rows_data: vec![RowData {
             cells: vec![Cell {
@@ -354,6 +406,7 @@ fn wire_contract_json_keys_are_snake_case() {
             row: 0,
             col: 0,
             visible: true,
+            shape: CursorShapeTag::Block,
         },
     };
 

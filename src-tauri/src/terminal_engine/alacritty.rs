@@ -5,7 +5,7 @@ use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
 use alacritty_terminal::event::{Event, EventListener};
-use alacritty_terminal::grid::Dimensions;
+use alacritty_terminal::grid::{Dimensions, Scroll};
 use alacritty_terminal::term::color::Colors;
 use alacritty_terminal::term::{Config, TermDamage};
 use alacritty_terminal::vte::ansi::{Color, CursorShape, NamedColor, Processor};
@@ -222,6 +222,24 @@ impl AlacrittyEngine {
         }
     }
 
+    /// Scroll the viewport up by `lines` lines into scrollback history.
+    ///
+    /// This changes `display_offset` so that `snapshot()` returns the correct
+    /// viewport rows via `Grid::display_iter()`. Positive `lines` means "scroll
+    /// toward older history"; use `scroll_down_by` (or call with 0) to reset.
+    ///
+    /// Internally calls `Grid::scroll_display(Scroll::Delta(lines as i32))`.
+    /// `Scroll::Delta(n)` adds `n` to `display_offset` (clamped to history size),
+    /// so positive `n` scrolls UP (toward history) and negative `n` scrolls DOWN.
+    ///
+    /// Primarily used in tests and by future scroll-event routing; production
+    /// scrolling is driven by VTE sequences that call `scroll_display` internally.
+    pub fn scroll_up_by(&mut self, lines: usize) {
+        self.term
+            .grid_mut()
+            .scroll_display(Scroll::Delta(lines as i32));
+    }
+
     /// Map a row of alacritty `Cell`s into a `RowData`.
     ///
     /// Cycle-12: added `ATTR_DIM`, `ATTR_HIDDEN`, `ATTR_STRIKEOUT`, `ATTR_WIDE_CHAR`
@@ -303,11 +321,77 @@ impl TerminalEngine for AlacrittyEngine {
     }
 
     fn snapshot(&self) -> GridSnapshot {
-        use alacritty_terminal::index::Line;
+        use alacritty_terminal::term::cell::Flags;
 
-        let rows_data = (0..self.rows as usize)
-            .map(|r| self.map_row(Line(r as i32)))
+        // `Grid::display_iter()` yields cells in reading order (top-left → bottom-right)
+        // for the VISIBLE viewport, accounting for the current `display_offset`.
+        //
+        // Coordinate contract (verified from alacritty_terminal source):
+        //   - Each `Indexed` item carries `point: Point` with a GRID-RELATIVE `Line(i32)`.
+        //   - When `display_offset = 0`: lines range from `Line(0)` to `Line(rows-1)`.
+        //   - When `display_offset = N`: lines range from `Line(-N)` to `Line(rows-1-N)`.
+        //   - Viewport row = `point.line.0 + display_offset as i32`, always in `0..rows`.
+        //
+        // This is the fix for audit F-5: the old code used `Line(0)..Line(rows)` directly,
+        // which ignores `display_offset` and reports the wrong rows when scrolled.
+        let display_offset = self.term.grid().display_offset() as i32;
+        let cols = self.cols as usize;
+        let rows = self.rows as usize;
+
+        let mut rows_data: Vec<RowData> = (0..rows)
+            .map(|_| RowData {
+                cells: Vec::with_capacity(cols),
+            })
             .collect();
+
+        for indexed in self.term.grid().display_iter() {
+            let viewport_row = (indexed.point.line.0 + display_offset) as usize;
+            let acell = &*indexed;
+
+            let mut attrs: u8 = 0;
+            if acell.flags.contains(Flags::BOLD) {
+                attrs |= ATTR_BOLD;
+            }
+            if acell.flags.intersects(Flags::ALL_UNDERLINES) {
+                attrs |= ATTR_UNDERLINE;
+            }
+            if acell.flags.contains(Flags::INVERSE) {
+                attrs |= ATTR_INVERSE;
+            }
+            if acell.flags.contains(Flags::ITALIC) {
+                attrs |= ATTR_ITALIC;
+            }
+            if acell.flags.contains(Flags::DIM) {
+                attrs |= ATTR_DIM;
+            }
+            if acell.flags.contains(Flags::HIDDEN) {
+                attrs |= ATTR_HIDDEN;
+            }
+            if acell.flags.contains(Flags::STRIKEOUT) {
+                attrs |= ATTR_STRIKEOUT;
+            }
+            if acell.flags.contains(Flags::WIDE_CHAR) {
+                attrs |= ATTR_WIDE_CHAR;
+            }
+
+            let ch = if let Some(zw) = acell.zerowidth() {
+                let mut s = String::with_capacity(4 + zw.len() * 4);
+                s.push(acell.c);
+                for &c in zw {
+                    s.push(c);
+                }
+                s
+            } else {
+                acell.c.to_string()
+            };
+
+            rows_data[viewport_row].cells.push(Cell {
+                ch,
+                fg: map_color(acell.fg),
+                bg: map_color(acell.bg),
+                attrs,
+            });
+        }
 
         let cursor = self.cursor_position();
 
@@ -320,18 +404,28 @@ impl TerminalEngine for AlacrittyEngine {
     }
 
     fn damage(&mut self) -> Vec<DirtyRect> {
+        use alacritty_terminal::index::Line;
+
         let cols = self.cols;
         let rows = self.rows;
+
+        // `display_offset` is needed to convert viewport-relative damage line numbers
+        // (as emitted by `TermDamageIterator`) back to grid-relative `Line` indices
+        // for `map_row`. Must be captured before calling `self.term.damage()` which
+        // takes a mutable borrow of `self.term`.
+        let display_offset = self.term.grid().display_offset() as i32;
 
         // Collect damage before calling reset_damage.
         let term_damage = self.term.damage();
         let rects: Vec<DirtyRect> = match term_damage {
             TermDamage::Full => {
                 // Entire viewport is dirty — return one rect per row covering all cols.
+                // Viewport rows 0..rows map to grid lines (0 - display_offset) ..
+                // (rows - 1 - display_offset).
                 (0..rows)
                     .map(|r| {
-                        use alacritty_terminal::index::Line;
-                        let row_data = self.map_row(Line(i32::from(r)));
+                        let grid_line = Line(i32::from(r) - display_offset);
+                        let row_data = self.map_row(grid_line);
                         DirtyRect {
                             row: r,
                             col_start: 0,
@@ -342,16 +436,23 @@ impl TerminalEngine for AlacrittyEngine {
                     .collect()
             }
             TermDamage::Partial(iter) => {
+                // `TermDamageIterator::next` adds `display_offset` to each raw damage
+                // line number (verified in alacritty_terminal-0.26.0/src/term/mod.rs
+                // line 208: `line.line + self.display_offset`). So `b.line` is a
+                // VIEWPORT-RELATIVE row index (0..rows), not a grid-relative Line.
+                //
+                // To call `map_row(Line(..))` we convert back:
+                //   grid_line = b.line as i32 - display_offset
                 let bounds: Vec<_> = iter.collect();
                 bounds
                     .into_iter()
                     .map(|b| {
-                        use alacritty_terminal::index::Line;
                         let row = b.line as u16;
                         let col_start = b.left as u16;
                         // col_end is exclusive; LineDamageBounds.right is inclusive.
                         let col_end = (b.right as u16).saturating_add(1).min(cols);
-                        let row_data = self.map_row(Line(b.line as i32));
+                        let grid_line = Line(b.line as i32 - display_offset);
+                        let row_data = self.map_row(grid_line);
                         let cells = row_data.cells[col_start as usize..col_end as usize].to_vec();
                         DirtyRect {
                             row,

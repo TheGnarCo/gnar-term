@@ -37,6 +37,8 @@
 //! operating; the caller can decide to drop the bridge when they detect the
 //! channel is gone via a separate signal (e.g. pane close).
 
+use alacritty_terminal::event::Event;
+
 use super::alacritty::AlacrittyEngine;
 use super::ipc::GridDiff;
 use super::trait_def::TerminalEngine;
@@ -128,6 +130,14 @@ impl PtyBridge {
     /// Feed raw PTY bytes into the engine and emit a `Diff` for the resulting
     /// damage. If no cells changed, a `Diff` with an empty `dirty` list is
     /// still emitted so the renderer can update cursor position.
+    ///
+    /// After computing the diff, all buffered events from `AlacrittyEngine` are
+    /// drained and logged. `Event::PtyWrite` events carry response bytes that
+    /// should be written back to the PTY (e.g., OSC color-query responses); they
+    /// are logged here but **not yet routed to the PTY writer**. Full write-back
+    /// routing requires cross-component plumbing with `AppState.ptys` and is
+    /// deferred to a follow-up cycle. The drain prevents silent event loss —
+    /// the queue is cleared so it does not grow unboundedly.
     pub fn feed_and_emit(&mut self, bytes: &[u8]) {
         self.engine.feed(bytes);
         let dirty = self.engine.damage();
@@ -140,6 +150,25 @@ impl PtyBridge {
             cursor,
         };
         let _ = self.emit(TerminalChannelMessage::Diff(diff));
+
+        // Drain and log all events emitted during this parse cycle.
+        // TODO(pty-write-routing): PtyWrite bytes must be written back to the
+        // PTY to unblock programs that issue OSC queries. Implement in the
+        // follow-up cycle that adds a pty_write_sink to PtyBridge.
+        for event in self.engine.drain_events() {
+            match &event {
+                Event::PtyWrite(text) => {
+                    log::debug!(
+                        "[alacritty_engine] PtyWrite ({} bytes): buffered — \
+                         routing to PTY writer deferred (see TODO pty-write-routing)",
+                        text.len()
+                    );
+                }
+                other => {
+                    log::debug!("[alacritty_engine] event: {other:?}");
+                }
+            }
+        }
     }
 
     /// Resize the engine viewport to `cols × rows` and emit a fresh `Snapshot`.

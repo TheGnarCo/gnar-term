@@ -6,6 +6,7 @@
 //! carry both lifetimes through the IPC layer.
 
 use crate::fs_commands::global_config_dir;
+use crate::terminal_engine::pty_bridge::PtyBridge;
 use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
 use serde::Serialize;
 use std::collections::HashMap;
@@ -157,6 +158,12 @@ pub(crate) struct PtyInstance {
 pub(crate) struct AppState {
     pub(crate) ptys: Mutex<HashMap<u32, PtyInstance>>,
     pub(crate) watch_flags: Mutex<HashMap<u32, Arc<AtomicBool>>>,
+    /// Per-pane Alacritty engine bridges, keyed by `pty_id`.
+    ///
+    /// An entry is present only after `attach_alacritty_engine` is called
+    /// for that pane. The existing xterm.js code path (`spawn_pty` /
+    /// `write_pty` / `resize_pty`) does not touch this map.
+    pub(crate) bridges: Mutex<HashMap<u32, PtyBridge>>,
 }
 
 #[derive(Clone, Serialize)]
@@ -984,6 +991,7 @@ mod tests {
         let state = AppState {
             ptys: Mutex::new(HashMap::new()),
             watch_flags: Mutex::new(HashMap::new()),
+            bridges: Mutex::new(HashMap::new()),
         };
 
         let pty_system = native_pty_system();
@@ -1120,6 +1128,7 @@ mod tests {
         let state = AppState {
             ptys: Mutex::new(HashMap::new()),
             watch_flags: Mutex::new(HashMap::new()),
+            bridges: Mutex::new(HashMap::new()),
         };
 
         let pty_system = native_pty_system();
@@ -1186,6 +1195,7 @@ mod tests {
         let state = AppState {
             ptys: Mutex::new(HashMap::new()),
             watch_flags: Mutex::new(HashMap::new()),
+            bridges: Mutex::new(HashMap::new()),
         };
 
         let pty_system = native_pty_system();
@@ -1264,6 +1274,7 @@ mod tests {
         let state = AppState {
             ptys: Mutex::new(HashMap::new()),
             watch_flags: Mutex::new(HashMap::new()),
+            bridges: Mutex::new(HashMap::new()),
         };
 
         let pty_system = native_pty_system();

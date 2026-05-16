@@ -14,7 +14,7 @@ mod tests {
 
     // ─── AC-2 tests ───────────────────────────────────────────────────────────
 
-    /// Feed bytes then call damage(); at least one `DirtyRect` must exist that
+    /// Feed bytes then call `damage()`; at least one `DirtyRect` must exist that
     /// covers row 0 and spans cols covering 'h','e','l','l','o'.
     #[test]
     fn feed_then_damage_produces_expected_rects() {
@@ -88,7 +88,7 @@ mod tests {
         assert_eq!(pos.col, 3, "cursor col should be 3 after writing 'abc'");
     }
 
-    /// Sanity: ATTR_BOLD const is non-zero (the bitfield is wired correctly).
+    /// Sanity: `ATTR_BOLD` const is non-zero (the bitfield is wired correctly).
     #[test]
     fn attr_bold_const_is_nonzero() {
         assert_ne!(ATTR_BOLD, 0);

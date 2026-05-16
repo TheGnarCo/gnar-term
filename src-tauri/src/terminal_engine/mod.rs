@@ -11,6 +11,8 @@ pub mod types;
 #[cfg(test)]
 mod alacritty_tests;
 #[cfg(test)]
+mod e2e_tests;
+#[cfg(test)]
 mod ipc_tests;
 #[cfg(test)]
 mod pty_bridge_tests;

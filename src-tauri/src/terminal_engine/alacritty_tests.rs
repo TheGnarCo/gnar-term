@@ -194,10 +194,10 @@ mod tests {
     /// current color value to generate the response string, then write that back
     /// to the PTY as a `PtyWrite`-equivalent operation.
     ///
-    /// This is AC-6: programs that issue OSC color queries no longer hang because
-    /// the event is now buffered rather than silently dropped. Full PTY write-back
-    /// routing (invoking the formatter + sending to the PTY writer) is a follow-up
-    /// cycle (see TODO pty-write-routing in `PtyBridge::feed_and_emit`).
+    /// This is AC-6: programs that issue OSC color queries no longer hang.
+    /// cycle-10 buffered the event; cycle-12 wired the formatter evaluation +
+    /// PTY write-back. This test only asserts the buffering layer is intact;
+    /// the routing is exercised in `pty_bridge_tests`.
     #[test]
     fn pty_write_event_buffered_on_color_query() {
         let mut engine = engine_80x24();

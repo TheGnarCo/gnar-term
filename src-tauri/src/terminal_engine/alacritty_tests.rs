@@ -7,6 +7,19 @@ mod tests {
     use crate::terminal_engine::types::{CursorShapeTag, ATTR_BOLD};
     use alacritty_terminal::event::Event;
 
+    // ─── helper: extract visible text for a viewport row ─────────────────────
+
+    /// Collect all non-space characters from `row` of `snap` into a single string.
+    fn extract_line_text(snap: &crate::terminal_engine::types::GridSnapshot, row: usize) -> String {
+        snap.rows_data[row]
+            .cells
+            .iter()
+            .map(|c| c.ch.as_str())
+            .collect::<String>()
+            .trim_end()
+            .to_string()
+    }
+
     // ─── helpers ─────────────────────────────────────────────────────────────
 
     fn engine_80x24() -> AlacrittyEngine {
@@ -214,5 +227,98 @@ mod tests {
             has_color_request,
             "expected at least one Event::ColorRequest after OSC 10 color query, got: {events:?}"
         );
+    }
+
+    // ─── Cycle-15: display_offset-aware snapshot / display_iter ──────────────
+
+    /// Snapshot must reflect the correct viewport when `display_offset > 0`.
+    ///
+    /// Strategy:
+    /// 1. Fill enough lines so that some push into scrollback.
+    /// 2. Verify a specific row contains a known line (no scroll).
+    /// 3. Scroll up by N lines via `AlacrittyEngine::scroll_up_by`.
+    /// 4. Verify the same viewport row now shows the older line (shifted by offset).
+    ///
+    /// Terminal state after feeding 10 lines with `\r\n` into a 5-row viewport:
+    ///   - Lines 0-4 push into scrollback; viewport holds lines 5-9.
+    ///   - After each `\r\n`, cursor moves down; the final `\r\n` after "line009"
+    ///     scrolls one more time, so row 3 = "line009" and row 4 = blank cursor line.
+    ///   - We assert row 3 to avoid the trailing-blank ambiguity.
+    ///
+    /// AC-2 (engine state semantics) keyword coverage: display, offset, scroll,
+    /// viewport, snapshot, iterator.
+    #[test]
+    fn snapshot_respects_display_offset_when_scrolled() {
+        // 80×5 viewport so we only need ~10 lines of output to fill scrollback.
+        let mut engine = AlacrittyEngine::new(80, 5);
+
+        // Feed 10 lines with carriage-return/newline.
+        // After completion: viewport shows lines 005-009, but the final \r\n scrolled
+        // once more so the cursor is on a fresh blank row 4. Row 3 = "line009".
+        for i in 0..10_u32 {
+            engine.feed(format!("line{i:03}\r\n").as_bytes());
+        }
+
+        // Baseline (no scroll): row 3 must contain "line009".
+        let snap_bottom = engine.snapshot();
+        let row3_before = extract_line_text(&snap_bottom, 3);
+        assert!(
+            row3_before.contains("line009"),
+            "pre-scroll: viewport row 3 should contain 'line009', got: {row3_before:?}\n\
+             full snapshot rows:\n{}",
+            (0..5)
+                .map(|r| format!("  row{r}: {:?}", extract_line_text(&snap_bottom, r)))
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
+
+        // Scroll up by 3 lines so display_offset = 3.
+        engine.scroll_up_by(3);
+
+        // After scrolling, the viewport shifts up by 3 rows.
+        // Old row 3 ("line009") is now at viewport row 6, which is outside the 5-row
+        // viewport → it should no longer appear on row 3.
+        let snap_scrolled = engine.snapshot();
+        let row3_after = extract_line_text(&snap_scrolled, 3);
+        assert!(
+            !row3_after.contains("line009"),
+            "post-scroll: viewport row 3 should NOT contain 'line009' after scrolling up by 3, \
+             got: {row3_after:?}"
+        );
+
+        // Row 3 should now show "line006" (3 lines earlier).
+        assert!(
+            row3_after.contains("line006"),
+            "post-scroll: viewport row 3 should contain 'line006', got: {row3_after:?}\n\
+             full snapshot rows:\n{}",
+            (0..5)
+                .map(|r| format!("  row{r}: {:?}", extract_line_text(&snap_scrolled, r)))
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
+    }
+
+    /// After scrolling up, `snapshot()` must still return exactly `rows` rows,
+    /// each with exactly `cols` cells — the viewport dimensions are invariant
+    /// under `display_offset` changes.
+    #[test]
+    fn snapshot_viewport_dimensions_invariant_under_scroll() {
+        let mut engine = AlacrittyEngine::new(80, 5);
+        for i in 0..10_u32 {
+            engine.feed(format!("line{i}\r\n").as_bytes());
+        }
+        engine.scroll_up_by(3);
+
+        let snap = engine.snapshot();
+        assert_eq!(snap.rows, 5, "rows must stay at 5 after scroll");
+        assert_eq!(snap.cols, 80, "cols must stay at 80 after scroll");
+        assert_eq!(snap.rows_data.len(), 5, "rows_data len must equal rows");
+        for (i, row) in snap.rows_data.iter().enumerate() {
+            assert_eq!(
+                row.cells.len(),
+                80,
+                "row {i} must have 80 cells after scroll"
+            );
+        }
     }
 }

@@ -1,4 +1,4 @@
-//! Unit tests for the PTY <-> engine bridge (cycle-4, cycle-12).
+//! Unit tests for the PTY <-> engine bridge (cycle-4, cycle-12, cycle-13).
 //!
 //! These tests drive `PtyBridge` directly without spawning a real PTY.
 //! A `TestSink` records all emitted `TerminalChannelMessage` payloads so
@@ -8,11 +8,15 @@
 //! - `TestWriter`: a `Write + Send` impl backed by `Arc<Mutex<Vec<u8>>>` used
 //!   to verify that `PtyWrite` and `ColorRequest` events route bytes back to
 //!   the PTY writer.
+//!
+//! Cycle-13 additions:
+//! - `TestClipboard`: a `ClipboardAccess` impl backed by `Arc<Mutex<String>>`
+//!   used to verify OSC 52 clipboard store/load routing.
 
 use std::io::Write;
 use std::sync::{Arc, Mutex};
 
-use super::pty_bridge::{MessageSink, PtyBridge, TerminalChannelMessage};
+use super::pty_bridge::{ClipboardAccess, MessageSink, PtyBridge, TerminalChannelMessage};
 
 // ─── TestSink ─────────────────────────────────────────────────────────────────
 
@@ -72,11 +76,49 @@ impl Write for TestWriter {
     }
 }
 
+// ─── TestClipboard ────────────────────────────────────────────────────────────
+
+/// A `ClipboardAccess` implementation that stores text in an in-memory buffer.
+///
+/// Backed by `Arc<Mutex<String>>` so both the test and the bridge hold a
+/// reference; after the bridge runs the test can inspect what was written.
+#[derive(Clone, Default)]
+struct TestClipboard {
+    storage: Arc<Mutex<String>>,
+}
+
+impl TestClipboard {
+    fn new() -> Self {
+        Self::default()
+    }
+
+    /// Seed the clipboard with known text before a load test.
+    fn set(&self, text: &str) {
+        *self.storage.lock().unwrap() = text.to_string();
+    }
+
+    /// Return the current clipboard contents.
+    fn get(&self) -> String {
+        self.storage.lock().unwrap().clone()
+    }
+}
+
+impl ClipboardAccess for TestClipboard {
+    fn write_text(&self, text: String) -> Result<(), String> {
+        *self.storage.lock().unwrap() = text;
+        Ok(())
+    }
+
+    fn read_text(&self) -> Result<String, String> {
+        Ok(self.storage.lock().unwrap().clone())
+    }
+}
+
 // ─── Helper constructors ─────────────────────────────────────────────────────
 
 fn make_bridge(cols: u16, rows: u16) -> (PtyBridge, TestSink) {
     let sink = TestSink::new();
-    let bridge = PtyBridge::new(cols, rows, Box::new(sink.clone()), None);
+    let bridge = PtyBridge::new(cols, rows, Box::new(sink.clone()), None, None);
     (bridge, sink)
 }
 
@@ -88,8 +130,26 @@ fn make_bridge_with_writer(cols: u16, rows: u16) -> (PtyBridge, TestSink, TestWr
         rows,
         Box::new(sink.clone()),
         Some(Box::new(writer.clone())),
+        None,
     );
     (bridge, sink, writer)
+}
+
+fn make_bridge_with_clipboard(
+    cols: u16,
+    rows: u16,
+) -> (PtyBridge, TestSink, TestWriter, TestClipboard) {
+    let sink = TestSink::new();
+    let writer = TestWriter::new();
+    let clipboard = TestClipboard::new();
+    let bridge = PtyBridge::new(
+        cols,
+        rows,
+        Box::new(sink.clone()),
+        Some(Box::new(writer.clone())),
+        Some(Box::new(clipboard.clone())),
+    );
+    (bridge, sink, writer, clipboard)
 }
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
@@ -236,7 +296,7 @@ fn pty_channel_drop_does_not_panic() {
         }
     }
 
-    let mut bridge = PtyBridge::new(80, 24, Box::new(DroppedSink), None);
+    let mut bridge = PtyBridge::new(80, 24, Box::new(DroppedSink), None, None);
     // Even though the first send fails (DroppedSink returns Err), construction
     // must not panic. Further operations also must not panic.
     bridge.feed_and_emit(b"hello");
@@ -393,4 +453,82 @@ fn attach_snapshot_contains_cursor_position() {
         }
     }
     drop(bridge);
+}
+
+// ─── Cycle-13: OSC 52 clipboard routing tests ────────────────────────────────
+
+/// clipboard/store/write: an OSC 52 store sequence causes the bridge to write
+/// the decoded text into the clipboard access sink.
+///
+/// OSC 52 store: `\x1b]52;c;<base64>\x07`
+/// where base64("hello") = "aGVsbG8="
+#[test]
+fn clipboard_store_writes_text_to_clipboard_access() {
+    let (mut bridge, _sink, _writer, clipboard) = make_bridge_with_clipboard(80, 24);
+
+    // OSC 52 store — base64("hello") = "aGVsbG8="
+    // Format: ESC ] 52 ; c ; <base64> BEL
+    bridge.feed_and_emit(b"\x1b]52;c;aGVsbG8=\x07");
+
+    // The clipboard access sink must contain the decoded text.
+    assert_eq!(
+        clipboard.get(),
+        "hello",
+        "clipboard store must write decoded text to ClipboardAccess"
+    );
+}
+
+/// `clipboard/load/read/pty_response`: seeding the clipboard and issuing an OSC
+/// 52 load query causes the bridge to write an OSC 52 response to the PTY.
+///
+/// OSC 52 load: `\x1b]52;c;?\x07`
+/// Expected response shape: `\x1b]52;c;<base64>\x1b\\` or with BEL terminator.
+#[test]
+fn clipboard_load_reads_clipboard_and_writes_osc_response_to_pty() {
+    let (mut bridge, _sink, writer, clipboard) = make_bridge_with_clipboard(80, 24);
+
+    // Seed the clipboard with known text.
+    clipboard.set("world");
+
+    // OSC 52 load query — format: ESC ] 52 ; c ; ? BEL
+    bridge.feed_and_emit(b"\x1b]52;c;?\x07");
+
+    let written = writer.written();
+    // The response must be non-empty.
+    assert!(
+        !written.is_empty(),
+        "clipboard load must write OSC 52 response bytes to pty_writer"
+    );
+    // The response must contain the OSC 52 prefix: ESC ] 52 ;
+    let response_str = String::from_utf8_lossy(&written);
+    assert!(
+        response_str.contains("\x1b]52;"),
+        "OSC 52 response must contain ESC ] 52 ; prefix, got: {response_str:?}"
+    );
+    // The response must contain the base64-encoded clipboard text.
+    // base64("world") = "d29ybGQ="
+    assert!(
+        response_str.contains("d29ybGQ="),
+        "OSC 52 response must contain base64(\"world\") = \"d29ybGQ=\", got: {response_str:?}"
+    );
+}
+
+/// clipboard/store/write: a `ClipboardStore` event without a clipboard access
+/// sink must not panic; the bridge must remain consistent for further events.
+#[test]
+fn clipboard_store_without_access_logs_and_continues() {
+    // Bridge with no clipboard access (None).
+    let (mut bridge, sink) = make_bridge(80, 24);
+    let msgs_before = sink.messages().len();
+
+    // OSC 52 store — should log and continue, not panic.
+    bridge.feed_and_emit(b"\x1b]52;c;aGVsbG8=\x07");
+
+    // A diff must still be emitted — the bridge is consistent.
+    let msgs = sink.messages();
+    assert!(
+        msgs.len() > msgs_before,
+        "bridge must continue emitting diffs after clipboard store with no access"
+    );
+    // No panic reaching here = pass.
 }

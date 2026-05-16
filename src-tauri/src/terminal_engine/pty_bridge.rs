@@ -1,4 +1,4 @@
-//! PTY <-> terminal-engine bridge (cycle-4).
+//! PTY <-> terminal-engine bridge (cycle-4, cycle-13).
 //!
 //! # Overview
 //!
@@ -36,6 +36,20 @@
 //! silently discarded. The PTY reader loop and the engine state continue
 //! operating; the caller can decide to drop the bridge when they detect the
 //! channel is gone via a separate signal (e.g. pane close).
+//!
+//! # OSC 52 clipboard (cycle-13)
+//!
+//! Programs that emit OSC 52 escape sequences (`\x1b]52;...`) expect the
+//! terminal to read/write the system clipboard on their behalf. The bridge
+//! routes these via a [`ClipboardAccess`] trait so production code uses the
+//! Tauri clipboard plugin while tests use an in-memory [`TestClipboard`].
+//!
+//! `alacritty_terminal` pre-decodes the base64 in a `ClipboardStore` event
+//! before emitting it — the payload is already plain UTF-8 text.
+//! For a `ClipboardLoad` event the formatter supplied by alacritty re-encodes
+//! the response back to base64 and wraps it in the correct OSC 52 response
+//! sequence before returning it, so we only need to pass the clipboard text
+//! to the formatter and write the result to the PTY.
 
 use std::io::Write;
 
@@ -46,6 +60,27 @@ use super::alacritty::AlacrittyEngine;
 use super::ipc::GridDiff;
 use super::trait_def::TerminalEngine;
 use super::types::GridSnapshot;
+
+// ─── ClipboardAccess trait ────────────────────────────────────────────────────
+
+/// Abstraction over system clipboard access for testability.
+///
+/// Production code implements this via an `AppHandle` wrapper that delegates to
+/// `tauri_plugin_clipboard_manager::ClipboardExt`. Tests use an in-memory
+/// `TestClipboard` backed by `Arc<Mutex<String>>`.
+///
+/// Both methods return `Result<_, String>` so errors can be logged without
+/// depending on any platform-specific error type.
+pub trait ClipboardAccess: Send + Sync {
+    /// Write `text` to the system clipboard.
+    fn write_text(&self, text: String) -> Result<(), String>;
+
+    /// Read the current system clipboard contents.
+    ///
+    /// Returns an empty string on Err so callers can always call the OSC 52
+    /// formatter even when the clipboard is unavailable.
+    fn read_text(&self) -> Result<String, String>;
+}
 
 // ─── TerminalChannelMessage ───────────────────────────────────────────────────
 
@@ -126,6 +161,12 @@ pub struct PtyBridge {
     /// `None` in test mode (no PTY to write to). `Some` in production when
     /// the bridge is created via `attach_alacritty_engine`.
     pty_writer: Option<Box<dyn Write + Send>>,
+    /// Optional clipboard access for routing OSC 52 clipboard events.
+    ///
+    /// `None` when no clipboard is available (e.g. unit tests without a Tauri
+    /// handle). `Some` in production when the bridge is created via
+    /// `attach_alacritty_engine` with an `AppHandle`.
+    clipboard: Option<Box<dyn ClipboardAccess>>,
     /// Cached viewport width — updated in `new` and `resize_and_emit`.
     ///
     /// Avoids calling `engine.snapshot()` (O(rows × cols)) on every
@@ -146,6 +187,9 @@ impl PtyBridge {
     /// - `pty_writer` — optional writer for PTY response bytes (OSC query
     ///   responses etc.). Pass `None` in tests; pass
     ///   `Some(pty.master_pty.take_writer()?)` in production.
+    /// - `clipboard` — optional clipboard access for OSC 52 events. Pass
+    ///   `None` in tests that don't exercise clipboard; pass `Some(...)` with
+    ///   an `AppHandleClipboard` wrapper in production.
     ///
     /// The initial full-damage produced by `AlacrittyEngine::new` is consumed
     /// by calling `reset_damage` before any caller-driven `feed_and_emit`
@@ -156,6 +200,7 @@ impl PtyBridge {
         rows: u16,
         sink: Box<dyn MessageSink>,
         pty_writer: Option<Box<dyn Write + Send>>,
+        clipboard: Option<Box<dyn ClipboardAccess>>,
     ) -> Self {
         let mut engine = AlacrittyEngine::new(cols, rows);
         // Discard the initial full-damage so the first real diff is clean.
@@ -166,6 +211,7 @@ impl PtyBridge {
             engine,
             sink,
             pty_writer,
+            clipboard,
             cols,
             rows,
         };
@@ -248,12 +294,19 @@ impl PtyBridge {
                     let response = formatter(rgb);
                     self.write_to_pty(response.as_bytes(), "ColorRequest");
                 }
-                Event::ClipboardLoad(_, _) | Event::ClipboardStore(_, _) => {
-                    // TODO(clipboard-osc52): route OSC 52 via tauri-plugin-clipboard or arboard.
-                    log::warn!(
-                        "[alacritty_engine] clipboard event received but not yet routed \
-                         (see TODO clipboard-osc52)"
-                    );
+                Event::ClipboardStore(_clip_type, ref text) => {
+                    // alacritty_terminal pre-decodes the base64 payload before
+                    // emitting ClipboardStore — the text is already plain UTF-8.
+                    self.write_to_clipboard(text.clone());
+                }
+                Event::ClipboardLoad(_clip_type, ref formatter) => {
+                    // Read the current clipboard text (empty string on error),
+                    // pass it through the alacritty formatter which re-encodes
+                    // it as a valid OSC 52 response, then write that back to
+                    // the PTY so the requesting program receives its answer.
+                    let text = self.read_from_clipboard();
+                    let response = formatter(&text);
+                    self.write_to_pty(response.as_bytes(), "ClipboardLoad");
                 }
                 other => {
                     log::debug!("[alacritty_engine] event: {other:?}");
@@ -282,6 +335,49 @@ impl PtyBridge {
                 "[alacritty_engine] {label}: no pty_writer (test mode), {} bytes discarded",
                 data.len()
             );
+        }
+    }
+
+    /// Write `text` to the clipboard access sink if present.
+    ///
+    /// Logs at `warn` on clipboard write error; logs at `debug` when no
+    /// clipboard access is configured (e.g. unit tests).
+    fn write_to_clipboard(&self, text: String) {
+        if let Some(ref clipboard) = self.clipboard {
+            if let Err(e) = clipboard.write_text(text) {
+                log::warn!("[alacritty_engine] ClipboardStore: failed to write clipboard: {e}");
+            } else {
+                log::debug!("[alacritty_engine] ClipboardStore: wrote text to clipboard");
+            }
+        } else {
+            log::debug!(
+                "[alacritty_engine] ClipboardStore: no clipboard access (test mode), store ignored"
+            );
+        }
+    }
+
+    /// Read text from the clipboard access sink, returning an empty string if
+    /// no clipboard is configured or the read fails.
+    fn read_from_clipboard(&self) -> String {
+        if let Some(ref clipboard) = self.clipboard {
+            match clipboard.read_text() {
+                Ok(text) => {
+                    log::debug!(
+                        "[alacritty_engine] ClipboardLoad: read {} bytes from clipboard",
+                        text.len()
+                    );
+                    text
+                }
+                Err(e) => {
+                    log::warn!("[alacritty_engine] ClipboardLoad: failed to read clipboard: {e}; using empty string");
+                    String::new()
+                }
+            }
+        } else {
+            log::debug!(
+                "[alacritty_engine] ClipboardLoad: no clipboard access (test mode), using empty string"
+            );
+            String::new()
         }
     }
 

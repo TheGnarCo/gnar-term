@@ -6,7 +6,42 @@
 //! in `lib.rs`.
 
 use crate::pty::AppState;
-use crate::terminal_engine::pty_bridge::{PtyBridge, TauriChannelSink, TerminalChannelMessage};
+use crate::terminal_engine::pty_bridge::{
+    ClipboardAccess, PtyBridge, TauriChannelSink, TerminalChannelMessage,
+};
+
+// ─── AppHandleClipboard ───────────────────────────────────────────────────────
+
+/// Production [`ClipboardAccess`] implementation backed by a Tauri `AppHandle`.
+///
+/// Delegates to `tauri_plugin_clipboard_manager::ClipboardExt`, which is
+/// already registered in `lib.rs`. Storing the `AppHandle` (rather than the
+/// `Clipboard` state directly) keeps the wrapper `Send + Sync` without
+/// needing to negotiate the plugin's internal Mutex lifetimes.
+struct AppHandleClipboard {
+    app: tauri::AppHandle,
+}
+
+impl AppHandleClipboard {
+    fn new(app: tauri::AppHandle) -> Self {
+        Self { app }
+    }
+}
+
+impl ClipboardAccess for AppHandleClipboard {
+    fn write_text(&self, text: String) -> Result<(), String> {
+        use tauri_plugin_clipboard_manager::ClipboardExt;
+        self.app
+            .clipboard()
+            .write_text(text)
+            .map_err(|e| e.to_string())
+    }
+
+    fn read_text(&self) -> Result<String, String> {
+        use tauri_plugin_clipboard_manager::ClipboardExt;
+        self.app.clipboard().read_text().map_err(|e| e.to_string())
+    }
+}
 
 /// Attach an Alacritty terminal engine to an existing PTY pane.
 ///
@@ -34,8 +69,16 @@ use crate::terminal_engine::pty_bridge::{PtyBridge, TauriChannelSink, TerminalCh
 /// subsequent `send()` calls return `Err`. The bridge swallows these errors
 /// silently (logged at debug level). The bridge entry remains in `AppState`
 /// until `kill_pty` removes it.
+///
+/// # OSC 52 clipboard (cycle-13)
+///
+/// `app` is a Tauri-injected `AppHandle` used to construct the
+/// `AppHandleClipboard` wrapper. OSC 52 store/load events are routed through
+/// the Tauri clipboard plugin (`tauri-plugin-clipboard-manager`), which is
+/// already registered in `lib.rs`.
 #[tauri::command]
 pub(crate) async fn attach_alacritty_engine(
+    app: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
     pty_id: u32,
     channel: tauri::ipc::Channel<TerminalChannelMessage>,
@@ -88,9 +131,11 @@ pub(crate) async fn attach_alacritty_engine(
     };
 
     let sink = TauriChannelSink::new(channel);
+    // Wrap the AppHandle as a ClipboardAccess sink for OSC 52 routing.
+    let clipboard: Option<Box<dyn ClipboardAccess>> = Some(Box::new(AppHandleClipboard::new(app)));
     // PtyBridge::new emits the initial Snapshot synchronously — ordering
     // invariant is satisfied before this function returns.
-    let bridge = PtyBridge::new(cols, rows, Box::new(sink), bridge_writer);
+    let bridge = PtyBridge::new(cols, rows, Box::new(sink), bridge_writer, clipboard);
 
     let mut bridges = state.bridges.lock().map_err(|e| e.to_string())?;
     bridges.insert(pty_id, bridge);

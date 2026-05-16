@@ -26,7 +26,7 @@
     dismissPane,
     relaunchPane,
   } from "../services/pane-service";
-  import { configStore } from "../config";
+  import { getTerminalEngine } from "../config";
   import { closeWorkspace } from "../services/workspace-runtime-service";
   import CloseButton from "./CloseButton.svelte";
 
@@ -344,7 +344,7 @@
 
   {#each pane.surfaces as surface (surface.id)}
     {#if isTerminalSurface(surface)}
-      {#if $configStore.terminalEngine === "alacritty"}
+      {#if getTerminalEngine() === "alacritty"}
         <!-- Phase 1: AlacrittyTerminalSurface does not yet implement a `visible`
              prop — visibility is handled via CSS display toggle on the wrapper,
              matching the registry-surface pattern in this file. -->

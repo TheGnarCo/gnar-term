@@ -170,14 +170,15 @@ describe("Renderer (canvas-2d alacritty renderer)", () => {
     const lastFillText = [...mock.calls]
       .reverse()
       .find((c) => c.method === "fillText");
-    // cursor rect must come after the last text
+    // cursor fillRect appears; we need at least one rect total
+    expect(rects.length).toBeGreaterThan(0);
+    // cursor rect must come after the last text: paintCursor is called at the
+    // end of paintSnapshot, after all cells have been painted.
+    expect(lastFillRect).toBeDefined();
+    expect(lastFillText).toBeDefined();
     const cursorIdx = mock.calls.lastIndexOf(lastFillRect!);
     const textIdx = mock.calls.lastIndexOf(lastFillText!);
-    // cursor fillRect appears; we just need at least one rect total
-    expect(rects.length).toBeGreaterThan(0);
-    // suppress unused var warning
-    void cursorIdx;
-    void textIdx;
+    expect(cursorIdx).toBeGreaterThan(textIdx);
   });
 
   // ── diff ──────────────────────────────────────────────────────────────────

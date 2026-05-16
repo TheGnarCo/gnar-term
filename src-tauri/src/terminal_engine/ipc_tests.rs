@@ -1,0 +1,365 @@
+//! Serde round-trip tests for the terminal IPC wire-format types.
+//!
+//! These tests verify that `GridSnapshot` and `GridDiff` survive a JSON
+//! encode → decode round-trip with structural equality, and that specific
+//! snake_case JSON keys are emitted to lock the on-wire shape.
+
+use crate::terminal_engine::ipc::{GridDiff, GridSnapshot};
+use crate::terminal_engine::types::{
+    Cell, ColorIndex, CursorPos, DirtyRect, RowData, ATTR_BOLD, ATTR_UNDERLINE,
+};
+
+// ─── GridSnapshot round-trips ─────────────────────────────────────────────────
+
+/// Full 3×2 snapshot with mixed Indexed/Rgb colors and bold|underline attrs.
+#[test]
+fn gridsnapshot_serde_roundtrip_preserves_cells_and_cursor() {
+    let snapshot = GridSnapshot {
+        cols: 3,
+        rows: 2,
+        cursor: CursorPos {
+            row: 0,
+            col: 1,
+            visible: true,
+        },
+        rows_data: vec![
+            RowData {
+                cells: vec![
+                    Cell {
+                        ch: "A".to_string(),
+                        fg: ColorIndex::Indexed(7),
+                        bg: ColorIndex::Rgb(20, 30, 40),
+                        attrs: ATTR_BOLD | ATTR_UNDERLINE,
+                    },
+                    Cell {
+                        ch: " ".to_string(),
+                        fg: ColorIndex::Indexed(0),
+                        bg: ColorIndex::Indexed(0),
+                        attrs: 0,
+                    },
+                    Cell {
+                        ch: "é".to_string(),
+                        fg: ColorIndex::Rgb(255, 128, 0),
+                        bg: ColorIndex::Indexed(15),
+                        attrs: 0,
+                    },
+                ],
+            },
+            RowData {
+                cells: vec![
+                    Cell {
+                        ch: " ".to_string(),
+                        fg: ColorIndex::Indexed(7),
+                        bg: ColorIndex::Indexed(0),
+                        attrs: 0,
+                    },
+                    Cell {
+                        ch: "B".to_string(),
+                        fg: ColorIndex::Indexed(2),
+                        bg: ColorIndex::Indexed(0),
+                        attrs: ATTR_BOLD,
+                    },
+                    Cell {
+                        ch: " ".to_string(),
+                        fg: ColorIndex::Indexed(7),
+                        bg: ColorIndex::Indexed(0),
+                        attrs: 0,
+                    },
+                ],
+            },
+        ],
+    };
+
+    let json = serde_json::to_string(&snapshot).expect("serialize GridSnapshot");
+    let decoded: GridSnapshot = serde_json::from_str(&json).expect("deserialize GridSnapshot");
+
+    assert_eq!(decoded.cols, snapshot.cols);
+    assert_eq!(decoded.rows, snapshot.rows);
+    assert_eq!(decoded.cursor, snapshot.cursor);
+    assert_eq!(decoded.rows_data.len(), snapshot.rows_data.len());
+    for (r, (got, want)) in decoded
+        .rows_data
+        .iter()
+        .zip(snapshot.rows_data.iter())
+        .enumerate()
+    {
+        assert_eq!(got.cells.len(), want.cells.len(), "row {r} cell count");
+        for (c, (gc, wc)) in got.cells.iter().zip(want.cells.iter()).enumerate() {
+            assert_eq!(gc, wc, "row {r} col {c}");
+        }
+    }
+}
+
+// ─── GridDiff round-trips ─────────────────────────────────────────────────────
+
+/// GridDiff with an empty dirty list (resize-only notification).
+#[test]
+fn griddiff_serde_roundtrip_empty_dirty() {
+    let diff = GridDiff {
+        rows: 24,
+        cols: 80,
+        dirty: vec![],
+        cursor: CursorPos {
+            row: 0,
+            col: 0,
+            visible: true,
+        },
+    };
+
+    let json = serde_json::to_string(&diff).expect("serialize GridDiff");
+    let decoded: GridDiff = serde_json::from_str(&json).expect("deserialize GridDiff");
+
+    assert_eq!(decoded.rows, diff.rows);
+    assert_eq!(decoded.cols, diff.cols);
+    assert!(decoded.dirty.is_empty());
+    assert_eq!(decoded.cursor, diff.cursor);
+}
+
+/// GridDiff with a single DirtyRect spanning a partial row.
+#[test]
+fn griddiff_serde_roundtrip_one_dirty_rect() {
+    let diff = GridDiff {
+        rows: 24,
+        cols: 80,
+        dirty: vec![DirtyRect {
+            row: 5,
+            col_start: 10,
+            col_end: 15,
+            cells: vec![
+                Cell {
+                    ch: "X".to_string(),
+                    fg: ColorIndex::Indexed(1),
+                    bg: ColorIndex::Indexed(0),
+                    attrs: 0,
+                },
+                Cell {
+                    ch: "Y".to_string(),
+                    fg: ColorIndex::Indexed(2),
+                    bg: ColorIndex::Indexed(0),
+                    attrs: 0,
+                },
+                Cell {
+                    ch: "Z".to_string(),
+                    fg: ColorIndex::Indexed(3),
+                    bg: ColorIndex::Indexed(0),
+                    attrs: 0,
+                },
+                Cell {
+                    ch: " ".to_string(),
+                    fg: ColorIndex::Indexed(7),
+                    bg: ColorIndex::Indexed(0),
+                    attrs: 0,
+                },
+                Cell {
+                    ch: " ".to_string(),
+                    fg: ColorIndex::Indexed(7),
+                    bg: ColorIndex::Indexed(0),
+                    attrs: 0,
+                },
+            ],
+        }],
+        cursor: CursorPos {
+            row: 5,
+            col: 15,
+            visible: true,
+        },
+    };
+
+    let json = serde_json::to_string(&diff).expect("serialize GridDiff one rect");
+    let decoded: GridDiff = serde_json::from_str(&json).expect("deserialize GridDiff one rect");
+
+    assert_eq!(decoded.dirty.len(), 1);
+    let rect = &decoded.dirty[0];
+    assert_eq!(rect.row, 5);
+    assert_eq!(rect.col_start, 10);
+    assert_eq!(rect.col_end, 15);
+    assert_eq!(rect.cells.len(), 5);
+    assert_eq!(rect.cells[0].ch, "X");
+    assert_eq!(decoded.cursor, diff.cursor);
+}
+
+/// GridDiff with multiple DirtyRects across different rows.
+#[test]
+fn griddiff_serde_roundtrip_multiple_rects_across_rows() {
+    let diff = GridDiff {
+        rows: 24,
+        cols: 80,
+        dirty: vec![
+            DirtyRect {
+                row: 0,
+                col_start: 0,
+                col_end: 3,
+                cells: vec![
+                    Cell {
+                        ch: "a".to_string(),
+                        fg: ColorIndex::Indexed(7),
+                        bg: ColorIndex::Indexed(0),
+                        attrs: 0,
+                    },
+                    Cell {
+                        ch: "b".to_string(),
+                        fg: ColorIndex::Indexed(7),
+                        bg: ColorIndex::Indexed(0),
+                        attrs: 0,
+                    },
+                    Cell {
+                        ch: "c".to_string(),
+                        fg: ColorIndex::Indexed(7),
+                        bg: ColorIndex::Indexed(0),
+                        attrs: 0,
+                    },
+                ],
+            },
+            DirtyRect {
+                row: 2,
+                col_start: 5,
+                col_end: 7,
+                cells: vec![
+                    Cell {
+                        ch: "d".to_string(),
+                        fg: ColorIndex::Rgb(100, 200, 50),
+                        bg: ColorIndex::Indexed(0),
+                        attrs: ATTR_BOLD,
+                    },
+                    Cell {
+                        ch: "e".to_string(),
+                        fg: ColorIndex::Rgb(100, 200, 50),
+                        bg: ColorIndex::Indexed(0),
+                        attrs: ATTR_BOLD,
+                    },
+                ],
+            },
+            DirtyRect {
+                row: 10,
+                col_start: 20,
+                col_end: 21,
+                cells: vec![Cell {
+                    ch: "→".to_string(),
+                    fg: ColorIndex::Indexed(4),
+                    bg: ColorIndex::Indexed(0),
+                    attrs: 0,
+                }],
+            },
+        ],
+        cursor: CursorPos {
+            row: 10,
+            col: 21,
+            visible: false,
+        },
+    };
+
+    let json = serde_json::to_string(&diff).expect("serialize multi-rect GridDiff");
+    let decoded: GridDiff = serde_json::from_str(&json).expect("deserialize multi-rect GridDiff");
+
+    assert_eq!(decoded.dirty.len(), 3);
+    assert_eq!(decoded.dirty[0].row, 0);
+    assert_eq!(decoded.dirty[1].row, 2);
+    assert_eq!(decoded.dirty[2].row, 10);
+    assert_eq!(decoded.dirty[2].cells[0].ch, "→");
+    assert!(!decoded.cursor.visible);
+}
+
+/// Cursor visibility survives round-trip when `visible = false`.
+#[test]
+fn cursor_visibility_serde_roundtrip_hidden_cursor() {
+    let diff = GridDiff {
+        rows: 10,
+        cols: 40,
+        dirty: vec![],
+        cursor: CursorPos {
+            row: 3,
+            col: 7,
+            visible: false,
+        },
+    };
+
+    let json = serde_json::to_string(&diff).expect("serialize hidden cursor");
+    let decoded: GridDiff = serde_json::from_str(&json).expect("deserialize hidden cursor");
+
+    assert!(!decoded.cursor.visible);
+    assert_eq!(decoded.cursor.row, 3);
+    assert_eq!(decoded.cursor.col, 7);
+}
+
+// ─── Wire-contract key-shape tests ────────────────────────────────────────────
+
+/// Asserts specific snake_case JSON field names to lock the on-wire shape
+/// so that TS consumers don't silently break on field renames.
+#[test]
+fn wire_contract_json_keys_are_snake_case() {
+    let snapshot = GridSnapshot {
+        cols: 1,
+        rows: 1,
+        cursor: CursorPos {
+            row: 0,
+            col: 0,
+            visible: true,
+        },
+        rows_data: vec![RowData {
+            cells: vec![Cell {
+                ch: " ".to_string(),
+                fg: ColorIndex::Indexed(7),
+                bg: ColorIndex::Indexed(0),
+                attrs: 0,
+            }],
+        }],
+    };
+
+    let json = serde_json::to_string(&snapshot).expect("serialize for key check");
+    assert!(
+        json.contains("\"rows_data\""),
+        "expected 'rows_data' key in JSON, got: {json}"
+    );
+    assert!(
+        json.contains("\"cursor\""),
+        "expected 'cursor' key in JSON, got: {json}"
+    );
+
+    let diff = GridDiff {
+        rows: 1,
+        cols: 1,
+        dirty: vec![DirtyRect {
+            row: 0,
+            col_start: 0,
+            col_end: 1,
+            cells: vec![Cell {
+                ch: " ".to_string(),
+                fg: ColorIndex::Indexed(0),
+                bg: ColorIndex::Indexed(0),
+                attrs: 0,
+            }],
+        }],
+        cursor: CursorPos {
+            row: 0,
+            col: 0,
+            visible: true,
+        },
+    };
+
+    let diff_json = serde_json::to_string(&diff).expect("serialize diff for key check");
+    assert!(
+        diff_json.contains("\"col_start\""),
+        "expected 'col_start' key in JSON, got: {diff_json}"
+    );
+    assert!(
+        diff_json.contains("\"col_end\""),
+        "expected 'col_end' key in JSON, got: {diff_json}"
+    );
+
+    // ColorIndex discriminated union: check for "kind" and "value" tags
+    let indexed_cell = Cell {
+        ch: "X".to_string(),
+        fg: ColorIndex::Indexed(5),
+        bg: ColorIndex::Rgb(1, 2, 3),
+        attrs: 0,
+    };
+    let cell_json = serde_json::to_string(&indexed_cell).expect("serialize cell for color check");
+    assert!(
+        cell_json.contains("\"kind\""),
+        "expected 'kind' discriminant in ColorIndex JSON, got: {cell_json}"
+    );
+    assert!(
+        cell_json.contains("\"value\""),
+        "expected 'value' field in ColorIndex JSON, got: {cell_json}"
+    );
+}

@@ -1,7 +1,10 @@
 //! Phase 1 grid types for the terminal state engine.
 //!
-//! Serialization derives (serde) are intentionally absent — cycle-3 will add
-//! those alongside the TypeScript wire format mirror.
+//! Serialization derives (serde) were added in cycle-3 alongside the
+//! TypeScript wire format mirror (`src/lib/types/terminal-ipc.ts`).
+//! `ColorIndex` uses an adjacently-tagged serde representation (`tag = "kind"`,
+//! `content = "value"`) so the TypeScript side receives a clean discriminated
+//! union: `{ kind: "Indexed", value: number } | { kind: "Rgb", value: [number, number, number] }`.
 
 // ─── Attribute bitfield constants ─────────────────────────────────────────────
 
@@ -21,7 +24,18 @@ pub const ATTR_ITALIC: u8 = 8;
 /// Named colors (foreground / background / black / etc.) from the alacritty
 /// `NamedColor` enum are mapped to their conventional palette index (0-15) when
 /// building a `ColorIndex`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// # Serde representation
+///
+/// Uses adjacently-tagged serde (`tag = "kind"`, `content = "value"`) so the
+/// on-wire JSON is a clean discriminated union:
+/// - `{ "kind": "Indexed", "value": 7 }`
+/// - `{ "kind": "Rgb", "value": [255, 128, 0] }`
+///
+/// This maps to the TypeScript type:
+/// `{ kind: "Indexed"; value: number } | { kind: "Rgb"; value: [number, number, number] }`
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "kind", content = "value")]
 pub enum ColorIndex {
     /// 256-color palette index (0–255). Named colors use conventional indices
     /// 0-15; the default foreground maps to 7, default background to 0.
@@ -36,7 +50,7 @@ pub enum ColorIndex {
 ///
 /// `ch` is a `String` to support multi-byte grapheme clusters. `attrs` is a
 /// bitfield using the `ATTR_*` constants above.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Cell {
     /// The character(s) in this cell. Space (`" "`) for empty cells.
     pub ch: String,
@@ -51,7 +65,7 @@ pub struct Cell {
 // ─── RowData ──────────────────────────────────────────────────────────────────
 
 /// One row of `Cell`s in the grid snapshot.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct RowData {
     /// The cells in this row, left-to-right, length == `GridSnapshot::cols`.
     pub cells: Vec<Cell>,
@@ -60,7 +74,7 @@ pub struct RowData {
 // ─── GridSnapshot ─────────────────────────────────────────────────────────────
 
 /// A point-in-time snapshot of the full terminal grid viewport.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct GridSnapshot {
     /// Viewport width in columns.
     pub cols: u16,
@@ -78,7 +92,7 @@ pub struct GridSnapshot {
 ///
 /// `col_end` is exclusive: a rect covering columns 0–4 has `col_start = 0`,
 /// `col_end = 5`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct DirtyRect {
     /// Zero-based viewport row index.
     pub row: u16,
@@ -93,7 +107,7 @@ pub struct DirtyRect {
 // ─── CursorPos ────────────────────────────────────────────────────────────────
 
 /// Terminal cursor position and visibility.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct CursorPos {
     /// Zero-based viewport row.
     pub row: u16,

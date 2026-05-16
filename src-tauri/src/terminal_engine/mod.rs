@@ -3,8 +3,11 @@
 //! full run context.
 
 pub mod alacritty;
+pub mod ipc;
 pub mod trait_def;
 pub mod types;
 
 #[cfg(test)]
 mod alacritty_tests;
+#[cfg(test)]
+mod ipc_tests;

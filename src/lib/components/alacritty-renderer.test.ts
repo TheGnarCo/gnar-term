@@ -10,7 +10,11 @@
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
-import { Renderer, resolveColor } from "./alacritty-renderer";
+import {
+  Renderer,
+  resolveColor,
+  DEFAULT_NAMED_PALETTE,
+} from "./alacritty-renderer";
 import type {
   GridSnapshot,
   GridDiff,
@@ -798,5 +802,131 @@ describe("Renderer (canvas-2d alacritty renderer)", () => {
       return h === 1;
     });
     expect(strikeRect).toBeDefined();
+  });
+
+  // ── Named slot resolution (cycle-14 palette) ──────────────────────────────
+
+  it("Named foreground resolves to DEFAULT_NAMED_PALETTE.foreground when no palette override", () => {
+    // resolveColor with no palette argument uses the built-in defaults.
+    const result = resolveColor({ kind: "Named", value: "foreground" });
+    expect(result).toBe(DEFAULT_NAMED_PALETTE.foreground);
+  });
+
+  it("Named background resolves to DEFAULT_NAMED_PALETTE.background by default", () => {
+    const result = resolveColor({ kind: "Named", value: "background" });
+    expect(result).toBe(DEFAULT_NAMED_PALETTE.background);
+  });
+
+  it("Named cursor resolves to DEFAULT_NAMED_PALETTE.cursor by default", () => {
+    const result = resolveColor({ kind: "Named", value: "cursor" });
+    expect(result).toBe(DEFAULT_NAMED_PALETTE.cursor);
+  });
+
+  it("Named slot resolves to custom palette override when provided", () => {
+    const customFg = "#d8d8d8";
+    const result = resolveColor(
+      { kind: "Named", value: "foreground" },
+      { foreground: customFg },
+    );
+    expect(result).toBe(customFg);
+  });
+
+  it("Named slot falls back to default when caller palette lacks that slot", () => {
+    // Provide a palette with only 'foreground'; 'background' must fall back.
+    const result = resolveColor(
+      { kind: "Named", value: "background" },
+      { foreground: "#aabbcc" },
+    );
+    expect(result).toBe(DEFAULT_NAMED_PALETTE.background);
+  });
+
+  it("Renderer injected palette overrides named fg color in cell paint", () => {
+    const customFg = "#abcdef";
+    const { ctx, mock: localMock } = makeMockContext();
+    const customRenderer = new Renderer({
+      ctx,
+      fontFamily: "monospace",
+      fontSize: 14,
+      cellWidth: 8,
+      cellHeight: 17,
+      palette: { foreground: customFg },
+    });
+    const diff: GridDiff = {
+      rows: 1,
+      cols: 5,
+      cursor: makeCursor(0, 0, false),
+      dirty: [
+        {
+          row: 0,
+          col_start: 0,
+          col_end: 1,
+          cells: [
+            {
+              ch: "X",
+              fg: { kind: "Named", value: "foreground" },
+              bg: { kind: "Indexed", value: 0 },
+              attrs: 0,
+            },
+          ],
+        },
+      ],
+    };
+    customRenderer.paintDiff(diff);
+    const styleChanges = localMock.calls
+      .filter((c) => c.method === "set fillStyle")
+      .map((c) => c.args[0] as string);
+    expect(styleChanges).toContain(customFg);
+  });
+
+  it("Renderer with no palette uses DEFAULT_NAMED_PALETTE for named fg", () => {
+    // A renderer with no palette option must fall back to defaults.
+    const diff: GridDiff = {
+      rows: 1,
+      cols: 5,
+      cursor: makeCursor(0, 0, false),
+      dirty: [
+        {
+          row: 0,
+          col_start: 0,
+          col_end: 1,
+          cells: [
+            {
+              ch: "Y",
+              fg: { kind: "Named", value: "foreground" },
+              bg: { kind: "Named", value: "background" },
+              attrs: 0,
+            },
+          ],
+        },
+      ],
+    };
+    renderer.paintDiff(diff);
+    const styleChanges = mock.calls
+      .filter((c) => c.method === "set fillStyle")
+      .map((c) => c.args[0] as string);
+    expect(styleChanges).toContain(DEFAULT_NAMED_PALETTE.foreground);
+    expect(styleChanges).toContain(DEFAULT_NAMED_PALETTE.background);
+  });
+
+  it("all named slot keys in DEFAULT_NAMED_PALETTE resolve without falling through to undefined", () => {
+    // Smoke test: every slot in the default palette must produce a non-empty string.
+    const slots = Object.keys(DEFAULT_NAMED_PALETTE) as Array<
+      keyof typeof DEFAULT_NAMED_PALETTE
+    >;
+    for (const slot of slots) {
+      const result = resolveColor({ kind: "Named", value: slot });
+      expect(result, `slot '${slot}'`).toBeTruthy();
+      expect(result, `slot '${slot}' must be a string`).toBeTypeOf("string");
+    }
+  });
+
+  it("Named dim_black resolves to expected dim palette value", () => {
+    const result = resolveColor({ kind: "Named", value: "dim_black" });
+    expect(result).toBe(DEFAULT_NAMED_PALETTE.dim_black);
+  });
+
+  it("Named bright_foreground resolves to expected palette value", () => {
+    const result = resolveColor({ kind: "Named", value: "bright_foreground" });
+    expect(result).toBe(DEFAULT_NAMED_PALETTE.bright_foreground);
   });
 });

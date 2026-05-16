@@ -13,8 +13,8 @@ use alacritty_terminal::Term;
 
 use super::trait_def::TerminalEngine;
 use super::types::{
-    Cell, ColorIndex, CursorPos, CursorShapeTag, DirtyRect, GridSnapshot, RowData, ATTR_BOLD,
-    ATTR_DIM, ATTR_HIDDEN, ATTR_INVERSE, ATTR_ITALIC, ATTR_STRIKEOUT, ATTR_UNDERLINE,
+    Cell, ColorIndex, CursorPos, CursorShapeTag, DirtyRect, GridSnapshot, NamedSlot, RowData,
+    ATTR_BOLD, ATTR_DIM, ATTR_HIDDEN, ATTR_INVERSE, ATTR_ITALIC, ATTR_STRIKEOUT, ATTR_UNDERLINE,
     ATTR_WIDE_CHAR,
 };
 
@@ -93,37 +93,57 @@ impl EventListener for MyListener {
 
 /// Map a `vte::ansi::Color` to our `ColorIndex`.
 ///
-/// Named colors are given their conventional ANSI/xterm palette index
-/// (0–15). Default foreground → 7, default background → 0. Any
-/// out-of-range named variant falls back to `Indexed(0)`.
-#[allow(clippy::match_same_arms)] // keeping each arm explicit is intentional
+/// # Mapping strategy (cycle-14)
+///
+/// The upstream `NamedColor` enum has two disjoint ranges:
+///
+/// - **Palette range** (`Black=0`..`BrightWhite=15`): these are interchangeable
+///   with the 16-color ANSI palette and are emitted as `ColorIndex::Indexed`.
+///   No semantic identity is lost — `Black` and `Indexed(0)` are definitionally
+///   the same color.
+///
+/// - **Semantic range** (`Foreground=256`, `Background=257`, `Cursor=258`,
+///   `DimBlack=259`..`DimWhite=266`, `BrightForeground=267`, `DimForeground=268`):
+///   these identify *slots* rather than specific colors. Collapsing them to
+///   palette indices (as the old code did) erased OSC 10/11/12 theme overrides
+///   and conflated `Foreground` with `White` (both → 7). They are now emitted
+///   as `ColorIndex::Named(NamedSlot)` so the renderer can resolve them against
+///   a theme palette.
 fn map_color(color: Color) -> ColorIndex {
     match color {
-        Color::Named(named) => {
-            let idx = match named {
-                NamedColor::Black => 0,
-                NamedColor::Red => 1,
-                NamedColor::Green => 2,
-                NamedColor::Yellow => 3,
-                NamedColor::Blue => 4,
-                NamedColor::Magenta => 5,
-                NamedColor::Cyan => 6,
-                NamedColor::White | NamedColor::Foreground => 7,
-                NamedColor::Background => 0,
-                NamedColor::BrightBlack | NamedColor::DimBlack => 8,
-                NamedColor::BrightRed | NamedColor::DimRed => 9,
-                NamedColor::BrightGreen | NamedColor::DimGreen => 10,
-                NamedColor::BrightYellow | NamedColor::DimYellow => 11,
-                NamedColor::BrightBlue | NamedColor::DimBlue => 12,
-                NamedColor::BrightMagenta | NamedColor::DimMagenta => 13,
-                NamedColor::BrightCyan | NamedColor::DimCyan => 14,
-                NamedColor::BrightWhite | NamedColor::DimWhite => 15,
-                NamedColor::BrightForeground | NamedColor::DimForeground => 7,
-                // Cursor color has no palette equivalent; fall back to default fg.
-                NamedColor::Cursor => 7,
-            };
-            ColorIndex::Indexed(idx)
-        }
+        Color::Named(named) => match named {
+            // ── Palette range (0-15): collapse to Indexed — no semantic loss ──
+            NamedColor::Black => ColorIndex::Indexed(0),
+            NamedColor::Red => ColorIndex::Indexed(1),
+            NamedColor::Green => ColorIndex::Indexed(2),
+            NamedColor::Yellow => ColorIndex::Indexed(3),
+            NamedColor::Blue => ColorIndex::Indexed(4),
+            NamedColor::Magenta => ColorIndex::Indexed(5),
+            NamedColor::Cyan => ColorIndex::Indexed(6),
+            NamedColor::White => ColorIndex::Indexed(7),
+            NamedColor::BrightBlack => ColorIndex::Indexed(8),
+            NamedColor::BrightRed => ColorIndex::Indexed(9),
+            NamedColor::BrightGreen => ColorIndex::Indexed(10),
+            NamedColor::BrightYellow => ColorIndex::Indexed(11),
+            NamedColor::BrightBlue => ColorIndex::Indexed(12),
+            NamedColor::BrightMagenta => ColorIndex::Indexed(13),
+            NamedColor::BrightCyan => ColorIndex::Indexed(14),
+            NamedColor::BrightWhite => ColorIndex::Indexed(15),
+            // ── Semantic range (256-268): preserve as Named slot ──────────────
+            NamedColor::Foreground => ColorIndex::Named(NamedSlot::Foreground),
+            NamedColor::Background => ColorIndex::Named(NamedSlot::Background),
+            NamedColor::Cursor => ColorIndex::Named(NamedSlot::Cursor),
+            NamedColor::DimBlack => ColorIndex::Named(NamedSlot::DimBlack),
+            NamedColor::DimRed => ColorIndex::Named(NamedSlot::DimRed),
+            NamedColor::DimGreen => ColorIndex::Named(NamedSlot::DimGreen),
+            NamedColor::DimYellow => ColorIndex::Named(NamedSlot::DimYellow),
+            NamedColor::DimBlue => ColorIndex::Named(NamedSlot::DimBlue),
+            NamedColor::DimMagenta => ColorIndex::Named(NamedSlot::DimMagenta),
+            NamedColor::DimCyan => ColorIndex::Named(NamedSlot::DimCyan),
+            NamedColor::DimWhite => ColorIndex::Named(NamedSlot::DimWhite),
+            NamedColor::BrightForeground => ColorIndex::Named(NamedSlot::BrightForeground),
+            NamedColor::DimForeground => ColorIndex::Named(NamedSlot::DimForeground),
+        },
         Color::Spec(rgb) => ColorIndex::Rgb(rgb.r, rgb.g, rgb.b),
         Color::Indexed(idx) => ColorIndex::Indexed(idx),
     }

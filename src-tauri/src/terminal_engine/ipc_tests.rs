@@ -353,6 +353,128 @@ fn wire_format_rgb_color_index_serialises_as_array() {
     );
 }
 
+// ─── Cycle-14: NamedSlot wire format tests ────────────────────────────────────
+
+use crate::terminal_engine::types::NamedSlot;
+
+/// `ColorIndex::Named(NamedSlot::Foreground)` must serialise to
+/// `{"kind":"Named","value":"foreground"}` — confirming the adjacently-tagged
+/// serde representation and the `rename_all = "snake_case"` on `NamedSlot`.
+#[test]
+fn wire_format_named_color_serialises_as_named_slot() {
+    let color = ColorIndex::Named(NamedSlot::Foreground);
+    let json = serde_json::to_string(&color).expect("serialize ColorIndex::Named(Foreground)");
+    assert!(
+        json.contains("\"kind\":\"Named\""),
+        "expected '\"kind\":\"Named\"' in ColorIndex JSON, got: {json}"
+    );
+    assert!(
+        json.contains("\"value\":\"foreground\""),
+        "expected '\"value\":\"foreground\"' in ColorIndex JSON, got: {json}"
+    );
+}
+
+/// All 14 `NamedSlot` variants must survive a JSON round-trip with structural equality.
+#[test]
+fn named_slot_all_variants_serde_roundtrip() {
+    let variants = [
+        NamedSlot::Foreground,
+        NamedSlot::Background,
+        NamedSlot::Cursor,
+        NamedSlot::BrightForeground,
+        NamedSlot::DimForeground,
+        NamedSlot::DimBlack,
+        NamedSlot::DimRed,
+        NamedSlot::DimGreen,
+        NamedSlot::DimYellow,
+        NamedSlot::DimBlue,
+        NamedSlot::DimMagenta,
+        NamedSlot::DimCyan,
+        NamedSlot::DimWhite,
+    ];
+    for slot in variants {
+        let color = ColorIndex::Named(slot);
+        let json = serde_json::to_string(&color)
+            .unwrap_or_else(|_| panic!("failed to serialize {slot:?}"));
+        let decoded: ColorIndex = serde_json::from_str(&json)
+            .unwrap_or_else(|_| panic!("failed to deserialize {slot:?}: {json}"));
+        assert_eq!(
+            decoded, color,
+            "round-trip mismatch for {slot:?}: json={json}"
+        );
+    }
+}
+
+/// `NamedSlot::Background` must serialise as `"background"` (`snake_case`).
+#[test]
+fn wire_format_named_slot_background_is_snake_case() {
+    let color = ColorIndex::Named(NamedSlot::Background);
+    let json = serde_json::to_string(&color).expect("serialize Named(Background)");
+    assert!(
+        json.contains("\"background\""),
+        "expected 'background' (snake_case) in JSON, got: {json}"
+    );
+}
+
+/// `NamedSlot::BrightForeground` must serialise as `"bright_foreground"`.
+#[test]
+fn wire_format_named_slot_bright_foreground_is_snake_case() {
+    let color = ColorIndex::Named(NamedSlot::BrightForeground);
+    let json = serde_json::to_string(&color).expect("serialize Named(BrightForeground)");
+    assert!(
+        json.contains("\"bright_foreground\""),
+        "expected 'bright_foreground' in JSON, got: {json}"
+    );
+}
+
+/// `NamedSlot::DimBlack` must serialise as `"dim_black"`.
+#[test]
+fn wire_format_named_slot_dim_black_is_snake_case() {
+    let color = ColorIndex::Named(NamedSlot::DimBlack);
+    let json = serde_json::to_string(&color).expect("serialize Named(DimBlack)");
+    assert!(
+        json.contains("\"dim_black\""),
+        "expected 'dim_black' in JSON, got: {json}"
+    );
+}
+
+/// `ColorIndex::Named` must survive a `GridSnapshot` round-trip end-to-end.
+/// This validates that the extended enum is compatible with nested serde derivation.
+#[test]
+fn named_color_in_cell_roundtrips_through_gridsnapshot() {
+    let snapshot = crate::terminal_engine::ipc::GridSnapshot {
+        cols: 1,
+        rows: 1,
+        cursor: CursorPos {
+            row: 0,
+            col: 0,
+            visible: true,
+            shape: CursorShapeTag::Block,
+        },
+        rows_data: vec![RowData {
+            cells: vec![Cell {
+                ch: "X".to_string(),
+                fg: ColorIndex::Named(NamedSlot::Foreground),
+                bg: ColorIndex::Named(NamedSlot::Background),
+                attrs: 0,
+            }],
+        }],
+    };
+
+    let json = serde_json::to_string(&snapshot).expect("serialize snapshot with Named colors");
+    let decoded: crate::terminal_engine::ipc::GridSnapshot =
+        serde_json::from_str(&json).expect("deserialize snapshot with Named colors");
+
+    assert_eq!(
+        decoded.rows_data[0].cells[0].fg,
+        ColorIndex::Named(NamedSlot::Foreground)
+    );
+    assert_eq!(
+        decoded.rows_data[0].cells[0].bg,
+        ColorIndex::Named(NamedSlot::Background)
+    );
+}
+
 // ─── Wire-contract key-shape tests ────────────────────────────────────────────
 
 /// Asserts specific `snake_case` JSON field names to lock the on-wire shape

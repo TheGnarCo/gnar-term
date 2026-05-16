@@ -43,16 +43,50 @@ export const ATTR_WIDE_CHAR = 128 as const;
 // ─── Color ────────────────────────────────────────────────────────────────────
 
 /**
+ * Semantic color slot names — mirrors the Rust `NamedSlot` enum (cycle-14).
+ *
+ * These 13 slots correspond to `vte::ansi::NamedColor` variants that have no
+ * palette-index equivalent (indices 256-268 in the alacritty `Colors` array).
+ * The renderer resolves them against a `palette: Partial<Record<NamedSlot, string>>`
+ * injected at construction time, falling back to built-in defaults.
+ *
+ * | Slot             | NamedColor index | Typical use                       |
+ * |------------------|-----------------|-----------------------------------|
+ * | foreground       | 256             | OSC 10 / SGR 39 default fg        |
+ * | background       | 257             | OSC 11 / SGR 49 default bg        |
+ * | cursor           | 258             | OSC 12 cursor color override      |
+ * | dim_black..      | 259-266         | DIM-rendered ANSI colour variants |
+ * | bright_foreground| 267             | SGR 1 foreground boost            |
+ * | dim_foreground   | 268             | SGR 2 foreground dim              |
+ */
+export type NamedSlot =
+  | "foreground"
+  | "background"
+  | "cursor"
+  | "dim_black"
+  | "dim_red"
+  | "dim_green"
+  | "dim_yellow"
+  | "dim_blue"
+  | "dim_magenta"
+  | "dim_cyan"
+  | "dim_white"
+  | "bright_foreground"
+  | "dim_foreground";
+
+/**
  * Terminal color discriminated union mirroring the Rust `ColorIndex` enum.
  *
  * The Rust serde adjacently-tagged representation (`tag = "kind"`,
  * `content = "value"`) produces:
  * - `{ "kind": "Indexed", "value": 7 }`
  * - `{ "kind": "Rgb", "value": [255, 128, 0] }`
+ * - `{ "kind": "Named", "value": "foreground" }` (cycle-14)
  */
 export type ColorIndex =
   | { kind: "Indexed"; value: number }
-  | { kind: "Rgb"; value: [number, number, number] };
+  | { kind: "Rgb"; value: [number, number, number] }
+  | { kind: "Named"; value: NamedSlot };
 
 // ─── Cell ─────────────────────────────────────────────────────────────────────
 

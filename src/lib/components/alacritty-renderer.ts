@@ -18,6 +18,7 @@ import type {
   CursorPos,
   Cell,
   ColorIndex,
+  NamedSlot,
 } from "../types/terminal-ipc";
 import {
   ATTR_BOLD,
@@ -63,6 +64,37 @@ const ANSI_PALETTE_16: readonly string[] = [
   "#ffffff", // 15 white
 ];
 
+// ─── Named-slot default palette (cycle-14) ────────────────────────────────────
+//
+// Conservative defaults for the 13 semantic named slots.  These are used when
+// the Renderer is constructed without an explicit `palette` override, or when
+// the caller's palette does not include a particular slot.
+//
+// Default choices:
+//   foreground / bright_foreground → white-ish (#cccccc — not pure white so text
+//     is visible against both dark and mid-tone backgrounds)
+//   background                     → black (#000000)
+//   cursor                         → white (#ffffff — high contrast against black bg)
+//   dim_foreground                 → dimmed foreground (~60% of foreground)
+//   dim_black..dim_white           → 60% of the corresponding ANSI_PALETTE_16 entry
+//     (mirrors the ATTR_DIM dimColor 0.6× factor used for palette colors)
+
+export const DEFAULT_NAMED_PALETTE: Readonly<Record<NamedSlot, string>> = {
+  foreground: "#cccccc",
+  background: "#000000",
+  cursor: "#ffffff",
+  bright_foreground: "#ffffff",
+  dim_foreground: "#7a7a7a",
+  dim_black: "#000000",
+  dim_red: "#4d0000",
+  dim_green: "#004d00",
+  dim_yellow: "#4d4d00",
+  dim_blue: "#00004d",
+  dim_magenta: "#4d004d",
+  dim_cyan: "#004d4d",
+  dim_white: "#737373",
+} as const;
+
 // ─── Color resolver ───────────────────────────────────────────────────────────
 
 // xterm 256-color cube channel value table.
@@ -87,11 +119,19 @@ function hex2(n: number): string {
  * - `Indexed(232..255)` → 24-step grayscale ramp.
  *   value = 8 + 10·(i − 232), from #080808 to #eeeeee.
  * - `Rgb(r,g,b)` → `"rgb(r,g,b)"` (direct pass-through).
+ * - `Named(slot)` → look up `slot` in the provided `palette`, falling back to
+ *   `DEFAULT_NAMED_PALETTE` (cycle-14).
  */
-function resolveColor(color: ColorIndex): string {
+function resolveColor(
+  color: ColorIndex,
+  palette: Partial<Record<NamedSlot, string>> = {},
+): string {
   if (color.kind === "Rgb") {
     const [r, g, b] = color.value;
     return `rgb(${r},${g},${b})`;
+  }
+  if (color.kind === "Named") {
+    return palette[color.value] ?? DEFAULT_NAMED_PALETTE[color.value];
   }
   // Indexed
   const idx = color.value;
@@ -162,6 +202,19 @@ export interface RendererOptions {
    * Cell height in pixels. Typically `fontSize * 1.2`.
    */
   cellHeight: number;
+  /**
+   * Theme palette for resolving `ColorIndex::Named` slots (cycle-14).
+   *
+   * Override individual named slots (e.g. `{ foreground: "#d8d8d8" }`) to
+   * honor OSC 10/11/12 theme colors.  Any slot absent from this object falls
+   * back to `DEFAULT_NAMED_PALETTE`.
+   *
+   * Example — apply a Solarized Dark fg/bg:
+   * ```ts
+   * new Renderer({ ..., palette: { foreground: "#839496", background: "#002b36" } });
+   * ```
+   */
+  palette?: Partial<Record<NamedSlot, string>>;
 }
 
 // ─── Renderer ─────────────────────────────────────────────────────────────────
@@ -182,6 +235,12 @@ export class Renderer {
   /** Bold + italic font string. */
   private readonly boldItalicFont: string;
 
+  /**
+   * Theme palette for resolving `ColorIndex::Named` slots (cycle-14).
+   * Merged at construction time: caller overrides take priority over defaults.
+   */
+  private readonly palette: Partial<Record<NamedSlot, string>>;
+
   constructor(opts: RendererOptions) {
     this.ctx = opts.ctx;
     this.fontFamily = opts.fontFamily;
@@ -192,6 +251,7 @@ export class Renderer {
     this.boldFont = `bold ${opts.fontSize}px ${opts.fontFamily}`;
     this.italicFont = `italic ${opts.fontSize}px ${opts.fontFamily}`;
     this.boldItalicFont = `italic bold ${opts.fontSize}px ${opts.fontFamily}`;
+    this.palette = opts.palette ?? {};
     // Set textBaseline to "top" so fillText y-coordinates align to the cell
     // top edge (row * cellHeight). The canvas default is "alphabetic" baseline,
     // which offsets glyphs upward by the font's ascender height and misaligns
@@ -298,8 +358,8 @@ export class Renderer {
     const y = row * this.cellHeight;
 
     // Resolve base colors, then swap if ATTR_INVERSE
-    let fgColor = resolveColor(cell.fg);
-    let bgColor = resolveColor(cell.bg);
+    let fgColor = resolveColor(cell.fg, this.palette);
+    let bgColor = resolveColor(cell.bg, this.palette);
     if (cell.attrs & ATTR_INVERSE) {
       [fgColor, bgColor] = [bgColor, fgColor];
     }

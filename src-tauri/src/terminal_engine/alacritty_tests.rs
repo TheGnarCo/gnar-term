@@ -199,6 +199,91 @@ mod tests {
         );
     }
 
+    // ─── Cycle-14 tests: map_color Named slot preservation ───────────────────
+
+    /// After feeding SGR 39 (reset foreground to default), the default-foreground
+    /// slot color must appear as `ColorIndex::Named(NamedSlot::Foreground)` in
+    /// cell.fg — not as `ColorIndex::Indexed(7)`.
+    ///
+    /// SGR 39 resets fg to `Color::Named(NamedColor::Foreground)`.
+    #[test]
+    fn map_color_default_foreground_produces_named_slot() {
+        use crate::terminal_engine::types::{ColorIndex, NamedSlot};
+
+        let mut engine = engine_80x24();
+        // Write a character with explicit SGR 39 (default fg) to ensure a dirty cell.
+        // ESC[39m = reset fg to default. Then write 'X' to land in cell(0,0).
+        engine.feed(b"\x1b[39mX");
+        let snap = engine.snapshot();
+        let cell = &snap.rows_data[0].cells[0];
+        assert_eq!(
+            cell.fg,
+            ColorIndex::Named(NamedSlot::Foreground),
+            "SGR 39 (default fg) must produce Named(Foreground), got: {:?}",
+            cell.fg
+        );
+    }
+
+    /// After feeding SGR 49 (reset background to default), the default-background
+    /// slot must appear as `ColorIndex::Named(NamedSlot::Background)` in cell.bg.
+    ///
+    /// SGR 49 resets bg to `Color::Named(NamedColor::Background)`.
+    #[test]
+    fn map_color_default_background_produces_named_slot() {
+        use crate::terminal_engine::types::{ColorIndex, NamedSlot};
+
+        let mut engine = engine_80x24();
+        // ESC[49m = reset bg to default, then write ' ' to land in cell(0,0).
+        engine.feed(b"\x1b[49m ");
+        let snap = engine.snapshot();
+        let cell = &snap.rows_data[0].cells[0];
+        assert_eq!(
+            cell.bg,
+            ColorIndex::Named(NamedSlot::Background),
+            "SGR 49 (default bg) must produce Named(Background), got: {:?}",
+            cell.bg
+        );
+    }
+
+    /// `Color::Named(NamedColor::Black)` must still map to `Indexed(0)` —
+    /// only the semantic slots (Foreground, Background, Cursor, etc.) get
+    /// the Named variant; the 16 ANSI palette entries remain Indexed.
+    #[test]
+    fn map_color_ansi_black_stays_indexed_zero() {
+        use crate::terminal_engine::types::ColorIndex;
+
+        let mut engine = engine_80x24();
+        // SGR 30 = set fg to Black (NamedColor::Black = 0).
+        engine.feed(b"\x1b[30mX");
+        let snap = engine.snapshot();
+        let cell = &snap.rows_data[0].cells[0];
+        assert_eq!(
+            cell.fg,
+            ColorIndex::Indexed(0),
+            "SGR 30 (Black) must produce Indexed(0), got: {:?}",
+            cell.fg
+        );
+    }
+
+    /// `Color::Named(NamedColor::White)` must still map to `Indexed(7)` —
+    /// White is a palette color, not a semantic slot.
+    #[test]
+    fn map_color_ansi_white_stays_indexed_seven() {
+        use crate::terminal_engine::types::ColorIndex;
+
+        let mut engine = engine_80x24();
+        // SGR 37 = set fg to White (NamedColor::White = 7).
+        engine.feed(b"\x1b[37mX");
+        let snap = engine.snapshot();
+        let cell = &snap.rows_data[0].cells[0];
+        assert_eq!(
+            cell.fg,
+            ColorIndex::Indexed(7),
+            "SGR 37 (White) must produce Indexed(7), got: {:?}",
+            cell.fg
+        );
+    }
+
     /// Feeding an OSC foreground-color query (`ESC ] 10 ; ? BEL`) must result
     /// in at least one `Event::ColorRequest` in the buffered queue.
     ///

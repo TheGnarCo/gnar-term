@@ -6,6 +6,7 @@ pub mod alacritty;
 pub mod ipc;
 pub mod pty_bridge;
 pub mod search;
+pub mod selection;
 pub mod trait_def;
 pub mod types;
 
@@ -17,3 +18,5 @@ mod e2e_tests;
 mod ipc_tests;
 #[cfg(test)]
 mod pty_bridge_tests;
+#[cfg(test)]
+mod selection_tests;

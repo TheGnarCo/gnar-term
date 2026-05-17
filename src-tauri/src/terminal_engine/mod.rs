@@ -5,6 +5,7 @@
 pub mod alacritty;
 pub mod ipc;
 pub mod pty_bridge;
+pub mod search;
 pub mod trait_def;
 pub mod types;
 

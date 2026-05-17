@@ -47,10 +47,6 @@ function makeTerminalSurface(id: string, ptyId: number): TerminalSurface {
     ptyId,
     hasUnread: false,
     opened: false,
-    terminal: { options: {} } as unknown as TerminalSurface["terminal"],
-    fitAddon: { fit: vi.fn() } as unknown as TerminalSurface["fitAddon"],
-    searchAddon: {} as unknown as TerminalSurface["searchAddon"],
-    termElement: document.createElement("div"),
   } as TerminalSurface;
 }
 

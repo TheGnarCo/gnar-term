@@ -155,8 +155,6 @@ vi.mock("../lib/terminal-service", () => ({
         opened: false,
         startupCommand: undefined as string | undefined,
         definedCommand: undefined as string | undefined,
-        // Provide a minimal terminal stub to avoid safeFocus rejections
-        terminal: { focus: vi.fn() },
       };
       pane.surfaces.push(stub);
       createdSurfaces.push({ pane, cwd, env });
@@ -193,10 +191,6 @@ describe("SSH surface serialize / hydrate", () => {
       ptyId: 42,
       hasUnread: false,
       opened: true,
-      terminal: {} as never,
-      fitAddon: {} as never,
-      searchAddon: {} as never,
-      termElement: {} as never,
       sshConfig: { host: "bastion.internal", user: "deploy", keepAlive: 60 },
     };
     const pane: Pane = {
@@ -260,10 +254,6 @@ describe("SSH surface serialize / hydrate", () => {
       ptyId: -1,
       hasUnread: false,
       opened: false,
-      terminal: {} as never,
-      fitAddon: {} as never,
-      searchAddon: {} as never,
-      termElement: {} as never,
       sshConfig,
     };
     const pane: Pane = {

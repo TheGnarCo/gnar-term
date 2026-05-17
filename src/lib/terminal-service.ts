@@ -3,23 +3,19 @@
  *
  * Extracted from the old TerminalManager class for use with Svelte stores.
  * This module owns all non-DOM terminal logic: spawning PTYs, buffering output,
- * creating TerminalSurface objects, and opening terminals with WebGL.
+ * creating TerminalSurface objects.
+ *
+ * Post-cutover (cycle-21): xterm.js is removed. All terminal rendering is
+ * handled by AlacrittyTerminalSurface (canvas-2d + alacritty engine). This
+ * service manages PTY lifecycle only.
  */
 
-import { Terminal } from "@xterm/xterm";
-import type { ILink } from "@xterm/xterm";
-import { FitAddon } from "@xterm/addon-fit";
-import { SearchAddon } from "@xterm/addon-search";
 import { invoke, Channel } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { appendMcpOutput } from "./services/mcp-output-buffer";
 import { eventBus } from "./services/event-bus";
 import { notifyOutputObservers } from "./services/surface-output-observer";
 import { getConfig, saveConfig } from "./config";
-import {
-  readText as clipboardRead,
-  writeText as clipboardWrite,
-} from "@tauri-apps/plugin-clipboard-manager";
 import {
   lookupTerminalByPtyId,
   registerPtyForSurface,
@@ -30,17 +26,9 @@ import {
   sendNotification as notifSend,
 } from "@tauri-apps/plugin-notification";
 import { get } from "svelte/store";
-import { xtermTheme } from "./stores/theme";
 import { workspaces, activeWorkspaceIdx } from "./stores/workspace";
-import { contextMenu, pendingAction } from "./stores/ui";
-import {
-  getRegisteredFileExtensions,
-  getContextMenuItemsForFile,
-} from "./services/context-menu-item-registry";
 import type { TerminalSurface, Pane } from "./types";
 import { uid, getAllSurfaces, getAllPanes, isTerminalSurface } from "./types";
-import type { MenuItem } from "./context-menu-types";
-import "@xterm/xterm/css/xterm.css";
 
 /**
  * Platform detection — used for Cmd (macOS) vs Ctrl (Linux/Windows) shortcuts.
@@ -151,14 +139,6 @@ export const fontReady = detectFont().then((f) => {
   resolvedFontFamily = f;
 });
 
-// User-supplied fontFamily wins over auto-detection. The bundled+system
-// fallbacks are always appended so a typo or missing font still renders.
-function effectiveFontFamily(): string {
-  const userFont = getConfig().fontFamily?.trim();
-  if (userFont) return `${userFont}, ${BUNDLED_FONT}, ${SYSTEM_FALLBACK}`;
-  return resolvedFontFamily;
-}
-
 // --- Flow Control ---
 
 const ptyBuffers = new Map<number, Uint8Array[]>();
@@ -245,9 +225,11 @@ function drainFirstOutputListeners(ptyId: number): void {
 }
 
 /** Append a raw PTY chunk to the per-pty buffer, tee it to the MCP buffer
- *  if one is registered, and schedule an rAF flush to xterm.js. Exported for
+ *  if one is registered, and schedule an rAF flush. Exported for
  *  tests; in production this is called from the Channel onmessage handler
- *  created in connectPty(). */
+ *  created in connectPty(). With the alacritty engine the Rust backend
+ *  processes PTY output directly; this function manages backpressure and MCP
+ *  fan-out only. */
 export function handlePtyChunk(ptyId: number, bytes: Uint8Array): void {
   // Fire first-output listeners on the very first chunk.
   if (!ptyHasOutput.has(ptyId)) {
@@ -307,54 +289,27 @@ function flushPtyBuffer(ptyId: number) {
     return;
   }
 
-  // Concatenate all buffered chunks into one write
+  // Concatenate all buffered chunks (for MCP buffer and observer fan-out).
+  // With the Alacritty engine, PTY output is consumed by the Rust backend —
+  // no write to an xterm.js Terminal object is needed here.
   const totalBytes = ptyBufferBytes.get(ptyId) || 0;
-  const merged = new Uint8Array(totalBytes);
-  let offset = 0;
-  for (const chunk of chunks) {
-    merged.set(chunk, offset);
-    offset += chunk.length;
-  }
   chunks.length = 0;
   ptyBufferBytes.set(ptyId, 0);
 
-  // Preserve the user's scroll position if they've scrolled up. xterm.js
-  // auto-scrolls to the bottom on every write(); capture the viewport before
-  // the write so we can roll it back in the callback.
-  const savedViewportY = surface.terminal.buffer.active.viewportY;
-  const maxScrollBefore = Math.max(
-    0,
-    surface.terminal.buffer.active.length - surface.terminal.rows,
-  );
-  const wasScrolledUp = savedViewportY < maxScrollBefore;
-
-  // Single write to xterm.js per frame — the callback fires when xterm.js has
-  // processed this batch, which is our signal that it's ready for more.
-  surface.terminal.write(merged, () => {
-    if (wasScrolledUp) {
-      const newViewportY = surface.terminal.buffer.active.viewportY;
-      surface.terminal.scrollLines(savedViewportY - newViewportY);
-    }
-    // If more data arrived while we were rendering, flush again next frame
-    const buffered = ptyBufferBytes.get(ptyId) || 0;
-    if (buffered > 0) {
-      scheduleFlush(ptyId);
-    }
-    // Resume PTY reader if we drained below low water mark
-    if (ptyPaused.has(ptyId) && buffered < BUFFER_LOW_WATER) {
-      invoke("resume_pty", { ptyId })
-        .then(() => {
-          ptyPaused.delete(ptyId);
-        })
-        .catch((err) => {
-          console.error(
-            "[terminal-service] resume_pty failed, terminal may hang:",
-            err,
-          );
-          ptyPaused.delete(ptyId);
-        });
-    }
-  });
+  // Resume PTY reader if we drained below low water mark
+  if (ptyPaused.has(ptyId) && totalBytes < BUFFER_LOW_WATER) {
+    invoke("resume_pty", { ptyId })
+      .then(() => {
+        ptyPaused.delete(ptyId);
+      })
+      .catch((err) => {
+        console.error(
+          "[terminal-service] resume_pty failed, terminal may hang:",
+          err,
+        );
+        ptyPaused.delete(ptyId);
+      });
+  }
 }
 
 // --- Event Listeners ---
@@ -400,22 +355,8 @@ export async function teardownListeners(): Promise<void> {
 function handlePtyExit(pty_id: number, exit_code: number | null = null): void {
   // pty-exit arrives via emit while chunks arrive via Channel — different
   // transports, so a trailing chunk may already be in the per-pty buffer.
-  // Flush it synchronously to the surface's terminal before we tear down
-  // flow-control state and remove the surface from the workspace tree.
-  const chunks = ptyBuffers.get(pty_id);
-  const bytesBuffered = ptyBufferBytes.get(pty_id) || 0;
-  if (chunks && chunks.length > 0 && bytesBuffered > 0) {
-    const surface = findSurfaceByPty(pty_id);
-    if (surface) {
-      const merged = new Uint8Array(bytesBuffered);
-      let offset = 0;
-      for (const chunk of chunks) {
-        merged.set(chunk, offset);
-        offset += chunk.length;
-      }
-      surface.terminal.write(merged);
-    }
-  }
+  // With the Alacritty engine the Rust backend processes PTY output directly;
+  // we just discard any buffered bytes on the TypeScript side.
   ptyBuffers.delete(pty_id);
   ptyBufferBytes.delete(pty_id);
   ptyFlushScheduled.delete(pty_id);
@@ -566,7 +507,7 @@ function handlePtyTitle(pty_id: number, title: string): void {
 }
 
 export async function setupListeners() {
-  // On Linux, prevent WebKitGTK from intercepting Ctrl+Shift+C/V before xterm.js
+  // On Linux, prevent WebKitGTK from intercepting Ctrl+Shift+C/V before the terminal canvas
   if (!isMac) {
     _keydownHandler = (e: KeyboardEvent) => {
       if (
@@ -674,486 +615,31 @@ export function startCwdPolling() {
   }, 5000); // Poll every 5 seconds
 }
 
-// --- Surface Creation helpers ---
-
-const _urlRegex = /(?:https?|file):\/\/[^\s"'<>()[\]{}]+/g;
-
-/** Link provider for plain https?:// URLs — opens them via the Tauri shell. */
-function createUrlLinkProvider(terminal: Terminal) {
-  return {
-    provideLinks(
-      lineNumber: number,
-      callback: (links: ILink[] | undefined) => void,
-    ) {
-      const line = terminal.buffer.active.getLine(lineNumber - 1);
-      if (!line) {
-        callback(undefined);
-        return;
-      }
-      const text = line.translateToString(true);
-      const links: ILink[] = [];
-      _urlRegex.lastIndex = 0;
-      let m: RegExpExecArray | null;
-      while ((m = _urlRegex.exec(text)) !== null) {
-        const url = m[0]!;
-        const startX = m.index + 1;
-        const endX = m.index + url.length;
-        links.push({
-          range: {
-            start: { x: startX, y: lineNumber },
-            end: { x: endX, y: lineNumber },
-          },
-          text: url,
-          decorations: { pointerCursor: true, underline: true },
-          activate(event: MouseEvent, text: string) {
-            if (
-              event.metaKey ||
-              event.ctrlKey ||
-              text.startsWith("http://") ||
-              text.startsWith("https://")
-            ) {
-              void invoke("open_url", { url: text }).catch((err) =>
-                console.warn("[terminal-service] open_url failed:", err),
-              );
-              return;
-            }
-            pendingAction.set({ type: "open-preview", target: text });
-          },
-        });
-      }
-      callback(links.length > 0 ? links : undefined);
-    },
-  };
-}
-
-/**
- * Link provider for registered file-extension paths (e.g. `.ts`, `.md`).
- * On click, dispatches to whichever context-menu handler is registered for
- * the file's extension. Resolved relative to `surface.cwd`.
- */
-function createFilePathLinkProvider(
-  surface: TerminalSurface,
-  terminal: Terminal,
-) {
-  return {
-    provideLinks: (
-      lineNumber: number,
-      callback: (links: ILink[] | undefined) => void,
-    ) => {
-      const line = terminal.buffer.active.getLine(lineNumber - 1);
-      if (!line) {
-        callback(undefined);
-        return;
-      }
-      const text = line.translateToString();
-      const registered = getRegisteredFileExtensions();
-      if (registered.length === 0) {
-        callback([]);
-        return;
-      }
-      const exts = registered.join("|");
-      const patterns = [
-        `"([^"]+\\.(?:${exts}))"`,
-        `'([^']+\\.(?:${exts}))'`,
-        `((?:/|\\./|~/)\\S[\\S ]*\\.(?:${exts}))(?=\\s|$)`,
-        `(\\S+\\.(?:${exts}))(?=\\s|$)`,
-      ];
-      // eslint-disable-next-line security/detect-non-literal-regexp -- patterns are constant, only the allowed-extension list is interpolated
-      const regex = new RegExp(patterns.join("|"), "gi");
-      const candidates: { path: string; startX: number; endX: number }[] = [];
-      let m;
-      while ((m = regex.exec(text)) !== null) {
-        const path = m[1] || m[2] || m[3] || m[4];
-        if (!path) continue;
-        const startX = m.index + m[0].indexOf(path);
-        candidates.push({ path, startX, endX: startX + path.length });
-      }
-      if (candidates.length === 0) {
-        callback(undefined);
-        return;
-      }
-      void Promise.all(
-        candidates.map(async (c) => {
-          const fullPath = await resolveFilePath(c.path, surface.cwd);
-          const exists = await invoke<boolean>("file_exists", {
-            path: fullPath,
-          });
-          if (!exists) return null;
-          return {
-            range: {
-              start: { x: c.startX + 1, y: lineNumber },
-              end: { x: c.endX + 1, y: lineNumber },
-            },
-            text: c.path,
-            activate: async (e: MouseEvent, linkText: string) => {
-              if (e.button !== 0) return;
-              const resolved = await resolveFilePath(linkText, surface.cwd);
-              const items = getContextMenuItemsForFile(resolved);
-              await items[0]?.handler(resolved);
-            },
-          };
-        }),
-      )
-        .then((results) => {
-          const links = results.filter(
-            (r): r is NonNullable<typeof r> => r !== null,
-          );
-          callback(links.length > 0 ? links : undefined);
-        })
-        .catch(() => {
-          callback(undefined);
-        });
-    },
-  };
-}
-
-/**
- * Build the xterm.js custom key event handler for `surface`. Returns a
- * function that intercepts Cmd/Ctrl shortcuts and returns `false` for keys
- * that should be handled by App.svelte rather than forwarded to the PTY.
- */
-function createKeyHandler(
-  surface: TerminalSurface,
-  terminal: Terminal,
-): (e: KeyboardEvent) => boolean {
-  return (e: KeyboardEvent) => {
-    if (e.type !== "keydown") return true;
-    if (e.ctrlKey && !e.metaKey && e.key === "Tab") return false;
-    if (
-      e.ctrlKey &&
-      e.shiftKey &&
-      !e.metaKey &&
-      (e.key === "C" || e.key === "c")
-    ) {
-      const sel = terminal.getSelection();
-      if (sel) void clipboardWrite(sel);
-      return false;
-    }
-    if (
-      e.ctrlKey &&
-      e.shiftKey &&
-      !e.metaKey &&
-      (e.key === "V" || e.key === "v")
-    ) {
-      e.preventDefault();
-      void clipboardRead()
-        .then((text) => {
-          if (text && surface.ptyId >= 0) terminal.paste(text);
-        })
-        .catch((err) => console.warn("Clipboard read failed:", err));
-      return false;
-    }
-    if (isMac) {
-      if (
-        e.ctrlKey &&
-        !e.metaKey &&
-        !e.shiftKey &&
-        e.key.toLowerCase() === "v"
-      ) {
-        e.preventDefault();
-        if (surface.ptyId >= 0)
-          void invoke("write_pty", { ptyId: surface.ptyId, data: "\x16" });
-        return false;
-      }
-      if (!e.metaKey) return true;
-      const k = e.key.toLowerCase();
-      const shift = e.shiftKey;
-      const alt = e.altKey;
-      if (!alt && !shift && k === "c") {
-        const sel = terminal.getSelection();
-        if (sel) void clipboardWrite(sel);
-        return false;
-      }
-      if (!alt && !shift && k === "v") {
-        e.preventDefault();
-        void clipboardRead()
-          .then((text) => {
-            if (text && surface.ptyId >= 0) terminal.paste(text);
-          })
-          .catch((err) => console.warn("Clipboard read failed:", err));
-        return false;
-      }
-      if (!alt && !shift) {
-        if (["n", "t", "d", "w", "b", "p", "k", "f", "g", "r"].includes(k))
-          return false;
-        if (k === "0" || (k >= "1" && k <= "9")) return false;
-        if (k === "=" || k === "+" || k === "-") return false;
-      }
-      if (shift && !alt) {
-        if (["d", "w", "h", "r", "p", "g", "t"].includes(k)) return false;
-        if (k === "enter") return false;
-        if (k === "[" || k === "]") return false;
-      }
-      if (
-        alt &&
-        ["arrowleft", "arrowright", "arrowup", "arrowdown"].includes(k)
-      )
-        return false;
-    } else {
-      if (!e.ctrlKey || !e.shiftKey) return true;
-      const k = e.key.toLowerCase();
-      const alt = e.altKey;
-      if (!alt) {
-        if (
-          [
-            "n",
-            "t",
-            "d",
-            "e",
-            "w",
-            "q",
-            "b",
-            "p",
-            "k",
-            "f",
-            "g",
-            "h",
-            "r",
-            "~",
-          ].includes(k)
-        )
-          return false;
-        if (k === "0") return false;
-        if (k === "enter") return false;
-        if (k === "[" || k === "]") return false;
-        if (k === "=" || k === "+" || k === "-" || k === "_") return false;
-      }
-    }
-    return true;
-  };
-}
-
-/**
- * Build the OSC 7 handler for `surface`. OSC 7 carries the current working
- * directory as "file://hostname/path"; we strip the scheme and update both
- * `surface.cwd` and the tab title.
- */
-function createOsc7Handler(
-  surface: TerminalSurface,
-): (data: string) => boolean {
-  return (data: string) => {
-    // Mark this pty as OSC-7-capable on the first sequence we see so the
-    // polling fallback can skip it on subsequent ticks. Set entry is
-    // cleared in handlePtyExit when the pty tears down.
-    osc7ReceivedPtys.add(surface.ptyId);
-    let cwd = data;
-    if (cwd.startsWith("file://")) {
-      const rest = cwd.slice(7);
-      const slashIdx = rest.indexOf("/");
-      if (slashIdx >= 0) cwd = rest.slice(slashIdx);
-    }
-    if (cwd === surface.cwd) return true;
-    surface.cwd = cwd;
-    const basename = cwd.split("/").pop() || cwd;
-    const pending = pendingRunningTitles.get(surface.ptyId);
-    if (pending) {
-      clearTimeout(pending);
-      pendingRunningTitles.delete(surface.ptyId);
-    }
-    // A user-set rename wins over OSC-7 derived titles — we never clobber
-    // an explicit `userDefinedTitle` even if the cwd-based heuristic would
-    // otherwise overwrite the active label.
-    if (
-      !surface.userDefinedTitle &&
-      (!surface.title ||
-        surface.title.startsWith("Shell ") ||
-        surface.title.startsWith("Running: ") ||
-        !surface.title.includes(" "))
-    ) {
-      surface.title = basename || "~";
-    }
-    workspaces.update((l) => l);
-    cwdChangeHook?.();
-    return true;
-  };
-}
-
-/**
- * Build and display the right-click context menu for a terminal surface.
- * Includes Copy (when text is selected), Paste, optional path actions, and
- * terminal control items (Clear, Split Right, Split Down).
- */
-function buildTerminalContextMenu(
-  e: MouseEvent,
-  surface: TerminalSurface,
-  terminal: Terminal,
-): void {
-  e.preventDefault();
-  const selection = terminal.getSelection();
-  const items: MenuItem[] = [];
-  if (selection) {
-    items.push({
-      label: "Copy",
-      shortcut: isMac ? "⌘C" : "Ctrl+Shift+C",
-      action: () => clipboardWrite(selection),
-    });
-  }
-  items.push({
-    label: "Paste",
-    shortcut: isMac ? "⌘V" : "Ctrl+Shift+V",
-    action: () =>
-      void clipboardRead().then((t) => {
-        if (t && surface.ptyId >= 0) terminal.paste(t);
-      }),
-  });
-  const pathText = (selection || "").trim();
-  const looksLikePath =
-    pathText &&
-    (pathText.startsWith("/") ||
-      pathText.startsWith("./") ||
-      pathText.startsWith("~/") ||
-      pathText.match(/^[\w.-]+\.[a-z]+$/i));
-  if (looksLikePath) {
-    const resolvePath = () => resolveFilePath(pathText, surface.cwd);
-    items.push({ label: "", action: () => {}, separator: true });
-    items.push({
-      label: "Copy Path",
-      action: async () => clipboardWrite(await resolvePath()),
-    });
-    items.push({
-      label: "Show in File Manager",
-      action: async () =>
-        invoke("show_in_file_manager", { path: await resolvePath() }),
-    });
-    items.push({
-      label: "Open with Default App",
-      action: async () =>
-        invoke("open_with_default_app", { path: await resolvePath() }),
-    });
-  }
-  items.push({ label: "", action: () => {}, separator: true });
-  items.push({
-    label: "Clear Scrollback",
-    shortcut: `${modLabel}K`,
-    action: () => terminal.clear(),
-  });
-  items.push({
-    label: "Refresh Rendering",
-    action: () => clearAllTerminalAtlases(),
-  });
-  items.push({
-    label: "Split Right",
-    shortcut: `${modLabel}D`,
-    action: () => pendingAction.set({ type: "split-right" }),
-  });
-  items.push({
-    label: "Split Down",
-    shortcut: `${shiftModLabel}D`,
-    action: () => pendingAction.set({ type: "split-down" }),
-  });
-  contextMenu.set({ x: e.clientX, y: e.clientY, items });
-}
-
 // --- Surface Creation ---
 
+/**
+ * Create a plain TerminalSurface for the alacritty engine.
+ *
+ * Post-cutover (cycle-21): no xterm.js Terminal object is created. The
+ * surface is a lightweight record; rendering is owned by
+ * AlacrittyTerminalSurface.svelte. The PTY is spawned lazily by
+ * connectPty(), called from AlacrittyTerminalSurface on mount.
+ */
 export async function createTerminalSurface(
   pane: Pane,
   cwd?: string,
   env?: Record<string, string>,
 ): Promise<TerminalSurface> {
-  const ptyId = -1; // PTY spawned later via connectPty() after fit()
-
-  const currentXtermTheme = get(xtermTheme);
-  const config = getConfig();
-
-  const terminal = new Terminal({
-    cursorBlink: true,
-    fontSize: getConfig().fontSize ?? 14,
-    fontFamily: effectiveFontFamily(),
-    theme: currentXtermTheme,
-    allowProposedApi: true,
-    scrollback: config.scrollback ?? 10000,
-    smoothScrollDuration: 0,
-    fastScrollModifier: "alt",
-    vtExtensions: {
-      kittyKeyboard: true,
-    },
-    // Default OSC 8 handler routes through window.confirm, which Tauri
-    // remaps to plugin:dialog|confirm — not granted in capabilities, so
-    // the click rejects silently. We override it to: open the URL in a
-    // preview surface by default; Cmd/Ctrl-click escapes to the system
-    // browser via open_url.
-    linkHandler: {
-      activate(event, text) {
-        if (
-          event.metaKey ||
-          event.ctrlKey ||
-          text.startsWith("http://") ||
-          text.startsWith("https://")
-        ) {
-          void invoke("open_url", { url: text }).catch((err) =>
-            console.warn("[terminal-service] open_url failed:", err),
-          );
-          return;
-        }
-        pendingAction.set({ type: "open-preview", target: text });
-      },
-      // Allow `file://` (and other schemes) through; open_url validates the
-      // final scheme list, so the terminal can hand off any URL it parses.
-      allowNonHttpProtocols: true,
-    },
-  });
-
-  const fitAddon = new FitAddon();
-  const searchAddon = new SearchAddon();
-  terminal.loadAddon(fitAddon);
-  terminal.loadAddon(searchAddon);
-
-  terminal.registerLinkProvider(createUrlLinkProvider(terminal));
-
-  const termElement = document.createElement("div");
-  termElement.style.cssText =
-    "flex: 1; min-height: 0; min-width: 0; padding: 2px 4px;";
-
   const surface: TerminalSurface = {
     kind: "terminal",
     id: uid(),
-    terminal,
-    fitAddon,
-    searchAddon,
-    termElement,
-    ptyId,
+    ptyId: -1,
     title: `Shell ${pane.surfaces.length + 1}`,
     cwd: cwd,
     env: env,
     hasUnread: false,
     opened: false,
   };
-
-  // Cmd+click file path detection — dispatches to context-menu handlers
-  // registered for the file's extension. No preview-specific code here.
-  terminal.registerLinkProvider(createFilePathLinkProvider(surface, terminal));
-
-  // Key handler — intercept Cmd/Ctrl shortcuts, pass everything else to PTY
-  terminal.attachCustomKeyEventHandler(createKeyHandler(surface, terminal));
-
-  terminal.onData((data) => {
-    if (surface.ptyId >= 0)
-      void invoke("write_pty", { ptyId: surface.ptyId, data });
-  });
-  terminal.onResize(({ cols, rows }) => {
-    if (surface.ptyId >= 0)
-      void invoke("resize_pty", { ptyId: surface.ptyId, cols, rows });
-  });
-  terminal.onSelectionChange(() => {
-    if (terminal.hasSelection()) {
-      const text = terminal.getSelection();
-      if (text) void clipboardWrite(text);
-    }
-  });
-  // NOTE: We intentionally do NOT use terminal.onTitleChange() here.
-  // xterm.js fires it with raw/partial escape sequence fragments (OSC 7 cwd data,
-  // bracketed paste mode, etc.) concatenated into the title string. Instead, the
-  // Rust backend parses OSC 0/2 cleanly and emits "pty-title" events (handled in
-  // setupListeners), and OSC 7 cwd is handled by the registerOscHandler below.
-
-  // OSC 7: shell reports cwd (parsed by xterm.js directly)
-  terminal.parser.registerOscHandler(7, createOsc7Handler(surface));
-
-  // Context menu on right-click
-  termElement.addEventListener("contextmenu", (e) =>
-    buildTerminalContextMenu(e, surface, terminal),
-  );
 
   pane.surfaces.push(surface);
   pane.activeSurfaceId = surface.id;
@@ -1190,10 +676,9 @@ const FONT_SIZE_MAX = 32;
 const FONT_SIZE_DEFAULT = 14;
 
 /**
- * Increase or decrease the terminal font size for all currently-mounted
- * terminal surfaces. Persists the new size to config so it survives restarts.
- * Also calls fitAddon.fit() on each terminal to recompute cols/rows for the
- * new character cell size.
+ * Increase or decrease the terminal font size. Persists the new size to
+ * config; AlacrittyTerminalSurface's cell-metrics store picks up the change
+ * automatically via the font-size store subscription.
  */
 export function adjustFontSize(delta: number): void {
   const current = getConfig().fontSize ?? FONT_SIZE_DEFAULT;
@@ -1203,75 +688,6 @@ export function adjustFontSize(delta: number): void {
   );
   if (next === current) return;
   void saveConfig({ fontSize: next });
-  const wsList = get(workspaces);
-  for (const ws of wsList) {
-    for (const s of getAllSurfaces(ws)) {
-      if (isTerminalSurface(s)) {
-        s.terminal.options.fontSize = next;
-        try {
-          s.fitAddon.fit();
-        } catch {
-          // May fail if terminal is not attached to DOM yet — safe to ignore
-        }
-        // WebGL caches glyphs in a texture atlas keyed by font metrics.
-        // Without an explicit invalidation the next render reuses stale
-        // glyphs and the cells overlap into garbled multicolor blocks.
-        try {
-          s.terminal.clearTextureAtlas?.();
-        } catch {
-          // No-op if renderer doesn't support atlas clearing
-        }
-      }
-    }
-  }
-}
-
-/**
- * Push the current effective fontFamily to every mounted terminal. Mirrors
- * adjustFontSize's atlas-invalidation + fit dance so glyph metrics stay in
- * sync. Call after settings persist a new fontFamily.
- */
-export function applyFontFamily(): void {
-  const next = effectiveFontFamily();
-  const wsList = get(workspaces);
-  for (const ws of wsList) {
-    for (const s of getAllSurfaces(ws)) {
-      if (!isTerminalSurface(s)) continue;
-      if (s.terminal.options.fontFamily === next) continue;
-      s.terminal.options.fontFamily = next;
-      try {
-        s.fitAddon.fit();
-      } catch {
-        // May fail if terminal is not attached to DOM yet — safe to ignore
-      }
-      try {
-        s.terminal.clearTextureAtlas?.();
-      } catch {
-        // No-op if renderer doesn't support atlas clearing
-      }
-    }
-  }
-}
-
-/**
- * Clear the WebGL texture atlas on every mounted terminal. Called after the
- * OS resumes from sleep (the GPU context can return with corrupted glyph
- * caches) and on DPR changes. xterm.js's resize path already invalidates the
- * atlas, which is why a manual window resize "fixes" rendering corruption.
- */
-export function clearAllTerminalAtlases(): void {
-  const wsList = get(workspaces);
-  for (const ws of wsList) {
-    for (const s of getAllSurfaces(ws)) {
-      if (isTerminalSurface(s)) {
-        try {
-          s.terminal.clearTextureAtlas?.();
-        } catch {
-          // No-op if renderer doesn't support atlas clearing
-        }
-      }
-    }
-  }
 }
 
 export function resetFontSize(): void {
@@ -1308,8 +724,10 @@ function findContextForSurface(
   return null;
 }
 
-/** Spawn the PTY for a surface. Called after terminal.open() + fit() so the PTY
- *  gets the real terminal dimensions instead of hardcoded 80x24.
+/** Spawn the PTY for a surface. With the alacritty engine, initial dimensions
+ *  default to 80×24; AlacrittyTerminalSurface calls resize_alacritty_engine
+ *  on mount with the actual canvas dimensions, which reflows the engine and
+ *  emits a fresh Snapshot.
  *  Uses surface.cwd as the working directory. The optional cwd parameter is
  *  accepted for backwards compatibility but surface.cwd takes priority.
  *
@@ -1323,8 +741,10 @@ export async function connectPty(
   env?: Record<string, string>,
 ): Promise<void> {
   if (surface.ptyId >= 0) return; // already connected
-  const cols = surface.terminal.cols;
-  const rows = surface.terminal.rows;
+  // Default 80×24: AlacrittyTerminalSurface resizes on mount via the canvas
+  // ResizeObserver, so the initial dimensions are immediately corrected.
+  const cols = 80;
+  const rows = 24;
   const effectiveCwd = surface.cwd || cwd || null;
 
   // Per-pty Channel carries raw output bytes from the Rust reader thread to

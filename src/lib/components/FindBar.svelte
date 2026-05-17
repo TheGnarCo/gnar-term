@@ -4,6 +4,7 @@
   import { findBarVisible } from "../stores/ui";
   import { activeSurface } from "../stores/workspace";
   import { isTerminalSurface } from "../types";
+  import type { SearchQuery } from "./alacritty/search-bridge";
 
   let inputEl: HTMLInputElement;
   let query = "";
@@ -11,18 +12,45 @@
   let caseSensitive = false;
   let wholeWord = false;
 
-  function getSearchAddon() {
+  /**
+   * Retrieve the search handle from the active surface's AlacrittyTerminalSurface.
+   *
+   * AlacrittyTerminalSurface.svelte exposes `searchHandle` as a prop that is
+   * bound back into the TerminalSurface object by PaneView. For now we look for
+   * it on the surface object directly (cycle-21 cutover: xterm search addon is gone).
+   */
+  function getSearchHandle() {
     const s = $activeSurface;
     if (!s || !isTerminalSurface(s)) return null;
-    return s.searchAddon;
+    // searchHandle is wired from AlacrittyTerminalSurface via PaneView bind:
+    return (
+      (s as { searchHandle?: import("./alacritty/search-bridge").SearchHandle })
+        .searchHandle ?? null
+    );
+  }
+
+  function buildQuery(): SearchQuery {
+    return {
+      pattern: query,
+      caseSensitive,
+      wholeWord,
+      regex: regexEnabled,
+    };
   }
 
   function doSearch(direction: "next" | "prev") {
-    const addon = getSearchAddon();
-    if (!addon || !query) return;
-    const opts = { regex: regexEnabled, caseSensitive, wholeWord };
-    if (direction === "next") addon.findNext(query, opts);
-    else addon.findPrevious(query, opts);
+    const handle = getSearchHandle();
+    if (!handle || !query) return;
+    const q = buildQuery();
+    if (direction === "next") {
+      void handle.findNext(q).catch((err) => {
+        console.warn("[FindBar] findNext failed:", err);
+      });
+    } else {
+      void handle.findPrev(q).catch((err) => {
+        console.warn("[FindBar] findPrev failed:", err);
+      });
+    }
   }
 
   function toggleRegex() {
@@ -41,14 +69,22 @@
   }
 
   function close() {
-    const addon = getSearchAddon();
-    if (addon) addon.clearDecorations();
+    const handle = getSearchHandle();
+    if (handle) {
+      void handle.clear().catch(() => {});
+    }
     findBarVisible.set(false);
     regexEnabled = false;
     caseSensitive = false;
     wholeWord = false;
+    // Return focus to the canvas — AlacrittyTerminalSurface is focusable.
     const s = $activeSurface;
-    if (s && isTerminalSurface(s)) s.terminal.focus();
+    if (s && isTerminalSurface(s)) {
+      const el = document.querySelector<HTMLElement>(
+        `[data-pty-id="${s.ptyId}"]`,
+      );
+      el?.focus();
+    }
   }
 
   function handleKeydown(e: KeyboardEvent) {

@@ -389,7 +389,7 @@ export function closeWorkspace(idx: number) {
   }
   for (const surf of getAllSurfaces(ws)) {
     if (isTerminalSurface(surf)) {
-      surf.terminal.dispose();
+      // AlacrittyTerminalSurface handles its own teardown via onDestroy.
       if (surf.ptyId >= 0) {
         // PTY may already have exited — safe to ignore
         invoke("kill_pty", { ptyId: surf.ptyId }).catch(() => {});

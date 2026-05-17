@@ -6,7 +6,6 @@
  * behavioral and API-existence tests are kept here.)
  */
 import { describe, it, expect, vi } from "vitest";
-import type { TerminalSurface } from "../lib/types";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn().mockResolvedValue(undefined),
@@ -94,10 +93,6 @@ describe("workspace runtime service", () => {
             hasUnread: false,
             opened: true,
             ptyId: 1,
-            terminal: {} as unknown as TerminalSurface["terminal"],
-            fitAddon: {} as unknown as TerminalSurface["fitAddon"],
-            searchAddon: {} as unknown as TerminalSurface["searchAddon"],
-            termElement: {} as unknown as TerminalSurface["termElement"],
           },
         ],
         activeSurfaceId: "s1",

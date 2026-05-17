@@ -87,13 +87,6 @@ function mockTerminalSurface(
   return {
     kind: "terminal",
     id: uid(),
-    terminal: {
-      dispose: vi.fn(),
-      focus: vi.fn(),
-    } as unknown as TerminalSurface["terminal"],
-    fitAddon: { fit: vi.fn() } as unknown as TerminalSurface["fitAddon"],
-    searchAddon: {} as unknown as TerminalSurface["searchAddon"],
-    termElement: document.createElement("div"),
     ptyId: 1,
     title: "test",
     hasUnread: false,
@@ -282,7 +275,7 @@ describe("workspace-service", () => {
 
       closeWorkspace(0);
 
-      expect(s.terminal.dispose).toHaveBeenCalled();
+      // Alacritty engine: no terminal.dispose(); PTY cleanup is via kill_pty.
       expect(invoke).toHaveBeenCalledWith("kill_pty", { ptyId: 42 });
     });
 
@@ -1168,7 +1161,7 @@ describe("surface-service", () => {
 
       closeActiveSurface();
 
-      expect(s1.terminal.dispose).toHaveBeenCalled();
+      // Alacritty engine: no terminal.dispose(); PTY cleanup is via kill_pty.
       expect(invoke).toHaveBeenCalledWith("kill_pty", { ptyId: 7 });
     });
 

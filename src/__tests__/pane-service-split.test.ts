@@ -56,13 +56,6 @@ function mockSurface(
   return {
     kind: "terminal",
     id: uid(),
-    terminal: {
-      dispose: vi.fn(),
-      focus: vi.fn(),
-    } as unknown as TerminalSurface["terminal"],
-    fitAddon: { fit: vi.fn() } as unknown as TerminalSurface["fitAddon"],
-    searchAddon: {} as unknown as TerminalSurface["searchAddon"],
-    termElement: document.createElement("div"),
     ptyId: 1,
     title: "test",
     hasUnread: false,
@@ -169,10 +162,7 @@ describe("splitPaneWithSurface — split-from-root", () => {
     expect(paneIds).not.toContain(sourcePane.id);
     expect(paneIds).toContain(targetPane.id);
     expect(panes.length).toBe(2);
-    // The dragged surface lives on (terminal NOT disposed).
-    expect(
-      sA.terminal.dispose as ReturnType<typeof vi.fn>,
-    ).not.toHaveBeenCalled();
+    // The dragged surface lives on in the new pane (no kill_pty on split).
     const newPane = panes.find((p) => p.id !== targetPane.id)!;
     expect(newPane.surfaces.map((s) => s.id)).toEqual([sA.id]);
   });

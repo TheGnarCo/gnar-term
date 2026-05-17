@@ -1,8 +1,13 @@
 /**
  * Tests for the menu-paste router. The native Edit > Paste accelerator
  * preempts the in-terminal keydown handler, so paste must route through
- * this dispatcher to preserve xterm bracketed-paste wrapping for TUIs
+ * this dispatcher to preserve bracketed-paste wrapping for TUIs
  * (Claude Code, vim) while still working in DOM inputs.
+ *
+ * After the alacritty cutover the router:
+ *   - Finds the PTY ID from `data-pty-id` on a canvas ancestor
+ *   - Encodes via PasteHandler.encodePaste() (bracketed paste)
+ *   - Calls write_pty via Tauri invoke
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -12,46 +17,26 @@ vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
   readText: () => clipboardText(),
 }));
 
-const workspacesValue: Array<{ paneLayout: unknown }> = [];
+const invokeWritePty = vi.fn().mockResolvedValue(undefined);
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: (...args: unknown[]) => invokeWritePty(...args),
+}));
+
+// PasteHandler.encodePaste is tested separately; here we just want to verify
+// the routing call is made with the encoded string.
+vi.mock("../lib/components/alacritty/paste-handler", () => ({
+  PasteHandler: class {
+    encodePaste(text: string) {
+      return `\x1b[200~${text}\x1b[201~`;
+    }
+  },
+}));
+
 vi.mock("../lib/stores/workspace", () => ({
   workspaces: { subscribe: vi.fn() },
 }));
-vi.mock("svelte/store", async () => {
-  const actual =
-    await vi.importActual<typeof import("svelte/store")>("svelte/store");
-  return { ...actual, get: () => workspacesValue };
-});
 
 import { handleMenuPaste } from "../lib/services/menu-paste-router";
-
-function makeTerminalSurface(termElement: HTMLElement, ptyId = 1) {
-  const paste = vi.fn();
-  return {
-    paste,
-    surface: {
-      kind: "terminal" as const,
-      id: "s1",
-      terminal: { paste } as unknown as { paste: typeof paste },
-      fitAddon: {} as never,
-      searchAddon: {} as never,
-      termElement,
-      ptyId,
-      title: "t",
-      hasUnread: false,
-      opened: true,
-    },
-  };
-}
-
-function setActiveLayout(surfaces: unknown[]) {
-  workspacesValue.length = 0;
-  workspacesValue.push({
-    paneLayout: {
-      type: "pane",
-      pane: { id: "p1", surfaces, activeSurfaceId: null },
-    },
-  });
-}
 
 function clearBody(): void {
   while (document.body.firstChild) {
@@ -61,35 +46,55 @@ function clearBody(): void {
 
 beforeEach(() => {
   clearBody();
-  workspacesValue.length = 0;
+  invokeWritePty.mockClear();
   clipboardText.mockResolvedValue("hello world");
 });
 
 describe("handleMenuPaste", () => {
-  it("routes to terminal.paste() when focus is inside a terminal surface", async () => {
-    const termEl = document.createElement("div");
-    const innerXterm = document.createElement("textarea");
-    termEl.appendChild(innerXterm);
-    document.body.appendChild(termEl);
-    const { paste, surface } = makeTerminalSurface(termEl);
-    setActiveLayout([surface]);
+  it("routes to terminal via write_pty when focused element has data-pty-id", async () => {
+    const canvas = document.createElement("canvas");
+    canvas.setAttribute("data-pty-id", "3");
+    canvas.tabIndex = 0;
+    document.body.appendChild(canvas);
+    canvas.focus();
 
-    innerXterm.focus();
     await handleMenuPaste();
 
-    expect(paste).toHaveBeenCalledWith("hello world");
+    expect(invokeWritePty).toHaveBeenCalledWith("write_pty", {
+      ptyId: 3,
+      data: "\x1b[200~hello world\x1b[201~",
+    });
+  });
+
+  it("routes to terminal via write_pty when focus is on a child of a data-pty-id element", async () => {
+    const outer = document.createElement("div");
+    outer.setAttribute("data-pty-id", "7");
+    const inner = document.createElement("textarea");
+    outer.appendChild(inner);
+    document.body.appendChild(outer);
+    inner.focus();
+
+    await handleMenuPaste();
+
+    expect(invokeWritePty).toHaveBeenCalledWith("write_pty", {
+      ptyId: 7,
+      data: "\x1b[200~hello world\x1b[201~",
+    });
   });
 
   it("does not paste when terminal ptyId is -1 (unspawned)", async () => {
-    const termEl = document.createElement("div");
-    document.body.appendChild(termEl);
-    const { paste, surface } = makeTerminalSurface(termEl, -1);
-    setActiveLayout([surface]);
-    termEl.tabIndex = -1;
-    termEl.focus();
+    const canvas = document.createElement("canvas");
+    canvas.setAttribute("data-pty-id", "-1");
+    canvas.tabIndex = 0;
+    document.body.appendChild(canvas);
+    canvas.focus();
 
     await handleMenuPaste();
-    expect(paste).not.toHaveBeenCalled();
+
+    expect(invokeWritePty).not.toHaveBeenCalledWith(
+      "write_pty",
+      expect.anything(),
+    );
   });
 
   it("splices text into a focused HTML input at the selection", async () => {

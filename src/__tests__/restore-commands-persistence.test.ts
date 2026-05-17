@@ -22,10 +22,6 @@ function makeSurface(
   return {
     kind: "terminal",
     id: "s1",
-    terminal: {} as unknown as TerminalSurface["terminal"],
-    fitAddon: {} as unknown as TerminalSurface["fitAddon"],
-    searchAddon: {} as unknown as TerminalSurface["searchAddon"],
-    termElement: document.createElement("div"),
     ptyId: 1,
     title: "shell",
     cwd: "/tmp",

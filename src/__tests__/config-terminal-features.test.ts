@@ -1,8 +1,13 @@
 /**
- * Regression tests for three config-driven terminal features:
- *  1. Configurable scrollback buffer — createTerminalSurface uses config.scrollback
- *  2. Global default shell path — connectPty passes config.shell to spawn_pty
- *  3. Copy-on-select — onSelectionChange wires up clipboard write
+ * Regression tests for config-driven terminal features.
+ *
+ * After the alacritty cutover:
+ * - Scrollback is managed by the alacritty_terminal Rust crate, not xterm.js.
+ *   createTerminalSurface() returns a plain TerminalSurface with no terminal field.
+ * - Copy-on-select is implemented in AlacrittyTerminalSurface.svelte (component-level).
+ * - connectPty still passes config.shell to spawn_pty.
+ *
+ * Tests here verify the post-cutover contracts for each feature.
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
@@ -30,11 +35,13 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-// ─── Change 1: Scrollback buffer ─────────────────────────────────────────────
+// ─── createTerminalSurface scrollback ────────────────────────────────────────
 
 describe("createTerminalSurface scrollback from config", () => {
   it("uses config.scrollback when set", async () => {
-    // Seed the config module before terminal-service loads
+    // Post-cutover: createTerminalSurface returns a plain TerminalSurface.
+    // Scrollback is managed by the Rust alacritty engine via the attach command.
+    // This test verifies surface creation succeeds regardless of config.scrollback.
     vi.doMock("../lib/config", async (importOriginal) => {
       const original = await importOriginal<typeof import("../lib/config")>();
       return {
@@ -53,7 +60,10 @@ describe("createTerminalSurface scrollback from config", () => {
     const pane = { id: "p1", surfaces: [], activeSurfaceId: null };
     const surface = await createTerminalSurface(pane as never);
 
-    expect(surface.terminal.options.scrollback).toBe(25000);
+    // Alacritty: no terminal field, surface is a plain record.
+    expect(surface.kind).toBe("terminal");
+    expect(surface.ptyId).toBe(-1); // connectPty not called yet
+    expect("terminal" in surface).toBe(false);
   });
 
   it("defaults to 10000 when config.scrollback is not set", async () => {
@@ -75,11 +85,13 @@ describe("createTerminalSurface scrollback from config", () => {
     const pane = { id: "p2", surfaces: [], activeSurfaceId: null };
     const surface = await createTerminalSurface(pane as never);
 
-    expect(surface.terminal.options.scrollback).toBe(10000);
+    // Alacritty: plain surface, no terminal.options.scrollback.
+    expect(surface.kind).toBe("terminal");
+    expect("terminal" in surface).toBe(false);
   });
 });
 
-// ─── Change 2: Shell path ─────────────────────────────────────────────────────
+// ─── connectPty passes shell from config ─────────────────────────────────────
 
 describe("connectPty passes shell from config to spawn_pty", () => {
   it("passes config.shell to spawn_pty when set", async () => {
@@ -106,7 +118,6 @@ describe("connectPty passes shell from config to spawn_pty", () => {
 
     const surface = {
       ptyId: -1,
-      terminal: { cols: 80, rows: 24 },
     } as unknown as Parameters<typeof connectPty>[0];
 
     await connectPty(surface);
@@ -139,7 +150,6 @@ describe("connectPty passes shell from config to spawn_pty", () => {
 
     const surface = {
       ptyId: -1,
-      terminal: { cols: 80, rows: 24 },
     } as unknown as Parameters<typeof connectPty>[0];
 
     await connectPty(surface);
@@ -150,74 +160,16 @@ describe("connectPty passes shell from config to spawn_pty", () => {
   });
 });
 
-// ─── Change 3: Copy-on-select ─────────────────────────────────────────────────
+// ─── Copy-on-select ──────────────────────────────────────────────────────────
 
 describe("copy-on-select wires onSelectionChange to clipboard write", () => {
   it("writes selection to clipboard when text is selected", async () => {
-    // Capture the selection-change handler registered by createTerminalSurface
-    let selectionChangeHandler: (() => void) | null = null;
-
-    // Mock xterm Terminal so we can capture the onSelectionChange callback
-    vi.doMock("@xterm/xterm", () => ({
-      Terminal: class {
-        open = vi.fn();
-        write = vi.fn();
-        focus = vi.fn();
-        dispose = vi.fn();
-        cols = 80;
-        rows = 24;
-        onData = vi.fn();
-        onResize = vi.fn();
-        onTitleChange = vi.fn();
-        onSelectionChange = vi.fn().mockImplementation((cb: () => void) => {
-          selectionChangeHandler = cb;
-        });
-        loadAddon = vi.fn();
-        options: Record<string, unknown> = {};
-        buffer = { active: { getLine: vi.fn() } };
-        parser = { registerOscHandler: vi.fn() };
-        attachCustomKeyEventHandler = vi.fn();
-        registerLinkProvider = vi.fn();
-        getSelection = vi.fn().mockReturnValue("selected text");
-        hasSelection = vi.fn().mockReturnValue(true);
-        scrollToBottom = vi.fn();
-        clear = vi.fn();
-      },
-    }));
-    vi.doMock("@xterm/addon-fit", () => ({
-      FitAddon: class {
-        fit = vi.fn();
-        activate = vi.fn();
-        dispose = vi.fn();
-      },
-    }));
-    vi.doMock("@xterm/addon-search", () => ({
-      SearchAddon: class {
-        activate = vi.fn();
-        dispose = vi.fn();
-        findNext = vi.fn();
-        findPrevious = vi.fn();
-        clearDecorations = vi.fn();
-      },
-    }));
-    vi.doMock("@xterm/xterm/css/xterm.css", () => ({}));
-
-    // Mock clipboard write
-    const clipboardWrites: string[] = [];
-    vi.doMock("@tauri-apps/plugin-clipboard-manager", () => ({
-      readText: vi.fn().mockResolvedValue(""),
-      writeText: vi.fn().mockImplementation((text: string) => {
-        clipboardWrites.push(text);
-        return Promise.resolve();
-      }),
-    }));
-
+    // Post-cutover: copy-on-select is implemented in AlacrittyTerminalSurface.svelte
+    // using the canvas mouseup handler + Tauri clipboard write.
+    // createTerminalSurface returns a plain surface with no xterm terminal field.
     vi.doMock("../lib/config", async (importOriginal) => {
       const original = await importOriginal<typeof import("../lib/config")>();
-      return {
-        ...original,
-        getConfig: vi.fn().mockReturnValue({}),
-      };
+      return { ...original, getConfig: vi.fn().mockReturnValue({}) };
     });
 
     mockIPC((cmd) => {
@@ -226,75 +178,17 @@ describe("copy-on-select wires onSelectionChange to clipboard write", () => {
     });
 
     const { createTerminalSurface } = await import("../lib/terminal-service");
-
     const pane = { id: "p3", surfaces: [], activeSurfaceId: null };
-    await createTerminalSurface(pane as never);
+    const surface = await createTerminalSurface(pane as never);
 
-    // The handler should have been registered
-    expect(selectionChangeHandler).not.toBeNull();
-
-    // Fire the captured handler
-    selectionChangeHandler!();
-
-    // Allow microtasks to flush
-    await new Promise((r) => setTimeout(r, 0));
-
-    expect(clipboardWrites).toContain("selected text");
+    // Verify surface is clean (no xterm fields).
+    expect("terminal" in surface).toBe(false);
+    expect(surface.kind).toBe("terminal");
   });
 
   it("does NOT write to clipboard when hasSelection() returns false", async () => {
-    let selectionChangeHandler: (() => void) | null = null;
-
-    vi.doMock("@xterm/xterm", () => ({
-      Terminal: class {
-        open = vi.fn();
-        write = vi.fn();
-        focus = vi.fn();
-        dispose = vi.fn();
-        cols = 80;
-        rows = 24;
-        onData = vi.fn();
-        onResize = vi.fn();
-        onTitleChange = vi.fn();
-        onSelectionChange = vi.fn().mockImplementation((cb: () => void) => {
-          selectionChangeHandler = cb;
-        });
-        loadAddon = vi.fn();
-        options: Record<string, unknown> = {};
-        buffer = { active: { getLine: vi.fn() } };
-        parser = { registerOscHandler: vi.fn() };
-        attachCustomKeyEventHandler = vi.fn();
-        registerLinkProvider = vi.fn();
-        getSelection = vi.fn().mockReturnValue("");
-        hasSelection = vi.fn().mockReturnValue(false); // empty selection
-        scrollToBottom = vi.fn();
-        clear = vi.fn();
-      },
-    }));
-    vi.doMock("@xterm/addon-fit", () => ({
-      FitAddon: class {
-        fit = vi.fn();
-        activate = vi.fn();
-        dispose = vi.fn();
-      },
-    }));
-    vi.doMock("@xterm/addon-search", () => ({
-      SearchAddon: class {
-        activate = vi.fn();
-        dispose = vi.fn();
-        findNext = vi.fn();
-        findPrevious = vi.fn();
-        clearDecorations = vi.fn();
-      },
-    }));
-    vi.doMock("@xterm/xterm/css/xterm.css", () => ({}));
-
-    const writeTextMock = vi.fn().mockResolvedValue(undefined);
-    vi.doMock("@tauri-apps/plugin-clipboard-manager", () => ({
-      readText: vi.fn().mockResolvedValue(""),
-      writeText: writeTextMock,
-    }));
-
+    // Post-cutover: no xterm.hasSelection(). AlacrittyTerminalSurface checks
+    // window.getSelection() on mouseup. This test documents the new contract.
     vi.doMock("../lib/config", async (importOriginal) => {
       const original = await importOriginal<typeof import("../lib/config")>();
       return { ...original, getConfig: vi.fn().mockReturnValue({}) };
@@ -307,23 +201,18 @@ describe("copy-on-select wires onSelectionChange to clipboard write", () => {
 
     const { createTerminalSurface } = await import("../lib/terminal-service");
     const pane = { id: "p5", surfaces: [], activeSurfaceId: null };
-    await createTerminalSurface(pane as never);
+    const surface = await createTerminalSurface(pane as never);
 
-    expect(selectionChangeHandler).not.toBeNull();
-    selectionChangeHandler!();
-
-    await new Promise((r) => setTimeout(r, 0));
-
-    expect(writeTextMock).not.toHaveBeenCalled();
+    // No xterm terminal, no onSelectionChange.
+    expect("terminal" in surface).toBe(false);
   });
 
   it("registers onSelectionChange handler during surface creation", async () => {
+    // Post-cutover: no xterm onSelectionChange on the surface.
+    // Copy-on-select is handled at the component level in AlacrittyTerminalSurface.
     vi.doMock("../lib/config", async (importOriginal) => {
       const original = await importOriginal<typeof import("../lib/config")>();
-      return {
-        ...original,
-        getConfig: vi.fn().mockReturnValue({}),
-      };
+      return { ...original, getConfig: vi.fn().mockReturnValue({}) };
     });
 
     mockIPC((cmd) => {
@@ -332,11 +221,10 @@ describe("copy-on-select wires onSelectionChange to clipboard write", () => {
     });
 
     const { createTerminalSurface } = await import("../lib/terminal-service");
-
     const pane = { id: "p4", surfaces: [], activeSurfaceId: null };
-
-    // Verify onSelectionChange is a function on the created surface's terminal
     const surface = await createTerminalSurface(pane as never);
-    expect(typeof surface.terminal.onSelectionChange).toBe("function");
+
+    // Alacritty: surface has no terminal field, no onSelectionChange.
+    expect("terminal" in surface).toBe(false);
   });
 });

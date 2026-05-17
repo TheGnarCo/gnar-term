@@ -35,10 +35,6 @@ function makeTerminalSurface(id: string, ptyId: number) {
   return {
     kind: "terminal" as const,
     id,
-    terminal: {} as never,
-    fitAddon: {} as never,
-    searchAddon: {} as never,
-    termElement: document.createElement("div"),
     ptyId,
     title: id,
     hasUnread: false,

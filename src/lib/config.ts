@@ -261,21 +261,6 @@ export type { RootWorkspace } from "./stores/workspace";
 export { type AgentPreset } from "./agents-config";
 
 export interface GnarTermConfig {
-  /**
-   * Phase 1 feature flag for the Alacritty terminal engine migration.
-   *
-   * - `"xterm"` (default): use the existing xterm.js-backed `TerminalSurface`.
-   *   Absent field is treated as `"xterm"` — existing behavior is fully preserved.
-   * - `"alacritty"`: use the new canvas-backed `AlacrittyTerminalSurface`.
-   *
-   * The value is read from `gnar-term.json` at app launch and remains stable
-   * for the session. Hot-swapping mid-session is NOT supported in Phase 1 —
-   * restart the app after changing this field.
-   *
-   * Do NOT modify Rust code to add this field: `gnar-term.json` is parsed as
-   * untyped JSON on the Rust side; unknown fields are passed through transparently.
-   */
-  terminalEngine?: "xterm" | "alacritty";
   // gnar-term extensions
   theme?: string;
   fontSize?: number;
@@ -544,42 +529,8 @@ export function getMcpSetting(): McpSetting {
   return "auto";
 }
 
-/**
- * Returns the active terminal engine selection from the loaded config.
- *
- * - Returns `"alacritty"` only when `terminalEngine` is explicitly `"alacritty"`.
- * - Returns `"xterm"` for absent, `"xterm"`, or any unrecognised value.
- *   The fallback-to-xterm guard ensures bad config (typo, old schema,
- *   corrupted JSON) never breaks terminal rendering.
- *
- * Phase 1: reloaded at app launch only; no hot-swap mid-session.
- */
-export function getTerminalEngine(): "xterm" | "alacritty" {
-  const v = _config.terminalEngine;
-  if (v === "alacritty") return "alacritty";
-  return "xterm";
-}
-
 export function getWorkspaceCommands(): CommandDef[] {
   return (_config.commands || []).filter((c) => c.workspace);
-}
-
-/**
- * Map the normalized terminal engine selection to the corresponding Svelte
- * component name used in PaneView.
- *
- * Extracted as a pure function so PaneView's dispatch logic can be
- * unit-tested without a DOM or Svelte rendering environment.
- *
- * @returns `"AlacrittyTerminalSurface"` when engine is `"alacritty"`,
- *          `"TerminalSurface"` for `"xterm"` or any other value.
- */
-export function selectTerminalComponent(
-  engine: "xterm" | "alacritty",
-): "TerminalSurface" | "AlacrittyTerminalSurface" {
-  return engine === "alacritty"
-    ? "AlacrittyTerminalSurface"
-    : "TerminalSurface";
 }
 
 // --- Runtime state ---

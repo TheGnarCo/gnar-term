@@ -4,22 +4,28 @@
    *
    * At runtime an SSH surface IS a TerminalSurface: the PTY process is
    * the system `ssh` binary launched with the persisted SshSurfaceConfig
-   * args. This component delegates to TerminalSurface for all rendering
-   * and PTY plumbing; its role is to match the SurfaceTypeDef.component
+   * args. This component delegates to AlacrittyTerminalSurface for all
+   * rendering and PTY plumbing; its role is to match the SurfaceTypeDef.component
    * slot in the registry (for future UI decoration — connection status,
    * re-connect affordance, etc.).
-   *
-   * Props mirror TerminalSurface's signature so PaneView can render it
-   * without special-casing.
    */
-  import TerminalSurface from "../components/TerminalSurface.svelte";
+  import AlacrittyTerminalSurface from "../components/AlacrittyTerminalSurface.svelte";
   import type { TerminalSurface as TermSurface } from "../types";
   import type { SshSurfaceConfig } from "./ssh-surface";
 
   export let surface: TermSurface & { sshConfig?: SshSurfaceConfig };
-  export let visible: boolean;
+  // visible / cwd / userScrolledUp are accepted for interface compatibility
+  // with PaneView but not forwarded (AlacrittyTerminalSurface manages its own
+  // visibility and cwd via PTY events).
+  export let visible: boolean = true;
   export let cwd: string | undefined = undefined;
   export let userScrolledUp = false;
+
+  // Silence unused-prop warnings — these are accepted for prop-interface
+  // compatibility but not needed by AlacrittyTerminalSurface.
+  void visible;
+  void cwd;
+  void userScrolledUp;
 </script>
 
-<TerminalSurface {surface} {visible} {cwd} bind:userScrolledUp />
+<AlacrittyTerminalSurface ptyId={surface.ptyId} paneId={surface.id} />

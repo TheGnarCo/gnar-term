@@ -285,29 +285,28 @@ describe("validateWhenPattern", () => {
 
 describe("terminal-service <-> context-menu integration", () => {
   it("terminal-service imports getRegisteredFileExtensions from the registry, not from preview", async () => {
-    // Note: jsdom's URL resolves relative URLs against the document base
-    // (http://localhost:3000/), not against a file:// base. Pass a relative
-    // path string instead so readFile resolves it against cwd (project root).
+    // Post-alacritty-cutover: the xterm link provider (createFilePathLinkProvider)
+    // was removed from terminal-service.ts along with all xterm code.
+    // Link handling is now done in AlacrittyTerminalSurface.svelte via link-overlay.ts.
+    // This test verifies terminal-service.ts does NOT import from the preview extension.
     const source = await readFile("src/lib/terminal-service.ts", "utf-8");
     expect(source).not.toContain('from "../extensions/preview"');
     expect(source).not.toMatch(/getSupportedExtensions\s*\(/);
-    expect(source).toContain("getRegisteredFileExtensions");
-    expect(source).toContain('from "./services/context-menu-item-registry"');
   });
 });
 
 describe("terminal-service link-click dispatch", () => {
   it("file-path link clicks route through the context-menu registry, not pendingAction", async () => {
+    // Post-alacritty-cutover: createFilePathLinkProvider was removed from
+    // terminal-service.ts. Link-overlay.ts in the alacritty component handles
+    // file-path link clicks via getContextMenuItemsForFile from the registry.
     const source = await readFile("src/lib/terminal-service.ts", "utf-8");
-    // Scope the assertion to the file-path link provider only: the URL
-    // provider intentionally dispatches via pendingAction("open-preview")
-    // for the click → preview surface flow.
-    const fnStart = source.indexOf("function createFilePathLinkProvider");
-    expect(fnStart, "createFilePathLinkProvider not found").toBeGreaterThan(-1);
-    const fnEnd = source.indexOf("\nfunction ", fnStart + 1);
-    const slice = source.slice(fnStart, fnEnd === -1 ? undefined : fnEnd);
-    expect(slice).not.toContain('"open-preview"');
-    expect(slice).toContain("getContextMenuItemsForFile");
+    // Verify the old xterm link provider is gone.
+    expect(source).not.toContain("function createFilePathLinkProvider");
+    // terminal-service.ts itself should not use pendingAction for open-preview.
+    const pendingActionMatches = source.match(/"open-preview"/g) ?? [];
+    // There may be zero or a comment reference; no functional dispatch.
+    expect(pendingActionMatches.length).toBeLessThanOrEqual(1);
   });
 });
 

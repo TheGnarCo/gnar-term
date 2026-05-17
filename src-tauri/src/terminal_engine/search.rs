@@ -295,7 +295,7 @@ mod tests {
 
     // ─── Case-sensitive literal ────────────────────────────────────────────
 
-    /// AC-1: regex_search finds a case-sensitive literal on the same row.
+    /// AC-1: `regex_search` finds a case-sensitive literal on the same row.
     #[test]
     fn regex_search_finds_case_sensitive_literal() {
         let term = mock_term("Hello World");
@@ -308,7 +308,7 @@ mod tests {
         assert_eq!(m.end_col, 10);
     }
 
-    /// AC-1: regex_search does NOT find when case differs and case_sensitive = true.
+    /// AC-1: `regex_search` does NOT find when case differs and `case_sensitive` = true.
     #[test]
     fn regex_search_case_sensitive_no_match_on_wrong_case() {
         let term = mock_term("Hello World");
@@ -322,7 +322,7 @@ mod tests {
 
     // ─── Case-insensitive literal ──────────────────────────────────────────
 
-    /// AC-1: regex_search finds match case-insensitively when case_sensitive = false.
+    /// AC-1: `regex_search` finds match case-insensitively when `case_sensitive` = false.
     #[test]
     fn regex_search_finds_case_insensitive_literal() {
         let term = mock_term("Hello World");
@@ -335,7 +335,7 @@ mod tests {
 
     // ─── Whole-word ───────────────────────────────────────────────────────
 
-    /// AC-1: regex_search whole_word matches an isolated word.
+    /// AC-1: `regex_search` `whole_word` matches an isolated word.
     #[test]
     fn regex_search_whole_word_matches_isolated_word() {
         let term = mock_term("foo bar baz");
@@ -346,7 +346,7 @@ mod tests {
         assert_eq!(m.end_col, 6);
     }
 
-    /// AC-1: regex_search whole_word does NOT match a substring.
+    /// AC-1: `regex_search` `whole_word` does NOT match a substring.
     #[test]
     fn regex_search_whole_word_no_match_for_substring() {
         let term = mock_term("foobar baz");
@@ -360,7 +360,7 @@ mod tests {
 
     // ─── Regex mode ───────────────────────────────────────────────────────
 
-    /// AC-1: regex_search in regex mode matches a real regex pattern.
+    /// AC-1: `regex_search` in regex mode matches a real regex pattern.
     #[test]
     fn regex_search_regex_mode_matches_pattern() {
         let term = mock_term("error: code 42");
@@ -374,7 +374,7 @@ mod tests {
 
     // ─── Literal escaping ─────────────────────────────────────────────────
 
-    /// AC-1: regex_search escapes literal metacharacters (e.g. `.*`).
+    /// AC-1: `regex_search` escapes literal metacharacters (e.g. `.*`).
     ///
     /// In literal mode, ".*" should match the exact characters `.*`, not any
     /// sequence of characters as a regex would.
@@ -391,7 +391,7 @@ mod tests {
 
     // ─── No match ────────────────────────────────────────────────────────
 
-    /// AC-1: regex_search find_next returns None when pattern not present.
+    /// AC-1: `regex_search` `find_next` returns None when pattern not present.
     #[test]
     fn regex_search_find_next_returns_none_when_no_match() {
         let term = mock_term("Hello World");
@@ -402,7 +402,7 @@ mod tests {
 
     // ─── find_prev ────────────────────────────────────────────────────────
 
-    /// AC-1: regex_search find_prev locates a match searching backwards.
+    /// AC-1: `regex_search` `find_prev` locates a match searching backwards.
     #[test]
     fn regex_search_find_prev_locates_match_searching_backwards() {
         // Two-line term: "abc\ndef" (mock_term uses \n for unwrapped line breaks)
@@ -417,7 +417,7 @@ mod tests {
         assert_eq!(m.start_col, 0);
     }
 
-    /// AC-1: regex_search find_prev returns None when no prior match exists.
+    /// AC-1: `regex_search` `find_prev` returns None when no prior match exists.
     #[test]
     fn regex_search_find_prev_returns_none_when_no_match() {
         let term = mock_term("Hello World");

@@ -1,7 +1,7 @@
 //! Tests for `selection.rs` — AC-2 selection + clipboard parity.
 //!
 //! Each test name contains at least one AC-2 keyword ("selection", "Selection",
-//! or "copy_on_selection_change") so `verify-envelope.sh` can confirm coverage.
+//! or "`copy_on_selection_change`") so `verify-envelope.sh` can confirm coverage.
 
 #[cfg(test)]
 mod tests {

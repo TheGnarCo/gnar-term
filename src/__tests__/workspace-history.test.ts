@@ -25,55 +25,6 @@ vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
   writeText: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("@xterm/xterm", () => ({
-  Terminal: class {
-    open = vi.fn();
-    write = vi.fn();
-    focus = vi.fn();
-    dispose = vi.fn();
-    cols = 80;
-    rows = 24;
-    onData = vi.fn();
-    onResize = vi.fn();
-    onTitleChange = vi.fn();
-    loadAddon = vi.fn();
-    options: Record<string, unknown> = {};
-    buffer = { active: { getLine: vi.fn() } };
-    parser = { registerOscHandler: vi.fn() };
-    attachCustomKeyEventHandler = vi.fn();
-    registerLinkProvider = vi.fn();
-    getSelection = vi.fn().mockReturnValue("");
-    hasSelection = vi.fn().mockReturnValue(false);
-    onSelectionChange = vi.fn();
-    scrollToBottom = vi.fn();
-    onScroll = vi.fn().mockReturnValue({ dispose: vi.fn() });
-  },
-}));
-vi.mock("@xterm/addon-fit", () => ({
-  FitAddon: class {
-    fit = vi.fn();
-    activate = vi.fn();
-    dispose = vi.fn();
-  },
-}));
-vi.mock("@xterm/addon-webgl", () => ({
-  WebglAddon: class {
-    activate = vi.fn();
-    dispose = vi.fn();
-    onContextLoss = vi.fn();
-  },
-}));
-vi.mock("@xterm/addon-search", () => ({
-  SearchAddon: class {
-    activate = vi.fn();
-    dispose = vi.fn();
-    findNext = vi.fn();
-    findPrevious = vi.fn();
-    clearDecorations = vi.fn();
-  },
-}));
-vi.mock("@xterm/xterm/css/xterm.css", () => ({}));
-
 vi.mock("../lib/config", () => ({
   getConfig: vi.fn(() => ({})),
   saveConfig: vi.fn().mockResolvedValue(undefined),

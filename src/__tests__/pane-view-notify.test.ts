@@ -40,21 +40,6 @@ function makeTerminalSurface(id: string, hasUnread: boolean): TerminalSurface {
     hasUnread,
     opened: false,
     notification: hasUnread ? "test notification" : undefined,
-    // Stub fields the component reads but that we don't drive in this test
-    terminal: {
-      options: {},
-      open: vi.fn(),
-      loadAddon: vi.fn(),
-      onData: vi.fn(),
-      write: vi.fn(),
-      dispose: vi.fn(),
-      onScroll: vi.fn().mockReturnValue({ dispose: vi.fn() }),
-      buffer: { active: { getLine: vi.fn(), length: 0 } },
-      rows: 24,
-    } as unknown as TerminalSurface["terminal"],
-    fitAddon: { fit: vi.fn() } as unknown as TerminalSurface["fitAddon"],
-    searchAddon: {} as unknown as TerminalSurface["searchAddon"],
-    termElement: document.createElement("div"),
   } as TerminalSurface;
 }
 

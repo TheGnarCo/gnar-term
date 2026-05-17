@@ -109,7 +109,7 @@ function removeSurface(ws: Workspace, pane: Pane, surfaceIdx: number) {
   const surfaceId = surface.id;
   const paneId = pane.id;
   if (isTerminalSurface(surface)) {
-    surface.terminal.dispose();
+    // AlacrittyTerminalSurface handles its own teardown via onDestroy.
     if (surface.ptyId >= 0) {
       // PTY may already have exited — safe to ignore
       invoke("kill_pty", { ptyId: surface.ptyId }).catch(() => {});

@@ -1536,10 +1536,6 @@ describe("MCP — spawn_agent worktree flag", () => {
         {
           kind: "terminal",
           id: "host-surf",
-          terminal: {} as any,
-          fitAddon: {} as any,
-          searchAddon: {} as any,
-          termElement: document.createElement("div"),
           ptyId: 1,
           title: "shell",
           cwd: "/work/derived-repo",

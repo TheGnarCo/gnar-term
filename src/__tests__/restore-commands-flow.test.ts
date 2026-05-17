@@ -22,55 +22,6 @@ vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
   readText: vi.fn().mockResolvedValue(""),
   writeText: vi.fn().mockResolvedValue(undefined),
 }));
-vi.mock("@xterm/xterm", () => ({
-  Terminal: class {
-    open = vi.fn();
-    write = vi.fn();
-    focus = vi.fn();
-    dispose = vi.fn();
-    cols = 80;
-    rows = 24;
-    onData = vi.fn();
-    onResize = vi.fn();
-    onTitleChange = vi.fn();
-    loadAddon = vi.fn();
-    options: Record<string, unknown> = {};
-    buffer = { active: { getLine: vi.fn(), length: 0 } };
-    parser = { registerOscHandler: vi.fn() };
-    attachCustomKeyEventHandler = vi.fn();
-    registerLinkProvider = vi.fn();
-    getSelection = vi.fn();
-    hasSelection = vi.fn().mockReturnValue(false);
-    onSelectionChange = vi.fn();
-    scrollToBottom = vi.fn();
-    clear = vi.fn();
-    onScroll = vi.fn().mockReturnValue({ dispose: vi.fn() });
-  },
-}));
-vi.mock("@xterm/addon-fit", () => ({
-  FitAddon: class {
-    fit = vi.fn();
-    activate = vi.fn();
-    dispose = vi.fn();
-  },
-}));
-vi.mock("@xterm/addon-webgl", () => ({
-  WebglAddon: class {
-    activate = vi.fn();
-    dispose = vi.fn();
-    onContextLoss = vi.fn();
-  },
-}));
-vi.mock("@xterm/addon-search", () => ({
-  SearchAddon: class {
-    activate = vi.fn();
-    dispose = vi.fn();
-    findNext = vi.fn();
-    findPrevious = vi.fn();
-    clearDecorations = vi.fn();
-  },
-}));
-vi.mock("@xterm/xterm/css/xterm.css", () => ({}));
 
 vi.stubGlobal("localStorage", {
   getItem: vi.fn().mockReturnValue(null),
@@ -197,10 +148,6 @@ describe("runDefinedCommand / dismissDefinedCommand", () => {
     return {
       kind: "terminal",
       id: "s1",
-      terminal: {} as unknown as TerminalSurface["terminal"],
-      fitAddon: {} as unknown as TerminalSurface["fitAddon"],
-      searchAddon: {} as unknown as TerminalSurface["searchAddon"],
-      termElement: document.createElement("div"),
       ptyId: 42,
       title: "shell",
       hasUnread: false,
@@ -276,10 +223,6 @@ describe("RestoreCommandPrompt", () => {
     return {
       kind: "terminal",
       id: "s1",
-      terminal: {} as unknown as TerminalSurface["terminal"],
-      fitAddon: {} as unknown as TerminalSurface["fitAddon"],
-      searchAddon: {} as unknown as TerminalSurface["searchAddon"],
-      termElement: document.createElement("div"),
       ptyId: 7,
       title: "shell",
       hasUnread: false,
@@ -323,10 +266,6 @@ describe("RestoreCommandsOverlay", () => {
     const a: TerminalSurface = {
       kind: "terminal",
       id: "sa",
-      terminal: {} as unknown as TerminalSurface["terminal"],
-      fitAddon: {} as unknown as TerminalSurface["fitAddon"],
-      searchAddon: {} as unknown as TerminalSurface["searchAddon"],
-      termElement: document.createElement("div"),
       ptyId: 11,
       title: "a",
       hasUnread: false,
@@ -337,10 +276,6 @@ describe("RestoreCommandsOverlay", () => {
     const b: TerminalSurface = {
       kind: "terminal",
       id: "sb",
-      terminal: {} as unknown as TerminalSurface["terminal"],
-      fitAddon: {} as unknown as TerminalSurface["fitAddon"],
-      searchAddon: {} as unknown as TerminalSurface["searchAddon"],
-      termElement: document.createElement("div"),
       ptyId: 22,
       title: "b",
       hasUnread: false,

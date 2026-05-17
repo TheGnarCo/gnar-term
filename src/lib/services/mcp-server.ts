@@ -373,14 +373,7 @@ function removeSurfaceFromPane(paneId: string, surfaceId: string): void {
         if (pane.id !== paneId) continue;
         const idx = pane.surfaces.findIndex((s) => s.id === surfaceId);
         if (idx < 0) continue;
-        const surface = pane.surfaces[idx]!;
-        if (isTerminalSurface(surface)) {
-          try {
-            surface.terminal.dispose();
-          } catch {
-            /* ignore */
-          }
-        }
+        // AlacrittyTerminalSurface handles its own teardown via onDestroy.
         pane.surfaces.splice(idx, 1);
         if (pane.surfaces.length === 0) {
           pane.activeSurfaceId = null;

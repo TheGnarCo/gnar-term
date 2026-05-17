@@ -313,7 +313,10 @@ pub fn run() {
             alacritty_commands::attach_alacritty_engine,
             alacritty_commands::feed_alacritty_engine,
             alacritty_commands::resize_alacritty_engine,
-            alacritty_commands::detach_alacritty_engine
+            alacritty_commands::detach_alacritty_engine,
+            terminal_engine::search::search_find_next,
+            terminal_engine::search::search_find_prev,
+            terminal_engine::search::search_clear
         ])
         .setup(|app| {
             // Set window title from CLI --title flag

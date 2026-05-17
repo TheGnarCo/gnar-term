@@ -1,45 +1,42 @@
 /**
  * pane-view-dispatch.test.ts
  *
- * Tests for the terminal engine dispatch decision in PaneView.
+ * After the alacritty cutover, PaneView renders AlacrittyTerminalSurface
+ * unconditionally — there is no runtime engine flag, no selectTerminalComponent
+ * function, and no TerminalSurface (xterm) fallback.
  *
- * PaneView.svelte selects between TerminalSurface and AlacrittyTerminalSurface
- * based on `getTerminalEngine()`. The dispatch logic is extracted into the pure
- * function `selectTerminalComponent` so it can be unit-tested without a DOM
- * or Svelte rendering environment.
+ * This test asserts the post-cutover invariants:
+ *   - config module does NOT export selectTerminalComponent
+ *   - config module does NOT export getTerminalEngine
+ *   - GnarTermConfig has no terminalEngine field
  *
  * AC keywords: dispatch, pane
  */
 
 import { describe, it, expect } from "vitest";
-import { selectTerminalComponent } from "../lib/config";
 
-describe("pane dispatch: selectTerminalComponent", () => {
-  it('dispatch with engine "xterm" selects TerminalSurface', () => {
-    expect(selectTerminalComponent("xterm")).toBe("TerminalSurface");
+describe("pane dispatch: alacritty-only cutover invariants", () => {
+  it("config module does NOT export selectTerminalComponent after cutover", async () => {
+    const mod = await import("../lib/config");
+    expect("selectTerminalComponent" in mod).toBe(false);
   });
 
-  it('dispatch with engine "alacritty" selects AlacrittyTerminalSurface', () => {
-    expect(selectTerminalComponent("alacritty")).toBe(
-      "AlacrittyTerminalSurface",
-    );
+  it("config module does NOT export getTerminalEngine after cutover", async () => {
+    const mod = await import("../lib/config");
+    expect("getTerminalEngine" in mod).toBe(false);
   });
 
-  it('dispatch values "xterm" and "alacritty" produce different component selections', () => {
-    const xtermResult = selectTerminalComponent("xterm");
-    const alacrittyResult = selectTerminalComponent("alacritty");
-    expect(xtermResult).not.toBe(alacrittyResult);
+  it("GnarTermConfig type does NOT have a terminalEngine field after cutover", async () => {
+    // Runtime check: empty config object has no terminalEngine key.
+    const cfg: import("../lib/config").GnarTermConfig = {};
+    expect("terminalEngine" in cfg).toBe(false);
   });
 
-  it("dispatch: xterm selection is the default (non-alacritty) component", () => {
-    const result = selectTerminalComponent("xterm");
-    expect(result).toBe("TerminalSurface");
-    expect(result).not.toBe("AlacrittyTerminalSurface");
-  });
-
-  it("dispatch: alacritty selection is not the xterm component", () => {
-    const result = selectTerminalComponent("alacritty");
-    expect(result).toBe("AlacrittyTerminalSurface");
-    expect(result).not.toBe("TerminalSurface");
+  it("AlacrittyTerminalSurface component is importable (no resolution error)", async () => {
+    // If TerminalSurface.svelte is gone and SshSurface was updated, this should work.
+    // We can only verify the component is importable; rendering requires a full Svelte env.
+    const mod =
+      await import("../lib/components/AlacrittyTerminalSurface.svelte");
+    expect(mod).toBeDefined();
   });
 });

@@ -81,13 +81,3 @@ function createThemeStore() {
 }
 
 export const theme = createThemeStore();
-
-export const xtermTheme = derived(theme, ($theme) => ({
-  background: $theme.termBg,
-  foreground: $theme.termFg,
-  cursor: $theme.termCursor,
-  cursorAccent: $theme.termBg,
-  selectionBackground: $theme.termSelection,
-  selectionForeground: $theme.termFg,
-  ...$theme.ansi,
-}));

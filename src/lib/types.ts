@@ -1,6 +1,3 @@
-import type { Terminal } from "@xterm/xterm";
-import type { FitAddon } from "@xterm/addon-fit";
-import type { SearchAddon } from "@xterm/addon-search";
 import type { AgentType } from "./services/agent-type";
 
 let _id = 0;
@@ -133,10 +130,10 @@ export function isBranchedWorkspace(ws: Workspace): ws is BranchedWorkspace {
 export interface TerminalSurface {
   kind: "terminal";
   id: string;
-  terminal: Terminal;
-  fitAddon: FitAddon;
-  searchAddon: SearchAddon;
-  termElement: HTMLElement;
+  /**
+   * PTY identifier. -1 until connectPty() resolves. Used to route IPC writes,
+   * flow-control pause/resume, and CWD polling.
+   */
   ptyId: number;
   title: string;
   cwd?: string;

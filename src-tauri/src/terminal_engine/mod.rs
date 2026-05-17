@@ -4,6 +4,7 @@
 
 pub mod alacritty;
 pub mod ipc;
+pub mod osc7;
 pub mod pty_bridge;
 pub mod search;
 pub mod selection;

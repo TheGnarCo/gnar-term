@@ -100,18 +100,26 @@ describe("safeFocus", () => {
     expect(mockedTick).not.toHaveBeenCalled();
   });
 
-  it("calls tick then terminal.focus for terminal surface", async () => {
+  it("calls tick then focuses the canvas element with data-pty-id for terminal surface", async () => {
     const { safeFocus } = await import("../lib/services/service-helpers");
-    const focus = vi.fn();
+
+    // Create a canvas element with data-pty-id as AlacrittyTerminalSurface does.
+    const canvas = document.createElement("canvas");
+    canvas.setAttribute("data-pty-id", "5");
+    const focusSpy = vi.spyOn(canvas, "focus");
+    document.body.appendChild(canvas);
+
     const termSurface = {
       kind: "terminal",
       id: "t1",
-      terminal: { focus },
+      ptyId: 5,
     } as unknown as Surface;
 
     await safeFocus(termSurface);
     expect(mockedTick).toHaveBeenCalled();
-    expect(focus).toHaveBeenCalled();
+    expect(focusSpy).toHaveBeenCalled();
+
+    document.body.removeChild(canvas);
   });
 });
 

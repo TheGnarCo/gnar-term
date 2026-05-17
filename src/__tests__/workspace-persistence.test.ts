@@ -228,11 +228,6 @@ describe("workspace persistence", () => {
           {
             kind: "terminal" as const,
             id: "s1",
-            terminal: {} as unknown as import("@xterm/xterm").Terminal,
-            fitAddon: {} as unknown as import("@xterm/addon-fit").FitAddon,
-            searchAddon:
-              {} as unknown as import("@xterm/addon-search").SearchAddon,
-            termElement: document.createElement("div"),
             ptyId: 1,
             title: "my-shell",
             cwd: "/home/user",

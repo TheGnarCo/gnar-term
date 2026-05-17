@@ -7,7 +7,6 @@
     activateExtension,
     deactivateExtension,
   } from "../services/extension-loader";
-  import { applyFontFamily } from "../terminal-service";
   import {
     installExtensionFromPath,
     uninstallExtension,
@@ -179,7 +178,8 @@
       scrollback,
       shell: shell || undefined,
     });
-    applyFontFamily();
+    // cell-metrics.ts in AlacrittyTerminalSurface handles font-family changes
+    // automatically via the config store subscription — no explicit call needed.
 
     const cfg = getConfig();
     const extensions = { ...cfg.extensions };

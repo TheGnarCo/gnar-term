@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from "svelte";
   import { listen } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";
-  import { theme, themes, xtermTheme } from "./lib/stores/theme";
+  import { theme, themes } from "./lib/stores/theme";
   import { fontSize, setFontSizeFromConfig } from "./lib/stores/font-size";
   import {
     isFullscreen,
@@ -46,10 +46,8 @@
     shiftModLabel,
     adjustFontSize,
     resetFontSize,
-    clearAllTerminalAtlases,
   } from "./lib/terminal-service";
   import { getAllPanes, getAllSurfaces, isTerminalSurface } from "./lib/types";
-  import { forEachTerminalSurface } from "./lib/services/service-helpers";
   import { check } from "@tauri-apps/plugin-updater";
   import { relaunch } from "@tauri-apps/plugin-process";
   import { ask, message } from "@tauri-apps/plugin-dialog";
@@ -227,9 +225,8 @@
   function applyTheme(id: string) {
     const previousId = get(theme.id);
     theme.set(id);
-    forEachTerminalSurface((s) => {
-      s.terminal.options.theme = $xtermTheme;
-    });
+    // theme-bridge.ts in AlacrittyTerminalSurface subscribes to the theme store
+    // and updates the renderer palette automatically — no manual propagation needed.
     eventBus.emit({ type: "theme:changed", id, previousId });
     void saveConfig({ theme: id });
   }
@@ -388,7 +385,13 @@
       shortcut: isMac ? `${modLabel}K` : `${shiftModLabel}K`,
       action: () => {
         const s = $activeSurface;
-        if (s && isTerminalSurface(s)) s.terminal.clear();
+        if (s && isTerminalSurface(s) && s.ptyId >= 0) {
+          // Send Ctrl+L to clear the screen (universal terminal clear).
+          void invoke("write_pty", {
+            ptyId: s.ptyId,
+            data: new Uint8Array([0x0c]),
+          }).catch(() => {});
+        }
       },
       source: "core",
     },
@@ -630,23 +633,9 @@
       })
       .catch((e) => console.warn("[drag-drop] init failed:", e));
 
-    // OS sleep/resume and long-running sessions can return the GPU context
-    // with a corrupted texture atlas — visible as garbled multi-color glyphs
-    // that "fix themselves" when the user resizes the window (resize is the
-    // only path that currently invalidates the atlas). Clear on every
-    // visibility regain AND on window focus regain so alt-tabbing across
-    // apps on the same desktop (which doesn't fire visibilitychange) also
-    // recovers without a manual resize.
-    const onVisibility = () => {
-      if (document.visibilityState === "visible") clearAllTerminalAtlases();
-    };
-    const onWindowFocus = () => clearAllTerminalAtlases();
-    document.addEventListener("visibilitychange", onVisibility);
-    window.addEventListener("focus", onWindowFocus);
-    _cleanupVisibilityRecover = () => {
-      document.removeEventListener("visibilitychange", onVisibility);
-      window.removeEventListener("focus", onWindowFocus);
-    };
+    // AlacrittyTerminalSurface uses canvas-2d — no WebGL texture atlas to
+    // clear on visibility/focus changes. The slot is kept for future use.
+    _cleanupVisibilityRecover = () => {};
     await fontReady;
     void setupListeners();
     startCwdPolling();
@@ -688,21 +677,10 @@
     // subsequent user-triggered zoom propagates to every live terminal,
     // refits the pty, and persists. The first emission is the loaded
     // value — apply but don't persist (prevents a write-on-startup).
+    // cell-metrics.ts in AlacrittyTerminalSurface subscribes to the font-size
+    // store and rebuilds cell dimensions + renderer automatically.
     let fontSizeInitialEmission = true;
     fontSize.subscribe((size) => {
-      forEachTerminalSurface((s) => {
-        s.terminal.options.fontSize = size;
-        try {
-          s.fitAddon?.fit();
-        } catch {
-          // fit throws if the terminal isn't opened yet; ignored.
-        }
-        try {
-          s.terminal.clearTextureAtlas?.();
-        } catch {
-          // No-op if renderer doesn't support atlas clearing
-        }
-      });
       if (fontSizeInitialEmission) {
         fontSizeInitialEmission = false;
         return;
@@ -866,17 +844,7 @@
 
     void appWindow.onFocusChanged((focused) => {
       if (!focused) return;
-      for (const ws of get(workspaces)) {
-        for (const s of getAllSurfaces(ws)) {
-          if (isTerminalSurface(s) && s.opened) {
-            try {
-              s.fitAddon.fit();
-            } catch {
-              // detached terminal — ignore
-            }
-          }
-        }
-      }
+      // AlacrittyTerminalSurface manages its own resize via ResizeObserver.
       // Re-sweep workspace root paths on focus — picks up directories
       // that were renamed in Finder/`mv` while gnar-term was unfocused.
       void validateWorkspaceRootPaths();

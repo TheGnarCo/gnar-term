@@ -16,7 +16,6 @@ vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn().mockResolvedValue(vi.fn()),
 }));
 
-const terminalClear = vi.fn();
 const isTerminalSurfaceMock = vi.fn().mockReturnValue(true);
 
 vi.mock("../lib/types", async (importOriginal) => {
@@ -96,11 +95,12 @@ function mkEvent(opts: {
 }
 
 describe("keyboard-shortcuts — clear + find bindings", () => {
+  let invokedMock: ReturnType<typeof vi.fn>;
+
   beforeEach(async () => {
-    terminalClear.mockClear();
     isTerminalSurfaceMock.mockReturnValue(true);
     const { workspace } = await loadModule();
-    // Seed activeSurface with a fake terminal surface.
+    // Seed activeSurface with a fake terminal surface (alacritty: no terminal field).
     workspace.workspaces.set([
       {
         id: "ws",
@@ -112,9 +112,11 @@ describe("keyboard-shortcuts — clear + find bindings", () => {
             surfaces: [
               {
                 id: "s",
-                type: "terminal",
+                kind: "terminal",
                 title: "t",
-                terminal: { clear: terminalClear } as never,
+                ptyId: 99,
+                hasUnread: false,
+                opened: true,
               } as never,
             ],
             activeSurfaceId: "s",
@@ -124,6 +126,9 @@ describe("keyboard-shortcuts — clear + find bindings", () => {
       } as never,
     ]);
     workspace.activeWorkspaceIdx.set(0);
+    const { invoke: freshInvoke } = await import("@tauri-apps/api/core");
+    invokedMock = vi.mocked(freshInvoke);
+    invokedMock.mockClear();
   });
 
   describe("macOS platform", () => {
@@ -131,10 +136,13 @@ describe("keyboard-shortcuts — clear + find bindings", () => {
       mockIsMac = true;
     });
 
-    it("⌘K clears the focused terminal", async () => {
+    it("⌘K clears the focused terminal via write_pty Ctrl+L", async () => {
       const { shortcuts } = await loadModule();
       shortcuts.handleAppKeydown(mkEvent({ key: "k", meta: true }), ctx);
-      expect(terminalClear).toHaveBeenCalledOnce();
+      expect(invokedMock).toHaveBeenCalledWith("write_pty", {
+        ptyId: 99,
+        data: new Uint8Array([0x0c]),
+      });
     });
 
     it("⌘F toggles findBarVisible", async () => {
@@ -153,11 +161,15 @@ describe("keyboard-shortcuts — clear + find bindings", () => {
 
     it("Ctrl+Shift+K does NOT clear on macOS (mac uses bare ⌘K)", async () => {
       const { shortcuts } = await loadModule();
+      invokedMock.mockClear();
       shortcuts.handleAppKeydown(
         mkEvent({ key: "k", ctrl: true, shift: true }),
         ctx,
       );
-      expect(terminalClear).not.toHaveBeenCalled();
+      expect(invokedMock).not.toHaveBeenCalledWith(
+        "write_pty",
+        expect.objectContaining({ ptyId: 99 }),
+      );
     });
   });
 
@@ -166,13 +178,16 @@ describe("keyboard-shortcuts — clear + find bindings", () => {
       mockIsMac = false;
     });
 
-    it("Ctrl+Shift+K clears the focused terminal", async () => {
+    it("Ctrl+Shift+K clears the focused terminal via write_pty Ctrl+L", async () => {
       const { shortcuts } = await loadModule();
       shortcuts.handleAppKeydown(
         mkEvent({ key: "K", ctrl: true, shift: true }),
         ctx,
       );
-      expect(terminalClear).toHaveBeenCalledOnce();
+      expect(invokedMock).toHaveBeenCalledWith("write_pty", {
+        ptyId: 99,
+        data: new Uint8Array([0x0c]),
+      });
     });
 
     it("Ctrl+Shift+F toggles findBarVisible", async () => {
@@ -187,8 +202,12 @@ describe("keyboard-shortcuts — clear + find bindings", () => {
 
     it("bare ⌘K (metaKey) does NOT clear on non-Mac", async () => {
       const { shortcuts } = await loadModule();
+      invokedMock.mockClear();
       shortcuts.handleAppKeydown(mkEvent({ key: "k", meta: true }), ctx);
-      expect(terminalClear).not.toHaveBeenCalled();
+      expect(invokedMock).not.toHaveBeenCalledWith(
+        "write_pty",
+        expect.objectContaining({ ptyId: 99 }),
+      );
     });
   });
 });

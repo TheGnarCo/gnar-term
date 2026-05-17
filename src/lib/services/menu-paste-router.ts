@@ -3,36 +3,39 @@
  * native Edit > Paste menu item (Cmd+V on macOS / Ctrl+V on Linux).
  *
  * Why a custom router: the menu accelerator preempts webview keydown,
- * so the in-terminal Cmd+V handler in terminal-service.ts is dead
+ * so the in-canvas Cmd+V handler in AlacrittyTerminalSurface is dead
  * code in production. Worse, the default `PredefinedMenuItem::paste`
  * dispatches the native NSText `paste:` action, which delivers via
- * input events and bypasses xterm.js's bracketed-paste wrapping.
+ * input events and bypasses bracketed-paste wrapping.
  * Claude Code (and other TUIs) rely on `\x1b[200~…\x1b[201~` to
  * recognize a paste — without it they process the buffer character-
  * by-character, submitting on the first newline.
  *
  * The router routes by focus:
- *   - terminal surface  → `surface.terminal.paste(text)` (bracketed)
- *   - input/textarea    → splice at selection, fire `input` event
- *   - contenteditable   → `document.execCommand("insertText")`
- *   - nothing focused   → no-op
+ *   - terminal surface canvas  → write_pty with PasteHandler bracketed encoding
+ *   - input/textarea           → splice at selection, fire `input` event
+ *   - contenteditable          → `document.execCommand("insertText")`
+ *   - nothing focused          → no-op
  */
 import { readText as clipboardRead } from "@tauri-apps/plugin-clipboard-manager";
-import { get } from "svelte/store";
-import { workspaces } from "../stores/workspace";
-import {
-  getAllSurfaces,
-  isTerminalSurface,
-  type TerminalSurface,
-} from "../types";
+import { invoke } from "@tauri-apps/api/core";
+import { PasteHandler } from "../components/alacritty/paste-handler";
 
-function findTerminalForElement(el: Element): TerminalSurface | null {
-  for (const ws of get(workspaces)) {
-    for (const surface of getAllSurfaces(ws)) {
-      if (isTerminalSurface(surface) && surface.termElement.contains(el)) {
-        return surface;
-      }
+// Shared PasteHandler instance. Bracketed paste mode is per-PTY, but the
+// default (enabled) is safe for all contexts so a single instance is fine.
+const _pasteHandler = new PasteHandler();
+
+function findPtyIdForElement(el: Element): number | null {
+  // AlacrittyTerminalSurface canvas elements carry data-pty-id.
+  // Walk up from the focused element in case a child has focus.
+  let node: Element | null = el;
+  while (node) {
+    const v = node.getAttribute("data-pty-id");
+    if (v !== null) {
+      const id = parseInt(v, 10);
+      return isNaN(id) ? null : id;
     }
+    node = node.parentElement;
   }
   return null;
 }
@@ -63,9 +66,12 @@ export async function handleMenuPaste(): Promise<void> {
   const active = document.activeElement;
   if (!active) return;
 
-  const terminal = findTerminalForElement(active);
-  if (terminal && terminal.ptyId >= 0) {
-    terminal.terminal.paste(text);
+  const ptyId = findPtyIdForElement(active);
+  if (ptyId !== null && ptyId >= 0) {
+    const encoded = _pasteHandler.encodePaste(text);
+    void invoke("write_pty", { ptyId, data: encoded }).catch((err) => {
+      console.warn("Menu paste: write_pty failed:", err);
+    });
     return;
   }
 

@@ -33,13 +33,6 @@ vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
 const mockCreatedSurface: TerminalSurface = {
   kind: "terminal",
   id: "mock-surface",
-  terminal: {
-    focus: vi.fn(),
-    dispose: vi.fn(),
-  } as unknown as import("@xterm/xterm").Terminal,
-  fitAddon: { fit: vi.fn() } as unknown as import("@xterm/addon-fit").FitAddon,
-  searchAddon: {} as unknown as import("@xterm/addon-search").SearchAddon,
-  termElement: document.createElement("div"),
   ptyId: -1,
   title: "Mock Shell",
   hasUnread: false,
@@ -67,15 +60,6 @@ function makeSurface(
   return {
     kind: "terminal",
     id,
-    terminal: {
-      focus: vi.fn(),
-      dispose: vi.fn(),
-    } as unknown as import("@xterm/xterm").Terminal,
-    fitAddon: {
-      fit: vi.fn(),
-    } as unknown as import("@xterm/addon-fit").FitAddon,
-    searchAddon: {} as unknown as import("@xterm/addon-search").SearchAddon,
-    termElement: document.createElement("div"),
     ptyId,
     title: `Shell ${id}`,
     hasUnread: false,

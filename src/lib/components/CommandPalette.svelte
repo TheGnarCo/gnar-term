@@ -32,7 +32,13 @@
     // OLD terminal (or one whose DOM was just torn down).
     void tick().then(() => {
       const s = get(activeSurface);
-      if (s && isTerminalSurface(s)) s.terminal.focus();
+      // Return focus to the active terminal's canvas element.
+      if (s && isTerminalSurface(s)) {
+        const canvas = document.querySelector<HTMLElement>(
+          `[data-pty-id="${s.ptyId}"]`,
+        );
+        canvas?.focus();
+      }
     });
   }
 

@@ -4,7 +4,7 @@
   import { sidebarVisible } from "../stores/ui";
   import { workspaces } from "../stores/workspace";
   import TabBar from "./TabBar.svelte";
-  import TerminalSurface from "./TerminalSurface.svelte";
+  import AlacrittyTerminalSurface from "./AlacrittyTerminalSurface.svelte";
   import PreviewSurface from "./PreviewSurface.svelte";
   import RestoreCommandPrompt from "./RestoreCommandPrompt.svelte";
   import EmptySurface from "./EmptySurface.svelte";
@@ -42,7 +42,6 @@
 
   let paneEl: HTMLElement;
   let resizeObserver: ResizeObserver;
-  let scrollState: Record<string, boolean> = {};
   let previewRefreshKeys: Record<string, number> = {};
 
   function handleRefreshPreview() {
@@ -54,17 +53,6 @@
     };
   }
 
-  $: showJumpToBottom =
-    pane.activeSurfaceId != null
-      ? (scrollState[pane.activeSurfaceId] ?? false)
-      : false;
-
-  function handleJumpToBottom() {
-    const active = pane.surfaces.find((s) => s.id === pane.activeSurfaceId);
-    if (active && isTerminalSurface(active)) {
-      active.terminal.scrollToBottom();
-    }
-  }
   let resizeTimer: ReturnType<typeof setTimeout> | null = null;
 
   // --- Notification chrome (Option E hybrid) ---
@@ -148,22 +136,15 @@
     clearUnreadInPane();
   }
 
-  function fitActiveTerminal() {
-    const active = pane.surfaces.find((s) => s.id === pane.activeSurfaceId);
-    if (active && isTerminalSurface(active)) {
-      try {
-        active.fitAddon.fit();
-      } catch (e) {
-        console.warn("fitAddon.fit() failed on resize:", e);
-      }
-    }
-  }
-
   onMount(() => {
     pane.element = paneEl;
     resizeObserver = new ResizeObserver(() => {
+      // AlacrittyTerminalSurface manages its own ResizeObserver internally.
+      // No fitAddon.fit() call needed here.
       if (resizeTimer) clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(fitActiveTerminal, 50);
+      resizeTimer = setTimeout(() => {
+        resizeTimer = null;
+      }, 50);
     });
     resizeObserver.observe(paneEl);
   });
@@ -215,8 +196,8 @@
       {onSelectSurfaceType}
       {onSplitRight}
       {onSplitDown}
-      {showJumpToBottom}
-      onJumpToBottom={handleJumpToBottom}
+      showJumpToBottom={false}
+      onJumpToBottom={() => {}}
       onRefreshPreview={handleRefreshPreview}
     />
   {:else}
@@ -342,12 +323,13 @@
 
   {#each pane.surfaces as surface (surface.id)}
     {#if isTerminalSurface(surface)}
-      <TerminalSurface
-        {surface}
-        visible={surface.id === pane.activeSurfaceId}
-        cwd={surface.cwd}
-        bind:userScrolledUp={scrollState[surface.id]}
-      />
+      <div
+        style="display: {surface.id === pane.activeSurfaceId
+          ? 'flex'
+          : 'none'}; flex: 1; min-width: 0; min-height: 0; flex-direction: column;"
+      >
+        <AlacrittyTerminalSurface ptyId={surface.ptyId} paneId={pane.id} />
+      </div>
     {:else if isRegistrySurface(surface)}
       <!-- Wrap registry surfaces in a visibility container so inactive
              tabs stay mounted (preserve component state) but invisible.

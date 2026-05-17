@@ -33,7 +33,7 @@ afterEach(() => {
 // ─── connectPty ──────────────────────────────────────────────────
 
 describe("connectPty uses real terminal dimensions", () => {
-  it("spawns PTY with terminal.cols and terminal.rows, not hardcoded values", async () => {
+  it("spawns PTY with default 80x24 — AlacrittyTerminalSurface resizes on mount via ResizeObserver", async () => {
     const spawnCalls: { cols: number; rows: number }[] = [];
 
     mockIPC((cmd, args) => {
@@ -50,14 +50,14 @@ describe("connectPty uses real terminal dimensions", () => {
 
     const surface = {
       ptyId: -1,
-      terminal: { cols: 120, rows: 36 },
     } as unknown as Parameters<typeof connectPty>[0];
 
     await connectPty(surface, "/tmp");
 
     expect(spawnCalls).toHaveLength(1);
-    expect(spawnCalls[0].cols).toBe(120);
-    expect(spawnCalls[0].rows).toBe(36);
+    // Alacritty engine: spawn with default 80×24; canvas ResizeObserver corrects on mount.
+    expect(spawnCalls[0].cols).toBe(80);
+    expect(spawnCalls[0].rows).toBe(24);
     expect(surface.ptyId).toBe(1);
   });
 
@@ -81,7 +81,6 @@ describe("connectPty uses real terminal dimensions", () => {
 
     const surface = {
       ptyId: -1,
-      terminal: { cols: 80, rows: 24 },
       cwd: "/Users/test/Documents",
     } as unknown as Parameters<typeof connectPty>[0];
 
@@ -108,7 +107,6 @@ describe("connectPty uses real terminal dimensions", () => {
 
     const surface = {
       ptyId: -1,
-      terminal: { cols: 80, rows: 24 },
     } as unknown as Parameters<typeof connectPty>[0];
 
     await connectPty(surface, "/tmp/fallback");
@@ -133,7 +131,6 @@ describe("connectPty uses real terminal dimensions", () => {
 
     const surface = {
       ptyId: -1,
-      terminal: { cols: 80, rows: 24 },
       cwd: "/Users/test/Documents",
     } as unknown as Parameters<typeof connectPty>[0];
 
@@ -159,7 +156,6 @@ describe("connectPty uses real terminal dimensions", () => {
 
     const surface = {
       ptyId: -1,
-      terminal: { cols: 80, rows: 24 },
     } as unknown as Parameters<typeof connectPty>[0];
 
     await connectPty(surface);
@@ -183,7 +179,6 @@ describe("connectPty uses real terminal dimensions", () => {
 
     const surface = {
       ptyId: 5,
-      terminal: { cols: 80, rows: 24 },
     } as unknown as Parameters<typeof connectPty>[0];
     await connectPty(surface);
 
@@ -201,7 +196,6 @@ describe("connectPty uses real terminal dimensions", () => {
 
     const surface = {
       ptyId: -1,
-      terminal: { cols: 80, rows: 24 },
     } as unknown as Parameters<typeof connectPty>[0];
     await connectPty(surface);
 

@@ -55,13 +55,6 @@ function mockSurface(
   return {
     kind: "terminal",
     id: uid(),
-    terminal: {
-      dispose: vi.fn(),
-      focus: vi.fn(),
-    } as unknown as TerminalSurface["terminal"],
-    fitAddon: { fit: vi.fn() } as unknown as TerminalSurface["fitAddon"],
-    searchAddon: {} as unknown as TerminalSurface["searchAddon"],
-    termElement: document.createElement("div"),
     ptyId: 1,
     title: "test",
     hasUnread: false,

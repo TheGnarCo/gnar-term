@@ -164,6 +164,7 @@ mod tests {
         let state = AppState {
             ptys: Mutex::new(HashMap::new()),
             watch_flags: Mutex::new(HashMap::new()),
+            bridges: Arc::new(Mutex::new(HashMap::new())),
         };
 
         let watch_id = NEXT_WATCH_ID.fetch_add(1, Ordering::Relaxed);

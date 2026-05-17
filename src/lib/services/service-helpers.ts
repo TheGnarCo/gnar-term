@@ -152,7 +152,11 @@ export function registerPtyForSurface(
 export async function safeFocus(s: Surface | null | undefined) {
   if (!s || !isTerminalSurface(s)) return;
   await tick();
-  s.terminal.focus();
+  // Focus the AlacrittyTerminalSurface canvas element.
+  const canvas = document.querySelector<HTMLElement>(
+    `[data-pty-id="${s.ptyId}"]`,
+  );
+  canvas?.focus();
 }
 
 export async function getCwdForSurface(

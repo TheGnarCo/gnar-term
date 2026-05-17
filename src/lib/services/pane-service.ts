@@ -156,7 +156,7 @@ export function closePane(paneId: string) {
   const closedSurfaceIds: string[] = pane.surfaces.map((s) => s.id);
   for (const s of [...pane.surfaces]) {
     if (isTerminalSurface(s)) {
-      s.terminal.dispose();
+      // AlacrittyTerminalSurface handles its own cleanup via onDestroy.
       // PTY may already have exited — safe to ignore
       if (s.ptyId >= 0) invoke("kill_pty", { ptyId: s.ptyId }).catch(() => {});
     }

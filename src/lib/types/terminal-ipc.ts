@@ -1,0 +1,232 @@
+/**
+ * Terminal IPC wire-format types — TypeScript mirror of:
+ *   src-tauri/src/terminal_engine/types.rs
+ *   src-tauri/src/terminal_engine/ipc.rs
+ *
+ * WARNING: These types must stay in sync with the Rust definitions above.
+ * Any change to the Rust serde field names or enum variants requires a
+ * matching update here.
+ *
+ * # attrs bitfield layout (used in Cell.attrs) — cycle-12 extended
+ *
+ * | Bit | Constant          | Meaning                   |
+ * |-----|-------------------|---------------------------|
+ * |  0  | ATTR_BOLD         | Bold text                 |
+ * |  1  | ATTR_UNDERLINE    | Underlined text           |
+ * |  2  | ATTR_INVERSE      | Reverse video             |
+ * |  3  | ATTR_ITALIC       | Italic text               |
+ * |  4  | ATTR_DIM          | Dim / half-bright text    |
+ * |  5  | ATTR_HIDDEN       | Concealed / invisible     |
+ * |  6  | ATTR_STRIKEOUT    | Strikethrough             |
+ * |  7  | ATTR_WIDE_CHAR    | Wide (East Asian) glyph   |
+ */
+
+// ─── Attribute bitfield constants ─────────────────────────────────────────────
+
+/** Bold text attribute bit. */
+export const ATTR_BOLD = 1 as const;
+/** Underline text attribute bit. */
+export const ATTR_UNDERLINE = 2 as const;
+/** Inverse (reverse video) text attribute bit. */
+export const ATTR_INVERSE = 4 as const;
+/** Italic text attribute bit. */
+export const ATTR_ITALIC = 8 as const;
+/** Dim / half-bright text attribute bit (cycle-12). */
+export const ATTR_DIM = 16 as const;
+/** Concealed / invisible text attribute bit (cycle-12). */
+export const ATTR_HIDDEN = 32 as const;
+/** Strikethrough text attribute bit (cycle-12). */
+export const ATTR_STRIKEOUT = 64 as const;
+/** Wide (East Asian) character attribute bit (cycle-12). */
+export const ATTR_WIDE_CHAR = 128 as const;
+
+// ─── Color ────────────────────────────────────────────────────────────────────
+
+/**
+ * Semantic color slot names — mirrors the Rust `NamedSlot` enum (cycle-14).
+ *
+ * These 13 slots correspond to `vte::ansi::NamedColor` variants that have no
+ * palette-index equivalent (indices 256-268 in the alacritty `Colors` array).
+ * The renderer resolves them against a `palette: Partial<Record<NamedSlot, string>>`
+ * injected at construction time, falling back to built-in defaults.
+ *
+ * | Slot             | NamedColor index | Typical use                       |
+ * |------------------|-----------------|-----------------------------------|
+ * | foreground       | 256             | OSC 10 / SGR 39 default fg        |
+ * | background       | 257             | OSC 11 / SGR 49 default bg        |
+ * | cursor           | 258             | OSC 12 cursor color override      |
+ * | dim_black..      | 259-266         | DIM-rendered ANSI colour variants |
+ * | bright_foreground| 267             | SGR 1 foreground boost            |
+ * | dim_foreground   | 268             | SGR 2 foreground dim              |
+ */
+export type NamedSlot =
+  | "foreground"
+  | "background"
+  | "cursor"
+  | "dim_black"
+  | "dim_red"
+  | "dim_green"
+  | "dim_yellow"
+  | "dim_blue"
+  | "dim_magenta"
+  | "dim_cyan"
+  | "dim_white"
+  | "bright_foreground"
+  | "dim_foreground";
+
+/**
+ * Terminal color discriminated union mirroring the Rust `ColorIndex` enum.
+ *
+ * The Rust serde adjacently-tagged representation (`tag = "kind"`,
+ * `content = "value"`) produces:
+ * - `{ "kind": "Indexed", "value": 7 }`
+ * - `{ "kind": "Rgb", "value": [255, 128, 0] }`
+ * - `{ "kind": "Named", "value": "foreground" }` (cycle-14)
+ */
+export type ColorIndex =
+  | { kind: "Indexed"; value: number }
+  | { kind: "Rgb"; value: [number, number, number] }
+  | { kind: "Named"; value: NamedSlot };
+
+// ─── Cell ─────────────────────────────────────────────────────────────────────
+
+/**
+ * A single terminal grid cell.
+ *
+ * `ch` is a string (not a single character) to support multi-byte grapheme
+ * clusters. Empty cells use `" "` (a single space).
+ *
+ * `attrs` is a bitfield; test with `attrs & ATTR_BOLD`, etc.
+ */
+export interface Cell {
+  /** The character(s) in this cell. Space (`" "`) for empty cells. */
+  ch: string;
+  /** Foreground color. */
+  fg: ColorIndex;
+  /** Background color. */
+  bg: ColorIndex;
+  /** Attribute bitfield (`ATTR_BOLD | ATTR_UNDERLINE | ATTR_INVERSE | ATTR_ITALIC`). */
+  attrs: number;
+}
+
+// ─── RowData ──────────────────────────────────────────────────────────────────
+
+/**
+ * One row of cells in the grid snapshot.
+ * `cells.length === GridSnapshot.cols`.
+ */
+export interface RowData {
+  /** The cells in this row, left-to-right. */
+  cells: Cell[];
+}
+
+// ─── CursorShapeTag ───────────────────────────────────────────────────────────
+
+/**
+ * Cursor shape discriminated union — mirrors the Rust `CursorShapeTag` enum.
+ *
+ * Serde emits `{ "kind": "block" }`, `{ "kind": "beam" }`, etc.
+ * (snake_case, tag-only — no `content` field).
+ */
+export type CursorShapeTag =
+  | { kind: "block" }
+  | { kind: "beam" }
+  | { kind: "underline" }
+  | { kind: "hollow_block" }
+  | { kind: "hidden" };
+
+// ─── CursorPos ────────────────────────────────────────────────────────────────
+
+/**
+ * Terminal cursor position, visibility, and shape.
+ *
+ * `visible` equals `shape.kind !== "hidden"` and is kept for backwards
+ * compatibility with renderers that do not inspect `shape`.
+ */
+export interface CursorPos {
+  /** Zero-based viewport row. */
+  row: number;
+  /** Zero-based viewport column. */
+  col: number;
+  /** `true` when the cursor is currently visible. Equals `shape.kind !== "hidden"`. */
+  visible: boolean;
+  /** Cursor rendering shape (cycle-12). */
+  shape: CursorShapeTag;
+}
+
+// ─── DirtyRect ────────────────────────────────────────────────────────────────
+
+/**
+ * A dirty (changed) span within a single row.
+ *
+ * `col_end` is **exclusive**: a rect covering columns 0–4 has
+ * `col_start = 0, col_end = 5`. The cell count is always `col_end - col_start`.
+ */
+export interface DirtyRect {
+  /** Zero-based viewport row index. */
+  row: number;
+  /** First dirty column (inclusive). */
+  col_start: number;
+  /** Last dirty column (exclusive). */
+  col_end: number;
+  /** The cells in the dirty span (`col_end - col_start` elements), left-to-right. */
+  cells: Cell[];
+}
+
+// ─── GridSnapshot ─────────────────────────────────────────────────────────────
+
+/**
+ * A point-in-time snapshot of the full terminal grid viewport.
+ *
+ * Sent once on pane attach. `rows_data` rows are ordered top-down
+ * (index 0 = top row).
+ */
+export interface GridSnapshot {
+  /** Viewport width in columns. */
+  cols: number;
+  /** Viewport height in rows. */
+  rows: number;
+  /** Cursor state at snapshot time. */
+  cursor: CursorPos;
+  /** Row data, top to bottom, `rows_data.length === rows`. */
+  rows_data: RowData[];
+}
+
+// ─── GridDiff ─────────────────────────────────────────────────────────────────
+
+/**
+ * Per-update wire payload carrying only the cells that changed since the last
+ * snapshot or diff.
+ *
+ * `rows` and `cols` are repeated so the renderer can detect a resize even when
+ * no cells are dirty. If `rows`/`cols` differ from the last-seen values, discard
+ * the current grid and request a fresh snapshot.
+ *
+ * `dirty` may be empty when only a resize or cursor move occurred.
+ * Rects are ordered top-down by row; within a row, left-to-right by `col_start`.
+ */
+export interface GridDiff {
+  /** Viewport height in rows at the time of this diff. */
+  rows: number;
+  /** Viewport width in columns at the time of this diff. */
+  cols: number;
+  /** Dirty spans since the last snapshot or diff. */
+  dirty: DirtyRect[];
+  /** Cursor position after processing the writes that produced this diff. */
+  cursor: CursorPos;
+}
+
+// ─── Channel message union ────────────────────────────────────────────────────
+
+/**
+ * The tagged stream payload type for the Tauri terminal channel.
+ *
+ * The renderer subscribes to a Tauri `Channel` that delivers this union:
+ * - First message on pane attach: `{ kind: "snapshot", value: GridSnapshot }`
+ * - Subsequent messages on engine writes: `{ kind: "diff", value: GridDiff }`
+ *
+ * Types only — runtime channel wiring is handled in cycle-4/5.
+ */
+export type TerminalChannelMessage =
+  | { kind: "snapshot"; value: GridSnapshot }
+  | { kind: "diff"; value: GridDiff };

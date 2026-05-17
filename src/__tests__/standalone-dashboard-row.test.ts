@@ -36,53 +36,6 @@ vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
   writeText: vi.fn().mockResolvedValue(undefined),
   writeImage: vi.fn().mockResolvedValue(undefined),
 }));
-vi.mock("@xterm/xterm", () => ({
-  Terminal: vi.fn().mockImplementation(() => ({
-    open: vi.fn(),
-    write: vi.fn(),
-    focus: vi.fn(),
-    dispose: vi.fn(),
-    onData: vi.fn(),
-    onResize: vi.fn(),
-    onTitleChange: vi.fn(),
-    loadAddon: vi.fn(),
-    options: {},
-    buffer: { active: { getLine: vi.fn(), length: 0 } },
-    rows: 24,
-    parser: { registerOscHandler: vi.fn() },
-    attachCustomKeyEventHandler: vi.fn(),
-    registerLinkProvider: vi.fn(),
-    getSelection: vi.fn(),
-    hasSelection: vi.fn().mockReturnValue(false),
-    onSelectionChange: vi.fn(),
-    scrollToBottom: vi.fn(),
-    onScroll: vi.fn().mockReturnValue({ dispose: vi.fn() }),
-  })),
-}));
-vi.mock("@xterm/addon-fit", () => ({
-  FitAddon: vi.fn().mockImplementation(() => ({
-    fit: vi.fn(),
-    activate: vi.fn(),
-    dispose: vi.fn(),
-  })),
-}));
-vi.mock("@xterm/addon-webgl", () => ({
-  WebglAddon: vi.fn().mockImplementation(() => ({
-    activate: vi.fn(),
-    dispose: vi.fn(),
-    onContextLoss: vi.fn(),
-  })),
-}));
-vi.mock("@xterm/addon-search", () => ({
-  SearchAddon: vi.fn().mockImplementation(() => ({
-    activate: vi.fn(),
-    dispose: vi.fn(),
-    findNext: vi.fn(),
-    findPrevious: vi.fn(),
-    clearDecorations: vi.fn(),
-  })),
-}));
-vi.mock("@xterm/xterm/css/xterm.css", () => ({}));
 
 vi.stubGlobal("localStorage", {
   getItem: vi.fn().mockReturnValue(null),

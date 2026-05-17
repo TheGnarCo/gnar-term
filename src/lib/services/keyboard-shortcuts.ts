@@ -6,10 +6,11 @@
  *   2. workspace-action registered shortcuts (extension toolbars)
  *   3. hardcoded core shortcuts handled here — these reference component
  *      refs or stores that don't fit the command-palette contract
- *      (e.g. focusing component-owned DOM, activating the focused pane's
- *      xterm before clearing its scrollback).
+ *      (e.g. focusing component-owned DOM, writing to the active PTY
+ *      for clear-scrollback).
  */
 import { get } from "svelte/store";
+import { invoke } from "@tauri-apps/api/core";
 import {
   commandPaletteOpen,
   findBarVisible,
@@ -67,7 +68,13 @@ export function handleAppKeydown(
       b: () => sidebarVisible.update((v) => !v),
       k: () => {
         const s = get(activeSurface);
-        if (s && isTerminalSurface(s)) s.terminal.clear();
+        // Send Ctrl+L to the PTY — universal terminal clear for the alacritty engine.
+        if (s && isTerminalSurface(s) && s.ptyId >= 0) {
+          void invoke("write_pty", {
+            ptyId: s.ptyId,
+            data: new Uint8Array([0x0c]),
+          }).catch(() => {});
+        }
       },
       p: () => commandPaletteOpen.update((v) => !v),
       f: () => findBarVisible.update((v) => !v),
@@ -179,7 +186,12 @@ export function handleAppKeydown(
       if (k === "k") {
         e.preventDefault();
         const s = get(activeSurface);
-        if (s && isTerminalSurface(s)) s.terminal.clear();
+        if (s && isTerminalSurface(s) && s.ptyId >= 0) {
+          void invoke("write_pty", {
+            ptyId: s.ptyId,
+            data: new Uint8Array([0x0c]),
+          }).catch(() => {});
+        }
         return;
       }
       if (k === "f") {

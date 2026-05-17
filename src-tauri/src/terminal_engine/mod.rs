@@ -3,6 +3,7 @@
 //! full run context.
 
 pub mod alacritty;
+pub mod input;
 pub mod ipc;
 pub mod pty_bridge;
 pub mod trait_def;
@@ -12,6 +13,8 @@ pub mod types;
 mod alacritty_tests;
 #[cfg(test)]
 mod e2e_tests;
+#[cfg(test)]
+mod input_tests;
 #[cfg(test)]
 mod ipc_tests;
 #[cfg(test)]

@@ -22,7 +22,12 @@ export interface PreviewSurface {
 
 export interface Previewer {
   extensions: string[];
-  render(content: string, filePath: string, element: HTMLElement): void;
+  /**
+   * Render content into `element`. May return a cleanup function that is
+   * invoked before the next re-render and on dispose — used by previewers
+   * that allocate resources needing explicit release (e.g. Blob URLs).
+   */
+  render(content: string, filePath: string, element: HTMLElement): void | (() => void);
 }
 
 // --- Registry ---
@@ -81,22 +86,36 @@ export async function openPreview(filePath: string): Promise<PreviewSurface> {
     }
   }
 
-  renderWithChrome(previewer, content, filePath, element);
+  let renderCleanup = renderWithChrome(previewer, content, filePath, element) ?? undefined;
 
   // Watch for changes (text formats only — binary previewers handle their own reload)
   let watchId = 0;
+  let unlistenFileChanged: (() => void) | undefined;
   if (!isBinary) {
     try {
       watchId = await invoke<number>("watch_file", { path: filePath });
-      await listen<{ watch_id: number; content: string }>("file-changed", (event) => {
+      // Capture the unlisten handle so dispose() can detach it — previously
+      // the returned function was discarded, leaking one listener per open.
+      unlistenFileChanged = await listen<{ watch_id: number; content: string }>("file-changed", (event) => {
         if (event.payload.watch_id === watchId) {
-          renderWithChrome(previewer, event.payload.content, filePath, element);
+          renderCleanup?.();
+          renderCleanup = renderWithChrome(previewer, event.payload.content, filePath, element) ?? undefined;
         }
       });
     } catch {}
   }
 
-  return { id, filePath, title: fileName, element, watchId };
+  return {
+    id,
+    filePath,
+    title: fileName,
+    element,
+    watchId,
+    dispose: () => {
+      unlistenFileChanged?.();
+      renderCleanup?.();
+    },
+  };
 }
 
 // --- Content-based preview (no file backing) ---
@@ -137,9 +156,9 @@ function getExtension(path: string): string {
   return parts.length > 1 ? parts.pop()!.toLowerCase() : "";
 }
 
-function renderWithChrome(previewer: Previewer, content: string, filePath: string, element: HTMLElement) {
+function renderWithChrome(previewer: Previewer, content: string, filePath: string, element: HTMLElement): void | (() => void) {
   // Just render the content directly — the path is already in the tab title
-  previewer.render(content, filePath, element);
+  return previewer.render(content, filePath, element);
 }
 
 function injectStyles() {

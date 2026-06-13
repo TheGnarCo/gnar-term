@@ -844,3 +844,41 @@ describe("resolveFilePath", () => {
     expect(await resolveFilePath("~/report.pdf", undefined)).toBe("/Users/testuser/report.pdf");
   });
 });
+
+// ─── Preview disposal (resource cleanup) ─────────────────────────
+
+describe("Preview disposal", () => {
+  it("dispose() detaches the file-changed listener (no leak)", async () => {
+    const unlisten = vi.fn();
+    mockListen.mockReset().mockResolvedValue(unlisten as any);
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "read_file") return "initial content";
+      if (cmd === "watch_file") return 42;
+      return undefined as any;
+    });
+
+    const surface = await openPreview("/tmp/notes.txt");
+    expect(surface.dispose).toBeTypeOf("function");
+    expect(unlisten).not.toHaveBeenCalled();
+
+    surface.dispose!();
+    expect(unlisten).toHaveBeenCalledTimes(1);
+  });
+
+  it("PDF previewer dispose() revokes the Blob URL", async () => {
+    const revoke = vi.fn();
+    URL.createObjectURL = vi.fn(() => "blob:mock-pdf-url");
+    URL.revokeObjectURL = revoke;
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "read_file_base64") return btoa("%PDF-1.4 fake");
+      return undefined as any;
+    });
+
+    const surface = await openPreview("/tmp/report.pdf");
+    // Let the async read_file_base64 .then() create the Blob URL.
+    await new Promise((r) => setTimeout(r, 0));
+
+    surface.dispose!();
+    expect(revoke).toHaveBeenCalledWith("blob:mock-pdf-url");
+  });
+});

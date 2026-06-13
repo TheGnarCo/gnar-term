@@ -4,7 +4,7 @@ import { workspaces, activeWorkspaceIdx, activeWorkspace, activeSurface } from "
 import { showInputPrompt } from "../stores/ui";
 import { createTerminalSurface } from "../terminal-service";
 import { openPreview } from "../../preview/index";
-import { uid, getAllPanes, getAllSurfaces, isTerminalSurface, type Workspace, type Pane, type SplitNode } from "../types";
+import { uid, getAllPanes, getAllSurfaces, isTerminalSurface, findPaneInWorkspace, type Workspace, type Pane, type SplitNode } from "../types";
 import { saveConfig, getConfig, type WorkspaceDef, type LayoutNode } from "../config";
 import { safeFocus } from "./service-helpers";
 
@@ -77,7 +77,7 @@ export async function createWorkspaceFromDef(def: WorkspaceDef) {
 
   workspaces.update(list => [...list, ws]);
   activeWorkspaceIdx.set(get(workspaces).length - 1);
-  const ap = getAllPanes(splitRoot).find(p => p.id === ws.activePaneId);
+  const ap = findPaneInWorkspace(ws, ws.activePaneId ?? "");
   const as_ = ap?.surfaces.find(s => s.id === ap.activeSurfaceId);
   safeFocus(as_);
 }

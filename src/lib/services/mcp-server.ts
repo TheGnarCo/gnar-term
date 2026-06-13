@@ -32,6 +32,7 @@ import {
   getAllSurfaces,
   isTerminalSurface,
   uid,
+  findPaneById as findPaneByIdInWorkspaces,
   type Pane,
   type SplitNode,
   type Surface,
@@ -163,24 +164,8 @@ function newSessionId(): string {
 
 // ---- Workspace / pane resolution ----
 
-/** Find the workspace that currently contains a pane with the given id, or
- *  null if no workspace contains it (pane was closed, or invalid id). */
-function findWorkspaceForPane(paneId: string): Workspace | null {
-  for (const ws of get(workspaces)) {
-    for (const pane of getAllPanes(ws.splitRoot)) {
-      if (pane.id === paneId) return ws;
-    }
-  }
-  return null;
-}
-
 function findPaneById(paneId: string): { workspace: Workspace; pane: Pane } | null {
-  for (const ws of get(workspaces)) {
-    for (const pane of getAllPanes(ws.splitRoot)) {
-      if (pane.id === paneId) return { workspace: ws, pane };
-    }
-  }
-  return null;
+  return findPaneByIdInWorkspaces(get(workspaces), paneId);
 }
 
 function findWorkspaceById(workspaceId: string): Workspace | null {

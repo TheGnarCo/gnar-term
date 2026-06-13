@@ -8,7 +8,7 @@ import {
 } from "../stores/workspace";
 import { createTerminalSurface } from "../terminal-service";
 import {
-  getAllPanes,
+  findPaneInWorkspace,
   isTerminalSurface,
   type Workspace,
   type Pane,
@@ -20,7 +20,7 @@ import { safeFocus, getCwdForSurface } from "./service-helpers";
 export function selectSurface(paneId: string, surfaceId: string) {
   const ws = get(activeWorkspace);
   if (!ws) return;
-  const pane = getAllPanes(ws.splitRoot).find((p) => p.id === paneId);
+  const pane = findPaneInWorkspace(ws, paneId);
   if (!pane) return;
   pane.activeSurfaceId = surfaceId;
   const s = pane.surfaces.find((s) => s.id === surfaceId);
@@ -32,7 +32,7 @@ export function selectSurface(paneId: string, surfaceId: string) {
 export function closeSurfaceById(paneId: string, surfaceId: string) {
   const ws = get(activeWorkspace);
   if (!ws) return;
-  const pane = getAllPanes(ws.splitRoot).find((p) => p.id === paneId);
+  const pane = findPaneInWorkspace(ws, paneId);
   if (!pane) return;
   const idx = pane.surfaces.findIndex((s) => s.id === surfaceId);
   if (idx < 0) return;
@@ -63,7 +63,7 @@ function removeSurface(ws: Workspace, pane: Pane, surfaceIdx: number) {
 export async function newSurface(paneId: string) {
   const ws = get(activeWorkspace);
   if (!ws) return;
-  const pane = getAllPanes(ws.splitRoot).find((p) => p.id === paneId);
+  const pane = findPaneInWorkspace(ws, paneId);
   if (!pane) return;
   const sourceSurface = pane.surfaces.find(
     (s) => s.id === pane.activeSurfaceId,
@@ -77,7 +77,7 @@ export async function newSurface(paneId: string) {
 export async function newSurfaceWithCommand(paneId: string, command: string) {
   const ws = get(activeWorkspace);
   if (!ws) return;
-  const pane = getAllPanes(ws.splitRoot).find((p) => p.id === paneId);
+  const pane = findPaneInWorkspace(ws, paneId);
   if (!pane) return;
   const sourceSurface = pane.surfaces.find(
     (s) => s.id === pane.activeSurfaceId,

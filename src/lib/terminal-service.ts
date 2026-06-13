@@ -20,7 +20,7 @@ import { workspaces, activeWorkspaceIdx } from "./stores/workspace";
 import { contextMenu, pendingAction } from "./stores/ui";
 import { canPreview, getSupportedExtensions, openPreview } from "../preview/index";
 import type { TerminalSurface, Pane, Surface, Workspace } from "./types";
-import { uid, getAllSurfaces, getAllPanes, isTerminalSurface, findParentSplit, replaceNodeInTree } from "./types";
+import { uid, getAllSurfaces, getAllPanes, isTerminalSurface, findParentSplit, replaceNodeInTree, findSurfaceByPtyId, findPaneContainingSurface } from "./types";
 import type { MenuItem } from "./context-menu-types";
 import { getConfig, saveConfig } from "./config";
 import { reportError } from "./services/error-reporting";
@@ -131,13 +131,7 @@ const BUFFER_HIGH_WATER = 128 * 1024; // 128KB
 const BUFFER_LOW_WATER = 32 * 1024;   // 32KB
 
 function findSurfaceByPty(ptyId: number): TerminalSurface | null {
-  const wsList = get(workspaces);
-  for (const ws of wsList) {
-    for (const s of getAllSurfaces(ws)) {
-      if (isTerminalSurface(s) && s.ptyId === ptyId) return s;
-    }
-  }
-  return null;
+  return findSurfaceByPtyId(get(workspaces), ptyId);
 }
 
 function scheduleFlush(ptyId: number) {
@@ -306,14 +300,10 @@ export async function setupListeners() {
     // Filter out escape-sequence fragments that slipped through (e.g. "4;0;")
     if (/^\d+[;\d:\/]*$/.test(text) || !text.trim()) return;
     workspaces.update((wsList) => {
-      for (const ws of wsList) {
-        for (const s of getAllSurfaces(ws)) {
-          if (isTerminalSurface(s) && s.ptyId === pty_id) {
-            s.notification = text;
-            s.hasUnread = true;
-            return wsList;
-          }
-        }
+      const s = findSurfaceByPtyId(wsList, pty_id);
+      if (s) {
+        s.notification = text;
+        s.hasUnread = true;
       }
       return wsList;
     });
@@ -325,13 +315,9 @@ export async function setupListeners() {
     // Filter out escape-sequence fragments that may slip through
     if (!title || /[\x00-\x1f\x7f]/.test(title) || /^\d+[;\d:\/]*$/.test(title)) return;
     workspaces.update((wsList) => {
-      for (const ws of wsList) {
-        for (const s of getAllSurfaces(ws)) {
-          if (isTerminalSurface(s) && s.ptyId === pty_id) {
-            s.title = title;
-            return wsList;
-          }
-        }
+      const s = findSurfaceByPtyId(wsList, pty_id);
+      if (s) {
+        s.title = title;
       }
       return wsList;
     });
@@ -671,10 +657,9 @@ function findContextForSurface(
   surfaceId: string,
 ): { paneId: string; workspaceId: string } | null {
   for (const ws of get(workspaces)) {
-    for (const pane of getAllPanes(ws.splitRoot)) {
-      if (pane.surfaces.some((s) => s.id === surfaceId)) {
-        return { paneId: pane.id, workspaceId: ws.id };
-      }
+    const pane = findPaneContainingSurface(ws, surfaceId);
+    if (pane) {
+      return { paneId: pane.id, workspaceId: ws.id };
     }
   }
   return null;

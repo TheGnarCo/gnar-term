@@ -4,9 +4,15 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "fs";
+import { readFileSync, readdirSync } from "fs";
 
-const RUST_SOURCE = readFileSync("src-tauri/src/lib.rs", "utf-8");
+// Concatenate every Rust source file so these content checks survive module
+// splits — the asserted code lives across src-tauri/src/*.rs (pty.rs, osc.rs,
+// lib.rs, …), not just lib.rs.
+const RUST_SOURCE = readdirSync("src-tauri/src")
+  .filter((f) => f.endsWith(".rs"))
+  .map((f) => readFileSync(`src-tauri/src/${f}`, "utf-8"))
+  .join("\n");
 
 describe("Molly Disco theme", () => {
   it("is registered in theme-data.ts", () => {

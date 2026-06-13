@@ -1,9 +1,18 @@
 /**
- * Terminal Service — PTY lifecycle, flow control, and surface creation.
+ * Terminal Service — PTY lifecycle, surface creation, and event wiring.
  *
  * Extracted from the old TerminalManager class for use with Svelte stores.
- * This module owns all non-DOM terminal logic: spawning PTYs, buffering output,
- * creating TerminalSurface objects, and opening terminals with WebGL.
+ * This module owns the terminal surface lifecycle (spawning PTYs, creating
+ * TerminalSurface objects, opening terminals) and the global PTY event
+ * listeners. Cohesive low-level concerns live in `./terminal/*` and are
+ * re-exported here so existing import paths (`./terminal-service`) keep working:
+ *
+ *   - ./terminal/platform     → isMac, modLabel, shiftModLabel (also defined
+ *                               here so platform consts stay co-located)
+ *   - ./terminal/path-utils   → resolveFilePath, resolvedFontFamily, fontReady
+ *   - ./terminal/font-size    → FONT_SIZE_*, getFontSize/adjustFontSize/resetFontSize
+ *   - ./terminal/flow-control → handlePtyChunk and the rAF flush pipeline
+ *   - ./terminal/pty-ready    → ptyReady map + waitForPtyReady
  */
 
 import { Terminal } from "@xterm/xterm";
@@ -12,200 +21,35 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import { SearchAddon } from "@xterm/addon-search";
 import { invoke, Channel } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { appendMcpOutput } from "./services/mcp-output-buffer";
 import { readText as clipboardRead, writeText as clipboardWrite } from "@tauri-apps/plugin-clipboard-manager";
 import { get } from "svelte/store";
 import { xtermTheme } from "./stores/theme";
 import { workspaces, activeWorkspaceIdx } from "./stores/workspace";
 import { contextMenu, pendingAction } from "./stores/ui";
 import { canPreview, getSupportedExtensions, openPreview } from "../preview/index";
-import type { TerminalSurface, Pane, Surface, Workspace } from "./types";
+import type { TerminalSurface, Pane, Workspace } from "./types";
 import { uid, getAllSurfaces, getAllPanes, isTerminalSurface, findParentSplit, replaceNodeInTree, findSurfaceByPtyId, findPaneContainingSurface } from "./types";
 import type { MenuItem } from "./context-menu-types";
-import { getConfig, saveConfig } from "./config";
+import { getConfig } from "./config";
 import { reportError } from "./services/error-reporting";
+import { FONT_SIZE_DEFAULT } from "./terminal/font-size";
+import { resolveFilePath, resolvedFontFamily } from "./terminal/path-utils";
+import { handlePtyChunk, drainAndTeardownPty } from "./terminal/flow-control";
+import { ptyReady } from "./terminal/pty-ready";
 import "@xterm/xterm/css/xterm.css";
 
-export const FONT_SIZE_MIN = 8;
-export const FONT_SIZE_MAX = 32;
-export const FONT_SIZE_DEFAULT = 14;
+// --- Re-exports: preserve the public API of ./terminal-service ---
+export { FONT_SIZE_MIN, FONT_SIZE_MAX, FONT_SIZE_DEFAULT, getFontSize, adjustFontSize, resetFontSize } from "./terminal/font-size";
+export { resolveFilePath, resolvedFontFamily, fontReady } from "./terminal/path-utils";
+export { handlePtyChunk } from "./terminal/flow-control";
+export { waitForPtyReady } from "./terminal/pty-ready";
 
 /** Platform detection — used for Cmd (macOS) vs Ctrl (Linux/Windows) shortcuts. */
 export const isMac = typeof navigator !== "undefined" && navigator.platform.toUpperCase().includes("MAC");
 
-// Per-surface PTY-ready signal. connectPty() resolves the deferred once the
-// Rust spawn_pty call returns; waitForPtyReady() awaits it instead of polling
-// surface.ptyId every 50ms. The polling version created a 50ms timer storm
-// during spawn bursts that contributed to a compositor freeze.
-interface PtyReadyDeferred {
-  promise: Promise<number>;
-  resolve: (ptyId: number) => void;
-  reject: (err: Error) => void;
-}
-const ptyReady = new Map<string, PtyReadyDeferred>();
-
-function makeDeferred(): PtyReadyDeferred {
-  let resolve!: (n: number) => void;
-  let reject!: (e: Error) => void;
-  const promise = new Promise<number>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return { promise, resolve, reject };
-}
-
-export function waitForPtyReady(surface: TerminalSurface, timeoutMs = 5000): Promise<number> {
-  if (surface.ptyId >= 0) return Promise.resolve(surface.ptyId);
-  let d = ptyReady.get(surface.id);
-  if (!d) {
-    d = makeDeferred();
-    ptyReady.set(surface.id, d);
-  }
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      reject(new Error("timed out waiting for PTY to spawn"));
-    }, timeoutMs);
-    d!.promise.then(
-      (n) => {
-        clearTimeout(timer);
-        resolve(n);
-      },
-      (e) => {
-        clearTimeout(timer);
-        reject(e);
-      },
-    );
-  });
-}
-
 /** Shortcut label helpers for platform-appropriate display. */
 export const modLabel = isMac ? "⌘" : "Ctrl+";
 export const shiftModLabel = isMac ? "⇧⌘" : "Ctrl+Shift+";
-
-/** Resolve a link path to an absolute filesystem path. Expands ~ and prepends cwd for relative paths. */
-export async function resolveFilePath(linkText: string, cwd: string | undefined): Promise<string> {
-  if (linkText.startsWith("/")) return linkText;
-  if (linkText.startsWith("~/")) {
-    try {
-      const home = await invoke<string>("get_home");
-      return home + linkText.slice(1);
-    } catch {
-      return linkText;
-    }
-  }
-  if (cwd) {
-    const base = cwd.endsWith("/") ? cwd.slice(0, -1) : cwd;
-    return `${base}/${linkText}`;
-  }
-  return linkText;
-}
-
-// --- Font Detection ---
-
-const BUNDLED_FONT = '"JetBrainsMono Nerd Font Mono"';
-const SYSTEM_FALLBACK = 'Menlo, "DejaVu Sans Mono", monospace';
-export let resolvedFontFamily = `${BUNDLED_FONT}, ${SYSTEM_FALLBACK}`;
-
-async function detectFont(): Promise<string> {
-  try {
-    const font = await invoke<string>("detect_font");
-    if (font) {
-      return `"${font}", ${BUNDLED_FONT}, ${SYSTEM_FALLBACK}`;
-    }
-  } catch (_) {
-    // Font detection not available — use bundled font
-  }
-  return `${BUNDLED_FONT}, ${SYSTEM_FALLBACK}`;
-}
-
-export const fontReady = detectFont().then((f) => { resolvedFontFamily = f; });
-
-// --- Flow Control ---
-
-const ptyBuffers = new Map<number, Uint8Array[]>();
-const ptyBufferBytes = new Map<number, number>();
-const ptyFlushScheduled = new Set<number>();
-const ptyPaused = new Set<number>();
-
-const BUFFER_HIGH_WATER = 128 * 1024; // 128KB
-const BUFFER_LOW_WATER = 32 * 1024;   // 32KB
-
-function findSurfaceByPty(ptyId: number): TerminalSurface | null {
-  return findSurfaceByPtyId(get(workspaces), ptyId);
-}
-
-function scheduleFlush(ptyId: number) {
-  if (ptyFlushScheduled.has(ptyId)) return;
-  ptyFlushScheduled.add(ptyId);
-  requestAnimationFrame(() => flushPtyBuffer(ptyId));
-}
-
-/** Append a raw PTY chunk to the per-pty buffer, tee it to the MCP buffer
- *  if one is registered, and schedule an rAF flush to xterm.js. Exported for
- *  tests; in production this is called from the Channel onmessage handler
- *  created in connectPty(). */
-export function handlePtyChunk(ptyId: number, bytes: Uint8Array): void {
-  let chunks = ptyBuffers.get(ptyId);
-  if (!chunks) {
-    chunks = [];
-    ptyBuffers.set(ptyId, chunks);
-  }
-  chunks.push(bytes);
-  const buffered = (ptyBufferBytes.get(ptyId) || 0) + bytes.length;
-  ptyBufferBytes.set(ptyId, buffered);
-
-  if (!ptyPaused.has(ptyId) && buffered >= BUFFER_HIGH_WATER) {
-    ptyPaused.add(ptyId);
-    invoke("pause_pty", { ptyId }).catch(() => {});
-  }
-
-  appendMcpOutput(ptyId, bytes);
-  scheduleFlush(ptyId);
-}
-
-function flushPtyBuffer(ptyId: number) {
-  ptyFlushScheduled.delete(ptyId);
-  const chunks = ptyBuffers.get(ptyId);
-  if (!chunks || chunks.length === 0) return;
-
-  const surface = findSurfaceByPty(ptyId);
-  if (!surface) {
-    // Surface gone — discard buffered data and resume PTY so reader thread exits
-    ptyBuffers.delete(ptyId);
-    ptyBufferBytes.delete(ptyId);
-    if (ptyPaused.has(ptyId)) {
-      ptyPaused.delete(ptyId);
-      invoke("resume_pty", { ptyId }).catch(() => {});
-    }
-    return;
-  }
-
-  // Concatenate all buffered chunks into one write
-  const totalBytes = ptyBufferBytes.get(ptyId) || 0;
-  const merged = new Uint8Array(totalBytes);
-  let offset = 0;
-  for (const chunk of chunks) {
-    merged.set(chunk, offset);
-    offset += chunk.length;
-  }
-  chunks.length = 0;
-  ptyBufferBytes.set(ptyId, 0);
-
-  // Single write to xterm.js per frame — the callback fires when xterm.js has
-  // processed this batch, which is our signal that it's ready for more.
-  surface.terminal.write(merged, () => {
-    // If more data arrived while we were rendering, flush again next frame
-    const buffered = ptyBufferBytes.get(ptyId) || 0;
-    if (buffered > 0) {
-      scheduleFlush(ptyId);
-    }
-    // Resume PTY reader if we drained below low water mark
-    if (ptyPaused.has(ptyId) && buffered < BUFFER_LOW_WATER) {
-      ptyPaused.delete(ptyId);
-      invoke("resume_pty", { ptyId }).catch(() => {});
-    }
-  });
-}
 
 // --- Event Listeners ---
 
@@ -220,28 +64,9 @@ export async function setupListeners() {
   }
   await listen<{ pty_id: number }>("pty-exit", (event) => {
     const { pty_id } = event.payload;
-    // pty-exit arrives via emit while chunks arrive via Channel — different
-    // transports, so a trailing chunk may already be in the per-pty buffer.
-    // Flush it synchronously to the surface's terminal before we tear down
-    // flow-control state and remove the surface from the workspace tree.
-    const chunks = ptyBuffers.get(pty_id);
-    const bytesBuffered = ptyBufferBytes.get(pty_id) || 0;
-    if (chunks && chunks.length > 0 && bytesBuffered > 0) {
-      const surface = findSurfaceByPty(pty_id);
-      if (surface) {
-        const merged = new Uint8Array(bytesBuffered);
-        let offset = 0;
-        for (const chunk of chunks) {
-          merged.set(chunk, offset);
-          offset += chunk.length;
-        }
-        surface.terminal.write(merged);
-      }
-    }
-    ptyBuffers.delete(pty_id);
-    ptyBufferBytes.delete(pty_id);
-    ptyFlushScheduled.delete(pty_id);
-    ptyPaused.delete(pty_id);
+    // Flush any trailing chunk that arrived via the Channel just before the
+    // pty-exit emit, then tear down flow-control state for the pty.
+    drainAndTeardownPty(pty_id);
 
     // Remove the surface from its pane, and collapse empty panes
     let needsDefaultWorkspace = false;
@@ -724,45 +549,3 @@ export async function connectPty(surface: TerminalSurface, cwd?: string): Promis
     ptyReady.delete(surface.id);
   }
 }
-
-/** Current terminal font size, clamped to the supported range. */
-export function getFontSize(): number {
-  const n = getConfig().fontSize ?? FONT_SIZE_DEFAULT;
-  return Math.max(FONT_SIZE_MIN, Math.min(FONT_SIZE_MAX, n));
-}
-
-function applyFontSize(next: number): void {
-  for (const ws of get(workspaces)) {
-    for (const s of getAllSurfaces(ws)) {
-      if (!isTerminalSurface(s)) continue;
-      s.terminal.options.fontSize = next;
-      try {
-        s.fitAddon.fit();
-      } catch {
-        // fit() can throw if the terminal isn't attached to the DOM yet —
-        // the size is reapplied on the next real fit, so ignore.
-      }
-    }
-  }
-}
-
-/**
- * Adjust the terminal font size by `delta` px, clamped to
- * [FONT_SIZE_MIN, FONT_SIZE_MAX]. Persists to config and re-fits every open
- * terminal so the change is immediate and survives restart.
- */
-export function adjustFontSize(delta: number): void {
-  const current = getFontSize();
-  const next = Math.max(FONT_SIZE_MIN, Math.min(FONT_SIZE_MAX, current + delta));
-  if (next === current) return;
-  void saveConfig({ fontSize: next });
-  applyFontSize(next);
-}
-
-/** Reset the terminal font size to the default. */
-export function resetFontSize(): void {
-  if (getFontSize() === FONT_SIZE_DEFAULT) return;
-  void saveConfig({ fontSize: FONT_SIZE_DEFAULT });
-  applyFontSize(FONT_SIZE_DEFAULT);
-}
-

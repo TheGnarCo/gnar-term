@@ -887,12 +887,33 @@ async fn file_exists(path: String) -> bool {
     }
 }
 
+/// True if `path` lands in a blocked location, checking the literal path first
+/// (so a sensitive-but-absent path fails closed) and then the canonicalized
+/// path (so symlinks into a blocked dir are caught). Shared by the directory
+/// and metadata listing commands so they enforce the same blocklist as
+/// `validate_read_path`/`file_exists`.
+fn path_is_blocked(path: &str) -> bool {
+    if is_blocked_path(path) {
+        return true;
+    }
+    match std::fs::canonicalize(path) {
+        Ok(canonical) => is_blocked_path(&canonical.to_string_lossy()),
+        Err(_) => false,
+    }
+}
+
 /// List filenames in a directory (non-recursive, files only)
 #[tauri::command]
 async fn list_dir(path: String) -> Result<Vec<String>, String> {
+    if path_is_blocked(&path) {
+        return Err(format!("Access denied: {}", path));
+    }
     let entries = std::fs::read_dir(&path).map_err(|e| format!("Failed to read dir {}: {}", path, e))?;
     let mut names = Vec::new();
     for entry in entries.flatten() {
+        if is_blocked_path(&entry.path().to_string_lossy()) {
+            continue;
+        }
         if let Ok(ft) = entry.file_type() {
             if ft.is_file() {
                 if let Some(name) = entry.file_name().to_str() {
@@ -929,6 +950,9 @@ async fn mcp_list_dir(
     include_hidden: Option<bool>,
 ) -> Result<Vec<McpDirEntry>, String> {
     let include_hidden = include_hidden.unwrap_or(false);
+    if path_is_blocked(&path) {
+        return Err(format!("Access denied: {}", path));
+    }
     let entries = std::fs::read_dir(&path)
         .map_err(|e| format!("Failed to read dir {}: {}", path, e))?;
     let mut out = Vec::new();
@@ -940,11 +964,14 @@ async fn mcp_list_dir(
         if !include_hidden && name.starts_with('.') {
             continue;
         }
+        let entry_path = entry.path().to_string_lossy().to_string();
+        if is_blocked_path(&entry_path) {
+            continue;
+        }
         let metadata = match entry.metadata() {
             Ok(m) => m,
             Err(_) => continue,
         };
-        let entry_path = entry.path().to_string_lossy().to_string();
         out.push(McpDirEntry {
             name,
             path: entry_path,
@@ -961,9 +988,13 @@ async fn mcp_list_dir(
     Ok(out)
 }
 
-/// Return `(exists, is_dir)` for the MCP `file_exists` tool.
+/// Return `(exists, is_dir)` for the MCP `file_exists` tool. Blocked paths
+/// report as non-existent so an agent can't probe for sensitive files.
 #[tauri::command]
 async fn mcp_file_info(path: String) -> (bool, bool) {
+    if path_is_blocked(&path) {
+        return (false, false);
+    }
     match std::fs::metadata(&path) {
         Ok(m) => (true, m.is_dir()),
         Err(_) => (false, false),
@@ -1728,6 +1759,55 @@ mod tests {
         let result = file_exists(tmp.to_string_lossy().to_string()).await;
         let _ = fs::remove_file(&tmp);
         assert!(!result, "symlinks into ~/.ssh must be rejected");
+    }
+
+    #[tokio::test]
+    async fn mcp_file_info_hides_sensitive_paths() {
+        // The MCP-facing metadata tool must enforce the same blocklist as
+        // file_exists — otherwise an agent could probe for ~/.ssh/id_rsa.
+        let home = std::env::var("HOME").unwrap();
+        let ssh = format!("{}/.ssh/id_rsa", home);
+        assert_eq!(
+            mcp_file_info(ssh).await,
+            (false, false),
+            "mcp_file_info must report blocked paths as non-existent"
+        );
+    }
+
+    #[tokio::test]
+    async fn mcp_list_dir_blocks_sensitive_directory() {
+        let home = std::env::var("HOME").unwrap();
+        let ssh_dir = format!("{}/.ssh", home);
+        assert!(
+            mcp_list_dir(ssh_dir, Some(true)).await.is_err(),
+            "mcp_list_dir must deny listing a blocked directory"
+        );
+    }
+
+    #[tokio::test]
+    async fn list_dir_blocks_sensitive_directory() {
+        let home = std::env::var("HOME").unwrap();
+        let ssh_dir = format!("{}/.ssh", home);
+        assert!(
+            list_dir(ssh_dir).await.is_err(),
+            "list_dir must deny listing a blocked directory"
+        );
+    }
+
+    #[tokio::test]
+    async fn mcp_list_dir_filters_blocked_entries() {
+        // Listing $HOME (with hidden entries) must not surface blocked
+        // children like .ssh / .aws / .bash_history.
+        let home = std::env::var("HOME").unwrap();
+        if let Ok(entries) = mcp_list_dir(home.clone(), Some(true)).await {
+            for e in &entries {
+                assert!(
+                    !is_blocked_path(&e.path),
+                    "mcp_list_dir leaked blocked entry: {}",
+                    e.path
+                );
+            }
+        }
     }
 
     #[test]

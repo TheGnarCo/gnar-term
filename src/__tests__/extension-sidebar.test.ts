@@ -5,8 +5,7 @@ import {
   upsertSection,
   removeSection,
   removeSectionsForWorkspace,
-  primarySections,
-  secondarySections,
+  extensionSections,
   _resetExtensionSidebarForTest,
 } from "../lib/stores/extension-sidebar";
 import {
@@ -37,49 +36,45 @@ describe("extension-sidebar store (per-workspace)", () => {
   it("starts empty", () => {
     setActiveWorkspace("ws-1");
     expect(get(extensionSidebarSections).size).toBe(0);
-    expect(get(primarySections)).toEqual([]);
-    expect(get(secondarySections)).toEqual([]);
+    expect(get(extensionSections)).toEqual([]);
   });
 
-  it("upserts primary and secondary sections separately within a workspace", () => {
+  it("upserts sections within a workspace", () => {
     setActiveWorkspace("ws-1");
     upsertSection({
-      side: "primary",
       sectionId: "p1",
       title: "P1",
       items: [{ id: "a", label: "A" }],
       workspaceId: "ws-1",
     });
     upsertSection({
-      side: "secondary",
       sectionId: "s1",
       title: "S1",
       items: [{ id: "b", label: "B" }],
       workspaceId: "ws-1",
     });
-    expect(get(primarySections)).toHaveLength(1);
-    expect(get(secondarySections)).toHaveLength(1);
-    expect(get(primarySections)[0].title).toBe("P1");
-    expect(get(secondarySections)[0].title).toBe("S1");
+    expect(get(extensionSections)).toHaveLength(2);
+    expect(get(extensionSections).map((s) => s.title).sort()).toEqual([
+      "P1",
+      "S1",
+    ]);
   });
 
   it("replaces an existing section with the same id within the same workspace", () => {
     setActiveWorkspace("ws-1");
     upsertSection({
-      side: "secondary",
       sectionId: "s1",
       title: "first",
       items: [],
       workspaceId: "ws-1",
     });
     upsertSection({
-      side: "secondary",
       sectionId: "s1",
       title: "second",
       items: [{ id: "x", label: "X" }],
       workspaceId: "ws-1",
     });
-    const sections = get(secondarySections);
+    const sections = get(extensionSections);
     expect(sections).toHaveLength(1);
     expect(sections[0].title).toBe("second");
     expect(sections[0].items).toEqual([{ id: "x", label: "X" }]);
@@ -87,31 +82,21 @@ describe("extension-sidebar store (per-workspace)", () => {
 
   it("removeSection is safe for non-existent IDs", () => {
     setActiveWorkspace("ws-1");
-    removeSection("ws-1", "primary", "nope");
-    expect(get(primarySections)).toEqual([]);
+    removeSection("ws-1", "nope");
+    expect(get(extensionSections)).toEqual([]);
   });
 
-  it("allows the same section_id on different sides", () => {
+  it("removeSection removes the matching section", () => {
     setActiveWorkspace("ws-1");
     upsertSection({
-      side: "primary",
       sectionId: "tools",
-      title: "P",
+      title: "Tools",
       items: [],
       workspaceId: "ws-1",
     });
-    upsertSection({
-      side: "secondary",
-      sectionId: "tools",
-      title: "S",
-      items: [],
-      workspaceId: "ws-1",
-    });
-    expect(get(primarySections)).toHaveLength(1);
-    expect(get(secondarySections)).toHaveLength(1);
-    removeSection("ws-1", "primary", "tools");
-    expect(get(primarySections)).toHaveLength(0);
-    expect(get(secondarySections)).toHaveLength(1);
+    expect(get(extensionSections)).toHaveLength(1);
+    removeSection("ws-1", "tools");
+    expect(get(extensionSections)).toHaveLength(0);
   });
 
   it("scopes sections per workspace: a section in W2 is invisible from W1", () => {
@@ -134,14 +119,12 @@ describe("extension-sidebar store (per-workspace)", () => {
     activeWorkspaceIdx.set(0); // active = W1
 
     upsertSection({
-      side: "secondary",
       sectionId: "shared-id",
       title: "in W1",
       items: [],
       workspaceId: "ws-1",
     });
     upsertSection({
-      side: "secondary",
       sectionId: "shared-id",
       title: "in W2",
       items: [],
@@ -149,33 +132,30 @@ describe("extension-sidebar store (per-workspace)", () => {
     });
 
     // Looking at W1 — only the W1 section should be visible.
-    expect(get(secondarySections)).toHaveLength(1);
-    expect(get(secondarySections)[0].title).toBe("in W1");
+    expect(get(extensionSections)).toHaveLength(1);
+    expect(get(extensionSections)[0].title).toBe("in W1");
 
     // Switch to W2 — only the W2 section should be visible.
     activeWorkspaceIdx.set(1);
-    expect(get(secondarySections)).toHaveLength(1);
-    expect(get(secondarySections)[0].title).toBe("in W2");
+    expect(get(extensionSections)).toHaveLength(1);
+    expect(get(extensionSections)[0].title).toBe("in W2");
   });
 
   it("removeSectionsForWorkspace prunes everything tied to a destroyed workspace", () => {
     setActiveWorkspace("ws-doomed");
     upsertSection({
-      side: "primary",
       sectionId: "a",
       title: "A",
       items: [],
       workspaceId: "ws-doomed",
     });
     upsertSection({
-      side: "secondary",
       sectionId: "b",
       title: "B",
       items: [],
       workspaceId: "ws-doomed",
     });
     upsertSection({
-      side: "primary",
       sectionId: "c",
       title: "C",
       items: [],

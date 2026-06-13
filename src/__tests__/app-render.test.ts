@@ -47,13 +47,20 @@ describe("App.svelte structure verification", () => {
     const fs = await import("fs");
     const source = fs.readFileSync("src/App.svelte", "utf-8");
     // Must have these components in the template
-    expect(source).toContain("<PrimarySidebar");
-    expect(source).toContain("<SecondarySidebar");
+    expect(source).toContain("<Sidebar");
     expect(source).toContain("<TitleBar");
     expect(source).toContain("<WorkspaceView");
     expect(source).toContain("<FindBar");
     expect(source).toContain("<CommandPalette");
     expect(source).toContain("<ContextMenu");
+  });
+
+  it("no longer renders a secondary sidebar", async () => {
+    const fs = await import("fs");
+    const source = fs.readFileSync("src/App.svelte", "utf-8");
+    // The secondary (right) sidebar was removed — there is a single sidebar.
+    expect(source).not.toContain("SecondarySidebar");
+    expect(source).not.toContain("secondarySidebar");
   });
 
   it("terminal area has overflow: hidden for viewport containment", async () => {

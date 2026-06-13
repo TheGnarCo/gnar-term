@@ -1,9 +1,9 @@
 <script lang="ts">
   import { theme } from "../stores/theme";
-  import { primarySidebarVisible, primarySidebarWidth, contextMenu } from "../stores/ui";
+  import { sidebarVisible, sidebarWidth, contextMenu } from "../stores/ui";
   import { dragResize } from "../actions/drag-resize";
   import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
-  import { primarySections } from "../stores/extension-sidebar";
+  import { extensionSections } from "../stores/extension-sidebar";
   import WorkspaceItem from "./WorkspaceItem.svelte";
   import ExtensionSidebarSection from "./ExtensionSidebarSection.svelte";
   import type { MenuItem } from "../context-menu-types";
@@ -53,11 +53,11 @@
 
 </script>
 
-{#if $primarySidebarVisible}
+{#if $sidebarVisible}
   <div
-    id="primary-sidebar"
+    id="sidebar"
     style="
-      width: {$primarySidebarWidth}px;
+      width: {$sidebarWidth}px;
       background: {$theme.sidebarBg};
       display: flex; overflow: hidden;
       font-size: 13px; user-select: none;
@@ -102,7 +102,7 @@
           onReorder={onReorderWorkspaces}
         />
       {/each}
-      {#each $primarySections as section (section.sectionId)}
+      {#each $extensionSections as section (section.sectionId)}
         <ExtensionSidebarSection {section} />
       {/each}
     </div>
@@ -117,7 +117,7 @@
     use:dragResize={{
       onDrag: (ev) => {
         const maxWidth = window.innerWidth * 0.33;
-        primarySidebarWidth.set(Math.max(140, Math.min(maxWidth, ev.clientX)));
+        sidebarWidth.set(Math.max(140, Math.min(maxWidth, ev.clientX)));
       },
       onStart: () => { dragging = true; },
       onEnd: () => { dragging = false; },

@@ -73,7 +73,7 @@ gnar-term runs on macOS, Linux, and Windows. When making changes:
 See `docs/` for design documentation:
 
 - **[docs/glossary.md](docs/glossary.md)** — canonical definitions for terms used across the codebase (workspace, pane, surface, etc.)
-- **[docs/sidebar-architecture.md](docs/sidebar-architecture.md)** — primary/secondary sidebar layout, extension model, and control placement rules
+- **[docs/sidebar-architecture.md](docs/sidebar-architecture.md)** — sidebar layout, extension model, and control placement rules
 
 ### Frontend Structure
 
@@ -92,7 +92,9 @@ When adding new functionality, put business logic in the appropriate service mod
 
 ### Sidebar Rules
 
-- Sidebar toggle buttons always live in the TitleBar, never in sidebar headers
-- Primary sidebar: vertically scrolling sections; Workspaces section is always first
-- Secondary sidebar: tab-controlled; each section is a tab; control row only renders when populated (via `controls` slot)
-- Both sidebars are resizable (max 33% viewport width, min 140px)
+There is a single sidebar (left). The right "secondary" sidebar was removed.
+
+- The sidebar toggle button always lives in the TitleBar, never in the sidebar header
+- Sidebar: vertically scrolling sections; Workspaces section is always first
+- Extension sections (declared via the MCP `render_sidebar` tool) append below Workspaces
+- The sidebar is resizable (max 33% viewport width, min 140px)

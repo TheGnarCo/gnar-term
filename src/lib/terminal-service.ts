@@ -23,6 +23,7 @@ import type { TerminalSurface, Pane, Surface, Workspace } from "./types";
 import { uid, getAllSurfaces, getAllPanes, isTerminalSurface, findParentSplit, replaceNodeInTree } from "./types";
 import type { MenuItem } from "./context-menu-types";
 import { getConfig, saveConfig } from "./config";
+import { reportError } from "./services/error-reporting";
 import "@xterm/xterm/css/xterm.css";
 
 export const FONT_SIZE_MIN = 8;
@@ -483,7 +484,7 @@ export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<T
     if (e.ctrlKey && e.shiftKey && !e.metaKey && (e.key === "V" || e.key === "v")) {
       e.preventDefault();
       clipboardRead().then(text => {
-        if (text && surface.ptyId >= 0) invoke("write_pty", { ptyId: surface.ptyId, data: text });
+        if (text && surface.ptyId >= 0) invoke("write_pty", { ptyId: surface.ptyId, data: text }).catch((e) => reportError(e, "write_pty"));
       });
       return false;
     }
@@ -509,7 +510,7 @@ export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<T
       if (!alt && !shift && k === "v") {
         e.preventDefault();
         clipboardRead().then(text => {
-          if (text && surface.ptyId >= 0) invoke("write_pty", { ptyId: surface.ptyId, data: text });
+          if (text && surface.ptyId >= 0) invoke("write_pty", { ptyId: surface.ptyId, data: text }).catch((e) => reportError(e, "write_pty"));
         }).catch((err) => console.warn("Clipboard read failed:", err));
         return false;
       }
@@ -546,10 +547,10 @@ export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<T
   });
 
   terminal.onData((data) => {
-    if (surface.ptyId >= 0) invoke("write_pty", { ptyId: surface.ptyId, data });
+    if (surface.ptyId >= 0) invoke("write_pty", { ptyId: surface.ptyId, data }).catch((e) => reportError(e, "write_pty"));
   });
   terminal.onResize(({ cols, rows }) => {
-    if (surface.ptyId >= 0) invoke("resize_pty", { ptyId: surface.ptyId, cols, rows });
+    if (surface.ptyId >= 0) invoke("resize_pty", { ptyId: surface.ptyId, cols, rows }).catch((e) => reportError(e, "resize_pty"));
   });
   // NOTE: We intentionally do NOT use terminal.onTitleChange() here.
   // xterm.js fires it with raw/partial escape sequence fragments (OSC 7 cwd data,
@@ -594,8 +595,8 @@ export async function createTerminalSurface(pane: Pane, cwd?: string): Promise<T
       label: "Paste",
       shortcut: isMac ? "⌘V" : "Ctrl+Shift+V",
       action: () => clipboardRead().then(t => {
-        if (t && surface.ptyId >= 0) invoke("write_pty", { ptyId: surface.ptyId, data: t });
-      }),
+        if (t && surface.ptyId >= 0) invoke("write_pty", { ptyId: surface.ptyId, data: t }).catch((e) => reportError(e, "write_pty"));
+      }).catch((e) => reportError(e, "clipboard-read")),
     });
 
     // Check if selection looks like a file path

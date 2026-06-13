@@ -3,12 +3,9 @@ name: CI
 on:
   push:
     branches: [main]
-  # Run on every pull request regardless of its base branch, so stacked PRs
-  # (e.g. base = a feature branch, not main) get CI too. For pull_request
-  # events GitHub reads this trigger from the PR's BASE branch, so this must
-  # be present on each base branch for its PRs to run.
+  # Run CI on every pull request regardless of its base branch, so stacked
+  # PRs (base = a feature branch, not main) get CI too.
   pull_request:
-    branches: [main]
 
 jobs:
   check:

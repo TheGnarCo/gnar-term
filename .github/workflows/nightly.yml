@@ -6,8 +6,9 @@ name: "Nightly"
 # and explicitly checks out `dev` to build.
 
 on:
-  schedule:
-    - cron: "0 8 * * *" # 08:00 UTC = 01:00 PT / 04:00 ET
+  # Nightly schedule disabled. Re-enable by uncommenting the schedule block.
+  # schedule:
+  #   - cron: "0 8 * * *" # 08:00 UTC = 01:00 PT / 04:00 ET
   workflow_dispatch:
 
 concurrency:

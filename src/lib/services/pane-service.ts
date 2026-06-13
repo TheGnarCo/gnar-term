@@ -15,6 +15,7 @@ import {
   getAllPanes,
   isTerminalSurface,
   findParentSplit,
+  findPaneInWorkspace,
   replaceNodeInTree,
   type Workspace,
   type Pane,
@@ -29,8 +30,7 @@ export async function splitPane(
 ) {
   const ws = get(activeWorkspace);
   if (!ws) return;
-  const activeP =
-    getAllPanes(ws.splitRoot).find((p) => p.id === paneId) ?? get(activePane);
+  const activeP = findPaneInWorkspace(ws, paneId) ?? get(activePane);
   if (!activeP) return;
 
   const sourceSurface = activeP.surfaces.find(
@@ -93,7 +93,7 @@ export function removePane(ws: Workspace, pane: Pane) {
 export function closePane(paneId: string) {
   const ws = get(activeWorkspace);
   if (!ws) return;
-  const pane = getAllPanes(ws.splitRoot).find((p) => p.id === paneId);
+  const pane = findPaneInWorkspace(ws, paneId);
   if (!pane) return;
   for (const s of [...pane.surfaces]) {
     if (isTerminalSurface(s)) {
@@ -115,7 +115,7 @@ export function focusPane(paneId: string) {
 export function reorderTab(paneId: string, fromIdx: number, toIdx: number) {
   const ws = get(activeWorkspace);
   if (!ws) return;
-  const pane = getAllPanes(ws.splitRoot).find((p) => p.id === paneId);
+  const pane = findPaneInWorkspace(ws, paneId);
   if (!pane || fromIdx === toIdx) return;
   const item = pane.surfaces.splice(fromIdx, 1)[0];
   const adjustedTo = fromIdx < toIdx ? toIdx - 1 : toIdx;

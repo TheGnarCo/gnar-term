@@ -1,0 +1,27 @@
+GnarTerm
+Copyright (c) 2026 The Gnar Company
+
+This product is licensed under the MIT License (see LICENSE).
+
+It bundles third-party components, each distributed under its own license.
+The list below is non-exhaustive; authoritative versions and licenses are
+declared in `package.json` (npm dependencies) and `src-tauri/Cargo.toml`
+(Rust crates), and full license texts ship with each dependency in
+`node_modules/<pkg>/LICENSE` and the crates' source.
+
+Frontend (npm):
+  - @xterm/xterm and addons ......... MIT — Copyright (c) The xterm.js authors
+  - svelte .......................... MIT — Copyright (c) Svelte contributors
+  - marked .......................... MIT — Copyright (c) Christopher Jeffrey, et al.
+  - dompurify ....................... Apache-2.0 OR MPL-2.0 — Copyright (c) Cure53
+  - github-markdown-css ............. MIT — Copyright (c) Sindre Sorhus
+  - pdfjs-dist ...................... Apache-2.0 — Copyright (c) Mozilla Foundation
+  - @tauri-apps/api and plugins ..... MIT OR Apache-2.0 — Copyright (c) Tauri Programme
+
+Backend (Rust crates):
+  - tauri ........................... MIT OR Apache-2.0 — Copyright (c) Tauri Programme
+  - portable-pty (wezterm) .......... MIT — Copyright (c) Wez Furlong
+  - tokio ........................... MIT — Copyright (c) Tokio Contributors
+  - serde, serde_json ............... MIT OR Apache-2.0 — Copyright (c) Serde developers
+  - clap ............................ MIT OR Apache-2.0 — Copyright (c) Clap contributors
+  - libc ............................ MIT OR Apache-2.0 — Copyright (c) The Rust Project Developers

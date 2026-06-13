@@ -398,6 +398,12 @@ pub fn build_hello_message() -> String {
 mod tests {
     use super::*;
 
+    /// Serializes tests that mutate the process-global `GNAR_TERM_*` env vars.
+    /// Rust runs tests in parallel within one process, so without this lock the
+    /// env-setting and env-clearing hello-message tests race and intermittently
+    /// read each other's state.
+    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     #[test]
     fn uds_path_is_resolved() {
         let p = uds_path().expect("uds_path should resolve");
@@ -408,7 +414,7 @@ mod tests {
 
     #[test]
     fn hello_message_includes_env_vars() {
-        // Use a separate process to control env without polluting other tests.
+        let _env = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         // We test the function directly by setting env, then unsetting.
         std::env::set_var("GNAR_TERM_PANE_ID", "pane-abc");
         std::env::set_var("GNAR_TERM_WORKSPACE_ID", "ws-xyz");
@@ -428,6 +434,7 @@ mod tests {
 
     #[test]
     fn hello_message_when_unbound_uses_null() {
+        let _env = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         // Ensure clean env.
         std::env::remove_var("GNAR_TERM_PANE_ID");
         std::env::remove_var("GNAR_TERM_WORKSPACE_ID");

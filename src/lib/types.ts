@@ -67,6 +67,63 @@ export function isTerminalSurface(s: Surface): s is TerminalSurface {
   return s.kind === "terminal";
 }
 
+/**
+ * Find a pane by id within a single workspace's split tree.
+ * Returns undefined when no pane in the workspace has that id.
+ */
+export function findPaneInWorkspace(ws: Workspace, paneId: string): Pane | undefined {
+  return getAllPanes(ws.splitRoot).find((p) => p.id === paneId);
+}
+
+/**
+ * Find a pane by id across all of the given workspaces, returning both the
+ * pane and the workspace that contains it. Returns null when no workspace
+ * contains a pane with that id (e.g. the pane was closed, or the id is invalid).
+ */
+export function findPaneById(
+  wsList: Workspace[],
+  paneId: string,
+): { workspace: Workspace; pane: Pane } | null {
+  for (const ws of wsList) {
+    const pane = findPaneInWorkspace(ws, paneId);
+    if (pane) return { workspace: ws, pane };
+  }
+  return null;
+}
+
+/**
+ * Find the pane that contains a surface with the given id, searching a single
+ * workspace's split tree. Returns undefined when no pane holds that surface.
+ */
+export function findPaneContainingSurface(
+  ws: Workspace,
+  surfaceId: string,
+): Pane | undefined {
+  return getAllPanes(ws.splitRoot).find((p) =>
+    p.surfaces.some((s) => s.id === surfaceId),
+  );
+}
+
+/**
+ * Find a terminal surface by its PTY id across all of the given workspaces.
+ * Only terminal surfaces carry a ptyId, so preview surfaces are skipped.
+ * Returns null when no live terminal surface owns that ptyId.
+ *
+ * This is a linear scan by design — a stateful ptyId→surface index would risk
+ * desyncing from the workspace tree on splits/closes/moves.
+ */
+export function findSurfaceByPtyId(
+  wsList: Workspace[],
+  ptyId: number,
+): TerminalSurface | null {
+  for (const ws of wsList) {
+    for (const s of getAllSurfaces(ws)) {
+      if (isTerminalSurface(s) && s.ptyId === ptyId) return s;
+    }
+  }
+  return null;
+}
+
 export function isPreviewSurface(s: Surface): s is PreviewSurface {
   return s.kind === "preview";
 }

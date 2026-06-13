@@ -1,6 +1,6 @@
 <script lang="ts">
   import { theme } from "../stores/theme";
-  import { primarySidebarVisible, secondarySidebarVisible } from "../stores/ui";
+  import { sidebarVisible } from "../stores/ui";
   import { isMac } from "../terminal-service";
 
   let btnStyle = "";
@@ -11,7 +11,7 @@
     padding: 0; -webkit-app-region: no-drag;
   `;
 
-  $: leftPadding = !$primarySidebarVisible && isMac ? "78px" : "8px";
+  $: leftPadding = !$sidebarVisible && isMac ? "78px" : "8px";
 </script>
 
 <div
@@ -23,9 +23,9 @@
   "
 >
   <button
-    style="{btnStyle} color: {$primarySidebarVisible ? $theme.fg : $theme.fgDim};"
-    title="Toggle Primary Sidebar (⌘B)"
-    on:click={() => primarySidebarVisible.update(v => !v)}
+    style="{btnStyle} color: {$sidebarVisible ? $theme.fg : $theme.fgDim};"
+    title="Toggle Sidebar (⌘B)"
+    on:click={() => sidebarVisible.update(v => !v)}
   >
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="2" width="14" height="12" rx="1.5"/><line x1="5.5" y1="2" x2="5.5" y2="14"/></svg>
   </button>
@@ -37,11 +37,6 @@
     ">GNARTERM</span>
   </div>
 
-  <button
-    style="{btnStyle} color: {$secondarySidebarVisible ? $theme.fg : $theme.fgDim};"
-    title="Toggle Secondary Sidebar"
-    on:click={() => secondarySidebarVisible.update(v => !v)}
-  >
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="2" width="14" height="12" rx="1.5"/><line x1="10.5" y1="2" x2="10.5" y2="14"/></svg>
-  </button>
+  <!-- 26px spacer balances the toggle button so the title stays centered -->
+  <div style="width: 26px; flex-shrink: 0;"></div>
 </div>

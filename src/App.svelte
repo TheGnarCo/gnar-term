@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { listen } from "@tauri-apps/api/event";
   import { theme, themes, xtermTheme } from "./lib/stores/theme";
-  import { primarySidebarVisible, secondarySidebarVisible, commandPaletteOpen, findBarVisible, pendingAction, showInputPrompt } from "./lib/stores/ui";
+  import { sidebarVisible, commandPaletteOpen, findBarVisible, pendingAction, showInputPrompt } from "./lib/stores/ui";
   import { workspaces, activeWorkspaceIdx, activeWorkspace, activePane, activeSurface } from "./lib/stores/workspace";
   import { invoke } from "@tauri-apps/api/core";
   import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -20,8 +20,7 @@
   import { confirmQuit } from "./lib/services/quit-confirmation-service";
 
   // Components
-  import PrimarySidebar from "./lib/components/PrimarySidebar.svelte";
-  import SecondarySidebar from "./lib/components/SecondarySidebar.svelte";
+  import Sidebar from "./lib/components/Sidebar.svelte";
   import TitleBar from "./lib/components/TitleBar.svelte";
   import WorkspaceView from "./lib/components/WorkspaceView.svelte";
   import CommandPalette from "./lib/components/CommandPalette.svelte";
@@ -30,7 +29,7 @@
   import InputPrompt from "./lib/components/InputPrompt.svelte";
   import ConfirmPrompt from "./lib/components/ConfirmPrompt.svelte";
 
-  let sidebarComponent: PrimarySidebar;
+  let sidebarComponent: Sidebar;
   let findBarComponent: FindBar;
 
   // ---- Theme ----
@@ -57,8 +56,7 @@
     { name: "Close Workspace", shortcut: `${shiftModLabel}W`, action: () => closeWorkspace($activeWorkspaceIdx) },
     { name: "Next Surface", shortcut: `${shiftModLabel}]`, action: () => nextSurface() },
     { name: "Previous Surface", shortcut: `${shiftModLabel}[`, action: () => prevSurface() },
-    { name: "Toggle Primary Sidebar", shortcut: `${shiftModLabel}B`, action: () => primarySidebarVisible.update(v => !v) },
-    { name: "Toggle Secondary Sidebar", action: () => secondarySidebarVisible.update(v => !v) },
+    { name: "Toggle Sidebar", shortcut: `${shiftModLabel}B`, action: () => sidebarVisible.update(v => !v) },
     { name: "Toggle Find Bar", shortcut: `${shiftModLabel}F`, action: () => findBarVisible.update(v => !v) },
     { name: "Clear Scrollback", shortcut: `${shiftModLabel}K`, action: () => { const s = $activeSurface; if (s && isTerminalSurface(s)) s.terminal.clear(); } },
     ...$workspaces.map((ws, i) => ({
@@ -111,7 +109,7 @@
       if (e.key === "w") { e.preventDefault(); closeActiveSurface(); return; }
       if (e.key >= "1" && e.key <= "8") { e.preventDefault(); switchWorkspace(parseInt(e.key) - 1); return; }
       if (e.key === "9") { e.preventDefault(); switchWorkspace($workspaces.length - 1); return; }
-      if (e.key === "b") { e.preventDefault(); primarySidebarVisible.update(v => !v); return; }
+      if (e.key === "b") { e.preventDefault(); sidebarVisible.update(v => !v); return; }
       if (e.key === "k") { e.preventDefault(); const s = $activeSurface; if (s && isTerminalSurface(s)) s.terminal.clear(); return; }
       if (e.key === "p") { e.preventDefault(); commandPaletteOpen.update(v => !v); return; }
       if (e.key === "f") { e.preventDefault(); findBarVisible.update(v => !v); return; }
@@ -142,7 +140,7 @@
       if (k === "h") { e.preventDefault(); flashFocusedPane(); return; }
       if (k === "r") { e.preventDefault(); sidebarComponent?.startRename($activeWorkspaceIdx); return; }
       if (k === "g") { e.preventDefault(); findBarVisible.set(true); findBarComponent?.findPrev(); return; }
-      if (k === "b") { e.preventDefault(); primarySidebarVisible.update(v => !v); return; }
+      if (k === "b") { e.preventDefault(); sidebarVisible.update(v => !v); return; }
       if (k === "p") { e.preventDefault(); commandPaletteOpen.update(v => !v); return; }
       if (k === "k") { e.preventDefault(); const s = $activeSurface; if (s && isTerminalSurface(s)) s.terminal.clear(); return; }
       if (k === "f") { e.preventDefault(); findBarVisible.update(v => !v); return; }
@@ -259,7 +257,7 @@
 <svelte:window on:keydown={handleKeydown} />
 
 <div id="app" style="display: flex; height: 100vh; overflow: hidden;">
-  <PrimarySidebar
+  <Sidebar
     bind:this={sidebarComponent}
     onNewWorkspace={() => createWorkspace(`Workspace ${$workspaces.length + 1}`)}
     onSwitchWorkspace={switchWorkspace}
@@ -297,8 +295,6 @@
       <FindBar bind:this={findBarComponent} />
     </div>
   </div>
-
-  <SecondarySidebar />
 </div>
 
 <CommandPalette commands={paletteCommands} />

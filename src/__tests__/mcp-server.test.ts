@@ -178,7 +178,6 @@ describe("MCP server JSON-RPC", () => {
       rpc("tools/call", {
         name: "render_sidebar",
         arguments: {
-          side: "secondary",
           section_id: "s1",
           title: "S1",
           items: [{ id: "a", label: "A" }],
@@ -193,7 +192,7 @@ describe("MCP server JSON-RPC", () => {
     });
     const map = get(extensionSidebarSections);
     expect(map.size).toBe(1);
-    const section = map.get("ws-B:secondary:s1");
+    const section = map.get("ws-B:s1");
     expect(section?.workspaceId).toBe("ws-B");
     expect(section?.title).toBe("S1");
   });
@@ -211,7 +210,6 @@ describe("MCP server JSON-RPC", () => {
       rpc("tools/call", {
         name: "render_sidebar",
         arguments: {
-          side: "primary",
           section_id: "s1",
           title: "S1",
           items: [],
@@ -220,8 +218,8 @@ describe("MCP server JSON-RPC", () => {
       ctx,
     );
     const map = get(extensionSidebarSections);
-    expect(map.has("ws-B:primary:s1")).toBe(true);
-    expect(map.has("ws-A:primary:s1")).toBe(false);
+    expect(map.has("ws-B:s1")).toBe(true);
+    expect(map.has("ws-A:s1")).toBe(false);
   });
 
   it("render_sidebar errors clearly when unbound and no workspace_id passed", async () => {
@@ -233,7 +231,7 @@ describe("MCP server JSON-RPC", () => {
     const resp = await dispatch(
       rpc("tools/call", {
         name: "render_sidebar",
-        arguments: { side: "secondary", section_id: "x", title: "X", items: [] },
+        arguments: { section_id: "x", title: "X", items: [] },
       }),
       ctx,
     );
@@ -252,7 +250,7 @@ describe("MCP server JSON-RPC", () => {
     await dispatch(
       rpc("tools/call", {
         name: "render_sidebar",
-        arguments: { side: "primary", section_id: "x", title: "X", items: [] },
+        arguments: { section_id: "x", title: "X", items: [] },
       }),
       ctx,
     );
@@ -261,7 +259,7 @@ describe("MCP server JSON-RPC", () => {
     const resp = await dispatch(
       rpc("tools/call", {
         name: "remove_sidebar_section",
-        arguments: { side: "primary", section_id: "x" },
+        arguments: { section_id: "x" },
       }),
       ctx,
     );
@@ -277,7 +275,7 @@ describe("MCP server JSON-RPC", () => {
     await dispatch(
       rpc("tools/call", {
         name: "render_sidebar",
-        arguments: { side: "primary", section_id: "x", title: "X", items: [] },
+        arguments: { section_id: "x", title: "X", items: [] },
       }),
       ctx,
     );

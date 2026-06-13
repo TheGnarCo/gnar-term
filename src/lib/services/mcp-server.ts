@@ -842,17 +842,15 @@ registerTool({
   inputSchema: {
     type: "object",
     properties: {
-      side: { type: "string", enum: ["primary", "secondary"] },
       section_id: { type: "string" },
       title: { type: "string" },
       items: { type: "array" },
       workspace_id: { type: "string" },
     },
-    required: ["side", "section_id", "title", "items"],
+    required: ["section_id", "title", "items"],
   },
   handler: (args, ctx) => {
     const p = args as {
-      side: "primary" | "secondary";
       section_id: string;
       title: string;
       items: SidebarItem[];
@@ -860,7 +858,6 @@ registerTool({
     };
     const target = resolveTarget({ workspace_id: p.workspace_id }, ctx);
     upsertSection({
-      side: p.side,
       sectionId: p.section_id,
       title: p.title,
       items: p.items ?? [],
@@ -877,20 +874,18 @@ registerTool({
   inputSchema: {
     type: "object",
     properties: {
-      side: { type: "string", enum: ["primary", "secondary"] },
       section_id: { type: "string" },
       workspace_id: { type: "string" },
     },
-    required: ["side", "section_id"],
+    required: ["section_id"],
   },
   handler: (args, ctx) => {
     const p = args as {
-      side: "primary" | "secondary";
       section_id: string;
       workspace_id?: string;
     };
     const target = resolveTarget({ workspace_id: p.workspace_id }, ctx);
-    removeSection(target.workspace.id, p.side, p.section_id);
+    removeSection(target.workspace.id, p.section_id);
     return { ok: true, workspace_id: target.workspace.id };
   },
 });

@@ -5,6 +5,12 @@ import { getAllPanes } from "../types";
 export const workspaces = writable<Workspace[]>([]);
 export const activeWorkspaceIdx = writable<number>(-1);
 
+/**
+ * Surface id of the currently maximized ("zoomed") pane, or null when no pane
+ * is zoomed. Ephemeral UI state — not persisted.
+ */
+export const zoomedSurfaceId = writable<string | null>(null);
+
 export const activeWorkspace = derived(
   [workspaces, activeWorkspaceIdx],
   ([$ws, $idx]) => $ws[$idx] ?? null

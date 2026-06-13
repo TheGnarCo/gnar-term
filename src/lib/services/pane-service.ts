@@ -6,6 +6,7 @@ import {
   activeWorkspace,
   activePane,
   activeSurface,
+  zoomedSurfaceId,
 } from "../stores/workspace";
 import { theme } from "../stores/theme";
 import { createTerminalSurface } from "../terminal-service";
@@ -158,4 +159,13 @@ export function flashFocusedPane() {
 export function splitFromSidebar(direction: "horizontal" | "vertical") {
   const pane = get(activePane);
   if (pane) splitPane(pane.id, direction);
+}
+
+/**
+ * Toggle the maximized ("zoomed") state of the surface. When a surface is
+ * zoomed its pane fills the workspace, hiding sibling panes; toggling again
+ * (or zooming a different surface) restores the split layout.
+ */
+export function togglePaneZoom(surfaceId: string) {
+  zoomedSurfaceId.update((current) => (current === surfaceId ? null : surfaceId));
 }

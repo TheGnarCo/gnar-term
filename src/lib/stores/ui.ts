@@ -36,3 +36,22 @@ export function showInputPrompt(placeholder: string, defaultValue?: string): Pro
     inputPrompt.set({ placeholder, defaultValue, resolve });
   });
 }
+
+/** Yes/no confirmation prompt — in-app modal (WKWebView has no window.confirm). */
+export interface ConfirmPromptState {
+  message: string;
+  title?: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  resolve: (value: boolean) => void;
+}
+export const confirmPrompt = writable<ConfirmPromptState | null>(null);
+
+export function showConfirmPrompt(
+  message: string,
+  opts: { title?: string; confirmLabel?: string; cancelLabel?: string } = {},
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    confirmPrompt.set({ message, ...opts, resolve });
+  });
+}

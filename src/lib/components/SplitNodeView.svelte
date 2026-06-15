@@ -16,7 +16,6 @@
   export let onSplitDown: (paneId: string) => void;
   export let onClosePane: (paneId: string) => void;
   export let onFocusPane: (paneId: string) => void;
-  export let onReorderTab: ((paneId: string, fromIdx: number, toIdx: number) => void) | undefined = undefined;
 
   let dragging = false;
   let dragRect: DOMRect | null = null;
@@ -45,6 +44,8 @@
 {#if node.type === "pane"}
   <PaneView
     pane={node.pane}
+    workspaceId={workspace.id}
+    isActive={workspace.activePaneId === node.pane.id}
     onSelectSurface={(sid) => onSelectSurface(node.pane.id, sid)}
     onCloseSurface={(sid) => onCloseSurface(node.pane.id, sid)}
     onNewSurface={() => onNewSurface(node.pane.id)}
@@ -52,7 +53,6 @@
     onSplitDown={() => onSplitDown(node.pane.id)}
     onClosePane={() => onClosePane(node.pane.id)}
     onFocusPane={() => onFocusPane(node.pane.id)}
-    onReorderTab={onReorderTab ? (from, to) => onReorderTab!(node.pane.id, from, to) : undefined}
   />
 {:else}
   {@const zoomed = $zoomedSurfaceId}
@@ -78,7 +78,6 @@
         {onSplitDown}
         {onClosePane}
         {onFocusPane}
-        {onReorderTab}
       />
     </div>
     {#if !zoomActive}
@@ -108,7 +107,6 @@
         {onSplitDown}
         {onClosePane}
         {onFocusPane}
-        {onReorderTab}
       />
     </div>
   </div>

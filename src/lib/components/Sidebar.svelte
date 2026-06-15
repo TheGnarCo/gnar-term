@@ -2,9 +2,11 @@
   import { theme } from "../stores/theme";
   import { sidebarVisible, sidebarWidth, contextMenu } from "../stores/ui";
   import { dragResize } from "../actions/drag-resize";
+  import { createDragReorder, type DragReorderState } from "../actions/drag-reorder";
   import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
   import { extensionSections } from "../stores/extension-sidebar";
   import WorkspaceItem from "./WorkspaceItem.svelte";
+  import DropGhost from "./DropGhost.svelte";
   import ExtensionSidebarSection from "./ExtensionSidebarSection.svelte";
   import type { MenuItem } from "../context-menu-types";
 
@@ -25,6 +27,20 @@
   }
 
   let dragging = false;
+
+  // Mouse-driven workspace reorder (HTML5 DnD is unreliable in WKWebView).
+  let wsDrag: DragReorderState = { sourceIdx: null, indicator: null, active: false, sourceHeight: 0 };
+  const wsReorder = createDragReorder({
+    dataAttr: "ws-drag-idx",
+    containerSelector: ".workspace-list",
+    ghostStyle: () => ({ background: $theme.bgActive, border: `1px solid ${$theme.accent}` }),
+    onDrop: (from, to) => onReorderWorkspaces(from, to),
+    onStateChange: () => { wsDrag = wsReorder.getState(); },
+  });
+  $: showGhostBefore = (idx: number) =>
+    wsDrag.active && wsDrag.indicator?.idx === idx && wsDrag.indicator?.edge === "before";
+  $: showGhostAfter = (idx: number) =>
+    wsDrag.active && wsDrag.indicator?.idx === idx && wsDrag.indicator?.edge === "after";
 
   function showWorkspaceContextMenu(x: number, y: number, idx: number) {
     const items: MenuItem[] = [
@@ -88,8 +104,11 @@
     </div>
 
     <!-- Workspace list (always first) + extension sections -->
-    <div style="flex: 1; overflow-y: auto; padding: 4px 0;">
+    <div class="workspace-list" style="flex: 1; overflow-y: auto; padding: 4px 0;">
       {#each $workspaces as ws, idx (ws.id)}
+        {#if showGhostBefore(idx)}
+          <DropGhost height={wsDrag.sourceHeight} />
+        {/if}
         <WorkspaceItem
           bind:this={workspaceItems[ws.id]}
           workspace={ws}
@@ -99,8 +118,13 @@
           onClose={() => onCloseWorkspace(idx)}
           onRename={(name) => onRenameWorkspace(idx, name)}
           onContextMenu={(x, y) => showWorkspaceContextMenu(x, y, idx)}
-          onReorder={onReorderWorkspaces}
+          dataDragIdx={idx}
+          dragHidden={wsDrag.sourceIdx === idx}
+          onDragMousedown={(e) => wsReorder.start(e, idx)}
         />
+        {#if showGhostAfter(idx)}
+          <DropGhost height={wsDrag.sourceHeight} />
+        {/if}
       {/each}
       {#each $extensionSections as section (section.sectionId)}
         <ExtensionSidebarSection {section} />

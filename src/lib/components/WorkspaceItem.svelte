@@ -30,13 +30,26 @@
   export let onClose: () => void;
   export let onRename: (name: string) => void;
   export let onContextMenu: (x: number, y: number) => void;
-  export let onReorder: (fromIdx: number, toIdx: number) => void;
+  /** Index advertised on the row for the mouse-driven reorder engine. */
+  export let dataDragIdx: number = index;
+  /** mousedown handler that arms the drag-reorder engine (owned by Sidebar). */
+  export let onDragMousedown: (e: MouseEvent) => void = () => {};
+  /** When true the row is the active drag source — hidden in place while a
+   *  floating ghost + DropGhost slot stand in for it. */
+  export let dragHidden: boolean = false;
 
   let hovered = false;
   let closeHovered = false;
   let nameEl: HTMLSpanElement;
   let renaming = false;
-  let dragOver = false;
+
+  // Arm the reorder engine on mousedown, except while inline-renaming: the
+  // engine preventDefaults the mousedown, which would block caret placement
+  // in the contentEditable name.
+  function handleMousedown(e: MouseEvent) {
+    if (renaming) return;
+    onDragMousedown(e);
+  }
 
   $: allSurfaces = getAllSurfaces(workspace);
   $: hasUnread = allSurfaces.some(s => s.hasUnread);
@@ -77,33 +90,19 @@
     renaming = false;
   }
 
-  function handleDragStart(e: DragEvent) {
-    e.dataTransfer?.setData("text/plain", index.toString());
-  }
-
-  function handleDrop(e: DragEvent) {
-    e.preventDefault();
-    dragOver = false;
-    const fromIdx = parseInt(e.dataTransfer?.getData("text/plain") || "-1", 10);
-    if (fromIdx >= 0 && fromIdx !== index) {
-      onReorder(fromIdx, index);
-    }
-  }
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
-  draggable="true"
+  data-ws-drag-idx={dataDragIdx}
   style="
-    margin: {dragOver ? '24px' : '2px'} 8px 2px 8px; border-radius: 6px; overflow: hidden;
+    margin: 2px 8px; border-radius: 6px; overflow: hidden;
+    display: {dragHidden ? 'none' : 'block'};
     background: {isActive ? $theme.bgActive : hovered ? $theme.bgHighlight : 'transparent'};
     border-left: 3px solid {isActive ? $theme.accent : 'transparent'};
-    transition: margin 0.15s, opacity 0.15s;
+    transition: opacity 0.15s;
   "
-  on:dragstart={handleDragStart}
-  on:dragover|preventDefault={() => dragOver = true}
-  on:dragleave={() => dragOver = false}
-  on:drop={handleDrop}
+  on:mousedown={handleMousedown}
 >
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <div

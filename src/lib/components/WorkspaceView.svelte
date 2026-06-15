@@ -11,7 +11,6 @@
   export let onSplitDown: (paneId: string) => void;
   export let onClosePane: (paneId: string) => void;
   export let onFocusPane: (paneId: string) => void;
-  export let onReorderTab: ((paneId: string, fromIdx: number, toIdx: number) => void) | undefined = undefined;
 </script>
 
 <div style="flex: 1; display: flex; min-height: 0; min-width: 0; {visible ? '' : 'display: none;'}">
@@ -25,6 +24,5 @@
     {onSplitDown}
     {onClosePane}
     {onFocusPane}
-    {onReorderTab}
   />
 </div>

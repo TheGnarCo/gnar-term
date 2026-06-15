@@ -52,13 +52,14 @@
     >
       <input
         bind:this={inputEl}
+        class="no-default-outline"
         type="text"
         placeholder={$inputPrompt.placeholder}
         value={$inputPrompt.defaultValue || ""}
         style="
           padding: 10px 14px; background: {$theme.bg}; border: 1px solid {$theme.borderActive};
           border-radius: 8px; color: {$theme.fg}; font-size: 14px;
-          outline: none; font-family: inherit; width: 100%; box-sizing: border-box;
+          font-family: inherit; width: 100%; box-sizing: border-box;
         "
       />
       <div style="display: flex; justify-content: flex-end; gap: 8px;">

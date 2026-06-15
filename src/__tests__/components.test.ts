@@ -746,10 +746,12 @@ describe("WorkspaceItem", () => {
     expect(screen.getByText("Build complete")).toBeTruthy();
   });
 
-  it("is draggable", () => {
+  it("carries the reorder data-attr for the mouse-driven drag engine", () => {
+    // HTML5 `draggable` was replaced by a mouse-event reorder engine that
+    // keys off data-ws-drag-idx (WKWebView's HTML5 DnD is unreliable).
     const { container } = renderWorkspaceItem();
-    const draggable = container.querySelector("[draggable='true']");
-    expect(draggable).toBeTruthy();
+    expect(container.querySelector("[draggable='true']")).toBeNull();
+    expect(container.querySelector("[data-ws-drag-idx]")).toBeTruthy();
   });
 });
 

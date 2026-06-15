@@ -167,5 +167,132 @@ export function splitFromSidebar(direction: "horizontal" | "vertical") {
  * (or zooming a different surface) restores the split layout.
  */
 export function togglePaneZoom(surfaceId: string) {
-  zoomedSurfaceId.update((current) => (current === surfaceId ? null : surfaceId));
+  zoomedSurfaceId.update((current) =>
+    current === surfaceId ? null : surfaceId,
+  );
+}
+
+/**
+ * Collapse a now-empty source pane out of the workspace tree by replacing its
+ * parent split with the sibling subtree. The caller has already moved the
+ * surface out, so — unlike closePane — no PTY is killed here. No-op when the
+ * source pane is the workspace root (there is nothing to collapse into).
+ */
+function collapseEmptyPane(ws: Workspace, sourcePaneId: string) {
+  if (ws.splitRoot.type === "pane" && ws.splitRoot.pane.id === sourcePaneId)
+    return;
+  const parentInfo = findParentSplit(ws.splitRoot, sourcePaneId);
+  if (parentInfo && parentInfo.parent.type === "split") {
+    const sibling = parentInfo.parent.children[parentInfo.index === 0 ? 1 : 0];
+    if (ws.splitRoot === parentInfo.parent) {
+      ws.splitRoot = sibling;
+    } else {
+      replaceNodeInTree(ws.splitRoot, parentInfo.parent, sibling);
+    }
+  }
+}
+
+/**
+ * Drag a tab onto another pane's body: split the target pane, placing the
+ * dragged surface in a fresh pane beside it. `direction`/`before` encode which
+ * edge of the target the tab was dropped against (top/left → before). Backs the
+ * directional split-zone drop in tab drag-and-drop.
+ */
+export function splitPaneWithSurface(
+  surfaceId: string,
+  sourcePaneId: string,
+  targetPaneId: string,
+  direction: "horizontal" | "vertical" = "horizontal",
+  before = false,
+): void {
+  const ws = get(activeWorkspace);
+  if (!ws) return;
+  const allPanes = getAllPanes(ws.splitRoot);
+  const sourcePane = allPanes.find((p) => p.id === sourcePaneId);
+  const targetPane = allPanes.find((p) => p.id === targetPaneId);
+  if (!sourcePane || !targetPane) return;
+
+  const surfaceIdx = sourcePane.surfaces.findIndex((s) => s.id === surfaceId);
+  if (surfaceIdx === -1) return;
+  const [surface] = sourcePane.surfaces.splice(surfaceIdx, 1);
+  if (!surface) return;
+  if (sourcePane.activeSurfaceId === surfaceId) {
+    sourcePane.activeSurfaceId = sourcePane.surfaces[0]?.id ?? null;
+  }
+
+  const newPane: Pane = {
+    id: uid(),
+    surfaces: [surface],
+    activeSurfaceId: surface.id,
+  };
+  const newSplit: SplitNode = {
+    type: "split",
+    direction,
+    children: before
+      ? [
+          { type: "pane", pane: newPane },
+          { type: "pane", pane: targetPane },
+        ]
+      : [
+          { type: "pane", pane: targetPane },
+          { type: "pane", pane: newPane },
+        ],
+    ratio: 0.5,
+  };
+
+  if (ws.splitRoot.type === "pane" && ws.splitRoot.pane.id === targetPaneId) {
+    ws.splitRoot = newSplit;
+  } else {
+    const parentInfo = findParentSplit(ws.splitRoot, targetPaneId);
+    if (parentInfo && parentInfo.parent.type === "split") {
+      parentInfo.parent.children[parentInfo.index] = newSplit;
+    }
+  }
+
+  // Collapse the source pane if the move emptied it. The new split (target +
+  // dragged surface) was just spliced in above, so when target was the root
+  // the source can only be nested — safe to collapse.
+  if (sourcePane.surfaces.length === 0) {
+    collapseEmptyPane(ws, sourcePaneId);
+  }
+
+  ws.activePaneId = newPane.id;
+  workspaces.update((l) => [...l]);
+  safeFocus(surface);
+}
+
+/**
+ * Drag a tab onto another pane's tab bar: move the surface into that pane's tab
+ * list. The source pane collapses if the move empties it. No PTY is killed —
+ * the surface is relocated, not closed.
+ */
+export function mergeTabToPane(
+  surfaceId: string,
+  sourcePaneId: string,
+  targetPaneId: string,
+): void {
+  if (sourcePaneId === targetPaneId) return;
+  const ws = get(activeWorkspace);
+  if (!ws) return;
+  const allPanes = getAllPanes(ws.splitRoot);
+  const sourcePane = allPanes.find((p) => p.id === sourcePaneId);
+  const targetPane = allPanes.find((p) => p.id === targetPaneId);
+  if (!sourcePane || !targetPane) return;
+
+  const idx = sourcePane.surfaces.findIndex((s) => s.id === surfaceId);
+  if (idx === -1) return;
+  const [surface] = sourcePane.surfaces.splice(idx, 1);
+  if (!surface) return;
+  if (sourcePane.activeSurfaceId === surfaceId) {
+    sourcePane.activeSurfaceId = sourcePane.surfaces[0]?.id ?? null;
+  }
+  if (sourcePane.surfaces.length === 0) {
+    collapseEmptyPane(ws, sourcePaneId);
+  }
+
+  targetPane.surfaces.push(surface);
+  targetPane.activeSurfaceId = surface.id;
+  ws.activePaneId = targetPane.id;
+  workspaces.update((l) => [...l]);
+  safeFocus(surface);
 }

@@ -14,7 +14,8 @@
 
   // Services
   import { createWorkspace, createWorkspaceFromDef, switchWorkspace, closeWorkspace, renameWorkspace, reorderWorkspaces, saveCurrentWorkspace } from "./lib/services/workspace-service";
-  import { splitPane, closePane, focusPane, reorderTab, focusDirection, flashFocusedPane, splitFromSidebar, togglePaneZoom } from "./lib/services/pane-service";
+  import { splitPane, closePane, focusPane, focusDirection, flashFocusedPane, splitFromSidebar, togglePaneZoom } from "./lib/services/pane-service";
+  import { handleMenuPaste } from "./lib/services/menu-paste-router";
   import { selectSurface, closeSurfaceById, newSurface, nextSurface, prevSurface, selectSurfaceByNumber, closeActiveSurface, openPreviewInPane, newSurfaceFromSidebar } from "./lib/services/surface-service";
   import { initMcpServer } from "./lib/services/mcp-server";
   import { confirmQuit } from "./lib/services/quit-confirmation-service";
@@ -242,6 +243,12 @@
       closeActiveSurface();
     });
 
+    // Edit > Paste routes here so terminals get bracketed paste (the native
+    // paste bypasses xterm's \x1b[200~ wrapping, breaking multiline paste).
+    await listen("menu-paste", () => {
+      void handleMenuPaste();
+    });
+
     // Don't tear down live PTYs silently — intercept the window close request
     // and confirm when terminals are still running.
     const appWindow = getCurrentWindow();
@@ -256,7 +263,7 @@
 
 <svelte:window on:keydown={handleKeydown} />
 
-<div id="app" style="display: flex; height: 100vh; overflow: hidden;">
+<div id="app" style="display: flex; height: 100vh; overflow: hidden; --theme-accent: {$theme.accent}; --theme-fg-dim: {$theme.fgDim};">
   <Sidebar
     bind:this={sidebarComponent}
     onNewWorkspace={() => createWorkspace(`Workspace ${$workspaces.length + 1}`)}
@@ -288,7 +295,6 @@
           onSplitDown={(paneId) => splitPane(paneId, "vertical")}
           onClosePane={closePane}
           onFocusPane={focusPane}
-          onReorderTab={reorderTab}
         />
       {/each}
 
@@ -301,3 +307,33 @@
 <ContextMenu />
 <InputPrompt />
 <ConfirmPrompt />
+
+<style>
+  /* xterm.js v6 ships an unstyled `.xterm-slider` thumb (its CSS depends on a
+     VSCode scrollbar-slider var we don't set), which leaves an empty rail with
+     no visible handle in terminal panes. Paint the thumb with the theme's
+     dimmed foreground and brighten on hover/active so it's discoverable. */
+  :global(.xterm-slider) {
+    background: var(--theme-fg-dim, rgba(255, 255, 255, 0.25));
+    border-radius: 4px;
+    opacity: 0.5;
+    transition: opacity 0.15s;
+  }
+  :global(.xterm-scrollable-element:hover .xterm-slider) {
+    opacity: 0.8;
+  }
+  :global(.xterm-slider:hover),
+  :global(.xterm-slider.active) {
+    opacity: 1;
+  }
+
+  /* Suppress the default focus outline but keep a visible keyboard ring on
+     :focus-visible, so mouse focus stays clean without losing a11y. */
+  :global(.no-default-outline) {
+    outline: none;
+  }
+  :global(.no-default-outline:focus-visible) {
+    outline: 2px solid var(--theme-accent, #7c6aff);
+    outline-offset: 2px;
+  }
+</style>

@@ -36,6 +36,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(AppState {
             ptys: Mutex::new(HashMap::new()),
             watch_flags: Mutex::new(HashMap::new()),
@@ -97,7 +98,13 @@ pub fn run() {
                 // Terminal surfaces override Cmd+C/V via attachCustomKeyEventHandler.
                 let cut = PredefinedMenuItem::cut(handle, None)?;
                 let copy = PredefinedMenuItem::copy(handle, None)?;
-                let paste = PredefinedMenuItem::paste(handle, None)?;
+                // Custom Paste (not PredefinedMenuItem::paste): the predefined
+                // item fires the native NSText paste, which bypasses xterm.js's
+                // bracketed-paste wrapping (\x1b[200~…\x1b[201~). TUIs like
+                // Claude Code rely on that wrapping to treat a multiline paste
+                // as one block; without it they submit on the first newline.
+                // We emit `menu-paste` and let the frontend route it by focus.
+                let paste = MenuItem::with_id(handle, "menu-paste", "Paste", true, Some("CmdOrCtrl+V"))?;
                 let select_all = PredefinedMenuItem::select_all(handle, None)?;
 
                 let edit_menu = Submenu::with_items(
@@ -155,6 +162,8 @@ pub fn run() {
                 let _ = app.emit("menu-cmd-palette", ());
             } else if id == "close-tab" {
                 let _ = app.emit("menu-close-tab", ());
+            } else if id == "menu-paste" {
+                let _ = app.emit("menu-paste", ());
             }
         })
         .run(tauri::generate_context!())

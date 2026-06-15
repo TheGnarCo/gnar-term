@@ -15,6 +15,7 @@
   // Services
   import { createWorkspace, createWorkspaceFromDef, switchWorkspace, closeWorkspace, renameWorkspace, reorderWorkspaces, saveCurrentWorkspace } from "./lib/services/workspace-service";
   import { splitPane, closePane, focusPane, focusDirection, flashFocusedPane, splitFromSidebar, togglePaneZoom } from "./lib/services/pane-service";
+  import { handleMenuPaste } from "./lib/services/menu-paste-router";
   import { selectSurface, closeSurfaceById, newSurface, nextSurface, prevSurface, selectSurfaceByNumber, closeActiveSurface, openPreviewInPane, newSurfaceFromSidebar } from "./lib/services/surface-service";
   import { initMcpServer } from "./lib/services/mcp-server";
   import { confirmQuit } from "./lib/services/quit-confirmation-service";
@@ -240,6 +241,12 @@
 
     await listen("menu-close-tab", () => {
       closeActiveSurface();
+    });
+
+    // Edit > Paste routes here so terminals get bracketed paste (the native
+    // paste bypasses xterm's \x1b[200~ wrapping, breaking multiline paste).
+    await listen("menu-paste", () => {
+      void handleMenuPaste();
     });
 
     // Don't tear down live PTYs silently — intercept the window close request

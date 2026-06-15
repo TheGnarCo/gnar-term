@@ -14,7 +14,7 @@
 
   // Services
   import { createWorkspace, createWorkspaceFromDef, switchWorkspace, closeWorkspace, renameWorkspace, reorderWorkspaces, saveCurrentWorkspace } from "./lib/services/workspace-service";
-  import { splitPane, closePane, focusPane, reorderTab, focusDirection, flashFocusedPane, splitFromSidebar, togglePaneZoom } from "./lib/services/pane-service";
+  import { splitPane, closePane, focusPane, focusDirection, flashFocusedPane, splitFromSidebar, togglePaneZoom } from "./lib/services/pane-service";
   import { selectSurface, closeSurfaceById, newSurface, nextSurface, prevSurface, selectSurfaceByNumber, closeActiveSurface, openPreviewInPane, newSurfaceFromSidebar } from "./lib/services/surface-service";
   import { initMcpServer } from "./lib/services/mcp-server";
   import { confirmQuit } from "./lib/services/quit-confirmation-service";
@@ -288,7 +288,6 @@
           onSplitDown={(paneId) => splitPane(paneId, "vertical")}
           onClosePane={closePane}
           onFocusPane={focusPane}
-          onReorderTab={reorderTab}
         />
       {/each}
 

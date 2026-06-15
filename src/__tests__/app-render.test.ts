@@ -277,13 +277,15 @@ describe("Flash focused pane", () => {
 });
 
 describe("Tab drag reorder within pane", () => {
-  it("Tab.svelte has drag handlers", async () => {
+  it("Tab.svelte uses the mouse-driven drag (not HTML5 DnD, broken in WKWebView)", async () => {
     const fs = await import("fs");
     const source = fs.readFileSync("src/lib/components/Tab.svelte", "utf-8");
-    expect(source).toContain('draggable="true"');
-    expect(source).toContain("on:dragstart=");
-    expect(source).toContain("on:drop=");
-    expect(source).toContain("onReorder");
+    // HTML5 DnD was replaced by a mouse-event state machine.
+    expect(source).not.toContain('draggable="true"');
+    expect(source).toContain("startTabDrag");
+    expect(source).toContain("on:mousedown=");
+    expect(source).toContain("data-tab-surface-id");
+    expect(source).toContain("data-tab-idx");
   });
 
   it("pane-service has reorderTab", async () => {

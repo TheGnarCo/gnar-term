@@ -16,6 +16,11 @@ export interface DragResizeOptions {
 
 export function dragResize(node: HTMLElement, options: DragResizeOptions) {
   let opts = options;
+  // Tracks the teardown for an in-flight drag so a mid-drag unmount (the host
+  // element is removed while the user is still holding the divider) can release
+  // the window-level mousemove/mouseup listeners. Without this, an interrupted
+  // drag leaks listeners that fire onDrag against a stale closure.
+  let activeCleanup: (() => void) | null = null;
 
   function handleMousedown(e: MouseEvent) {
     if (opts.onStart) {
@@ -28,12 +33,18 @@ export function dragResize(node: HTMLElement, options: DragResizeOptions) {
       opts.onDrag(ev);
     }
 
-    function onUp() {
-      opts.onEnd?.();
+    function cleanup() {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
+      activeCleanup = null;
     }
 
+    function onUp() {
+      opts.onEnd?.();
+      cleanup();
+    }
+
+    activeCleanup = cleanup;
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
   }
@@ -46,6 +57,8 @@ export function dragResize(node: HTMLElement, options: DragResizeOptions) {
     },
     destroy() {
       node.removeEventListener("mousedown", handleMousedown);
+      // Release any listeners from a drag still in flight at unmount.
+      activeCleanup?.();
     },
   };
 }

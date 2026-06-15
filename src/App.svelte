@@ -256,7 +256,7 @@
 
 <svelte:window on:keydown={handleKeydown} />
 
-<div id="app" style="display: flex; height: 100vh; overflow: hidden;">
+<div id="app" style="display: flex; height: 100vh; overflow: hidden; --theme-accent: {$theme.accent}; --theme-fg-dim: {$theme.fgDim};">
   <Sidebar
     bind:this={sidebarComponent}
     onNewWorkspace={() => createWorkspace(`Workspace ${$workspaces.length + 1}`)}
@@ -300,3 +300,33 @@
 <ContextMenu />
 <InputPrompt />
 <ConfirmPrompt />
+
+<style>
+  /* xterm.js v6 ships an unstyled `.xterm-slider` thumb (its CSS depends on a
+     VSCode scrollbar-slider var we don't set), which leaves an empty rail with
+     no visible handle in terminal panes. Paint the thumb with the theme's
+     dimmed foreground and brighten on hover/active so it's discoverable. */
+  :global(.xterm-slider) {
+    background: var(--theme-fg-dim, rgba(255, 255, 255, 0.25));
+    border-radius: 4px;
+    opacity: 0.5;
+    transition: opacity 0.15s;
+  }
+  :global(.xterm-scrollable-element:hover .xterm-slider) {
+    opacity: 0.8;
+  }
+  :global(.xterm-slider:hover),
+  :global(.xterm-slider.active) {
+    opacity: 1;
+  }
+
+  /* Suppress the default focus outline but keep a visible keyboard ring on
+     :focus-visible, so mouse focus stays clean without losing a11y. */
+  :global(.no-default-outline) {
+    outline: none;
+  }
+  :global(.no-default-outline:focus-visible) {
+    outline: 2px solid var(--theme-accent, #7c6aff);
+    outline-offset: 2px;
+  }
+</style>

@@ -6,9 +6,13 @@ Canonical definitions for terms used across the codebase, documentation, and ext
 
 | Term | Definition |
 |------|-----------|
-| **Workspace** | A named collection of panes arranged in a split tree. Users switch between workspaces in the sidebar. Each workspace has an independent layout. |
-| **Pane** | A rectangular container within a workspace that holds one or more surfaces. Panes can be split horizontally or vertically to create tiled layouts. |
-| **Surface** | A single view inside a pane. The two surface types are **terminal** (a PTY-backed shell session) and **preview** (a file preview, e.g., Markdown). Surfaces appear as tabs in their pane's tab bar. |
+| **Window** | A native OS window (Tauri window) with its own sidebar and workspace tree. GnarTerm is single-window today; the term is reserved for a future multi-window model. |
+| **Workspace** | A named entry in the sidebar and the top-level unit of work. Each workspace owns an independent pane split-tree. A workspace may be standalone, may be the **anchor** of a **workspace group**, or may be a **member** of one. A workspace optionally carries a `worktree` property when backed by a git worktree — a property, not a separate kind of workspace. |
+| **Workspace Group** | A collapsible, named region of the sidebar that nests multiple workspaces under a single **anchor** workspace. The group has no identity of its own: it is the anchor plus its ordered members. Groups collapse/expand, reorder by drag, and their grouping, member order, and collapse state persist across launches. |
+| **Anchor** | The single workspace that owns a workspace group. The anchor's sidebar row *is* the group's header row — there is no separate header. Members reference their anchor via `anchorWorkspaceId`; the anchor records member order in `memberWorkspaceIds`. |
+| **Pane** | A rectangular split region within a workspace that holds one or more surfaces. Panes split horizontally or vertically to form tiled layouts. |
+| **Surface** | A single tab inside a pane. A surface's content is a **panel**. Surfaces appear in the pane's tab bar. |
+| **Panel** | The content rendered inside a surface. A panel is one of two kinds: a **Terminal** (a PTY-backed shell session) or a **Browser** (a file/Markdown preview — also called Preview). |
 | **Split** | A division of a pane into two child panes, either horizontal (side-by-side) or vertical (stacked). Splits are recursive — each child can be split again. |
 | **Split Tree** | The recursive data structure (`SplitNode`) that defines a workspace's layout. Leaf nodes are panes; branch nodes are splits with a direction and ratio. |
 

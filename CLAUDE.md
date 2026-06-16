@@ -98,3 +98,15 @@ There is a single sidebar (left). The right "secondary" sidebar was removed.
 - Sidebar: vertically scrolling sections; Workspaces section is always first
 - Extension sections (declared via the MCP `render_sidebar` tool) append below Workspaces
 - The sidebar is resizable (max 33% viewport width, min 140px)
+
+#### Workspaces section: nested tree
+
+- The Workspaces section is a nested tree of standalone workspaces and **workspace groups**, ordered by the `workspaceOrder` store
+- An **anchor** workspace's row doubles as its group's header row — there is no separate header. Standalone workspaces are degenerate groups (no chevron, no nested list)
+- Members are plain **Workspaces** (there is no Branch *kind*); git-worktree backing is a `worktree` property, not a separate kind. Membership derives from a member's `anchorWorkspaceId`; `memberWorkspaceIds` records order only
+- A **Panel** is the content inside a surface: Terminal or Browser (a.k.a. Preview)
+- Retire the word "banner" — anchor rows are "anchor rows", the unit is a "workspace group"
+
+### Terminology
+
+Canonical term definitions live in [docs/glossary.md](docs/glossary.md): Window, Workspace, Workspace Group, Anchor, Pane, Surface, Panel, Split/Split Tree. Use those terms; do not reintroduce "banner" or "Branch" as a workspace kind.

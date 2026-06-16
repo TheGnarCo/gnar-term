@@ -20,6 +20,35 @@ sections beneath the existing ones.
 - The header row contains only the new workspace button (+). The sidebar toggle lives in the TitleBar.
 - When adding a new section (e.g., a file browser, git status panel), append it below the current sections. Do not introduce tabs or horizontal navigation.
 
+## Workspaces Section — Nested Tree
+
+The Workspaces section is a **nested tree**, not a flat list. Standalone
+workspaces and **workspace groups** share one ordered column, sequenced by the
+`workspaceOrder` store rather than by raw array index.
+
+- **Anchor row = group header.** A workspace group has no separate header row.
+  The **anchor** workspace's own row *is* the group header — it renders the group
+  name, controls, and the collapse chevron inline. A standalone workspace is a
+  degenerate group: it renders as an ordinary row with no chevron and no nested
+  list.
+- **Collapse chevron.** Groups with one or more members show a chevron on the
+  anchor row that expands/collapses the nested member list. Collapse state is
+  keyed by the anchor's workspace id and persists across launches.
+- **Indented members.** When expanded, member workspaces render as indented rows
+  beneath the anchor row, in the order recorded by the anchor's
+  `memberWorkspaceIds`. Members are plain workspaces; membership is derived from
+  each member's `anchorWorkspaceId` back-reference, and the indented list shows
+  ordering only.
+- **Nested drag.** Drag reordering operates at two levels: top-level rows
+  (standalone workspaces and group anchors) reorder within `workspaceOrder`, and
+  members reorder within their group's member list. Drop targets render a
+  rail-flush drop ghost.
+- **Collapsed-rail mode.** When the sidebar is collapsed, the Workspaces section
+  renders as a narrow vertical rail. Each row is reduced to a thin colored stripe
+  (wider for the active workspace, narrower otherwise); hovering a row reveals a
+  floating popover of the full row/group at the row's vertical position, so a
+  collapsed sidebar stays navigable without expanding.
+
 ## Layout Anatomy
 
 ```
@@ -28,10 +57,13 @@ sections beneath the existing ones.
 | +               | [<=] GNARTERM                |
 +-------------------+-------------------------------+
 | Workspaces        | Tab Bar (surfaces)            |
-|   Workspace 1     | [shell 1] [shell 2] [+]      |
+|   Standalone WS   | [shell 1] [shell 2] [+]      |
+|   v Anchor (grp)  |                               |
+|       Member 1    |                               |
+|       Member 2    |                               |
 |   Workspace 2     |                               |
 |                   |                               |
-| (future sections) | Terminal / Preview Content     |
+| (future sections) | Terminal / Browser Content     |
 |   File Browser    |                               |
 |   Git Status      |                               |
 +------|------------+-------------------------------+

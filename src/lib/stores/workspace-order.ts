@@ -9,10 +9,26 @@
  * This module owns:
  *   - the ordered list
  *   - mutation helpers for append / prepend / insert / remove / move
+ *   - a debounced write of the order to state.json
  *
- * No persistence wiring lives here yet — Stage 2 adds the debounced persist.
+ * Each mutation schedules a debounced `saveState({ workspaceOrder })` so the
+ * user's drag-sorted order survives a relaunch. Bootstrap does NOT schedule a
+ * write — it reflects what is already on disk.
  */
 import { writable, get } from "svelte/store";
+import { saveState } from "../config";
+import { makePersistScheduler } from "../utils/persist-scheduler";
+
+const ORDER_PERSIST_DELAY = 500;
+
+const _orderScheduler = makePersistScheduler(async () => {
+  await saveState({ workspaceOrder: get(_workspaceOrder) });
+}, ORDER_PERSIST_DELAY);
+
+/** Schedule a debounced persist of the current order. */
+export const scheduleOrderPersist = _orderScheduler.schedulePersist;
+/** Cancel any pending order persist without writing (test resets). */
+export const cancelOrderPersist = _orderScheduler.cancel;
 
 export interface WorkspaceRow {
   kind: "workspace" | string;
@@ -34,6 +50,7 @@ let _rowKeys = new Set<string>();
 export function setWorkspaceOrder(next: WorkspaceRow[]): void {
   _workspaceOrder.set(next);
   _rowKeys = new Set(next.map(rowKey));
+  scheduleOrderPersist();
 }
 
 /** Insert a row at position 0 if not already present. */
@@ -42,6 +59,7 @@ export function prependWorkspaceRow(row: WorkspaceRow): void {
   if (_rowKeys.has(k)) return;
   _workspaceOrder.update((current) => [row, ...current]);
   _rowKeys.add(k);
+  scheduleOrderPersist();
 }
 
 /** Append a row to the end if not already present. */
@@ -50,6 +68,7 @@ export function appendWorkspaceRow(row: WorkspaceRow): void {
   if (_rowKeys.has(k)) return;
   _workspaceOrder.update((current) => [...current, row]);
   _rowKeys.add(k);
+  scheduleOrderPersist();
 }
 
 /** Remove a row by kind + id. No-op if missing. */
@@ -60,6 +79,7 @@ export function removeWorkspaceRow(row: WorkspaceRow): void {
     current.filter((r) => !(r.kind === row.kind && r.id === row.id)),
   );
   _rowKeys.delete(k);
+  scheduleOrderPersist();
 }
 
 /** Insert a row at the given index. No-op if the row is already present. */
@@ -72,6 +92,7 @@ export function insertWorkspaceRow(at: number, row: WorkspaceRow): void {
     return next;
   });
   _rowKeys.add(k);
+  scheduleOrderPersist();
 }
 
 /** Move the row at `from` to position `to`. Indices are into the full list. */
@@ -85,6 +106,7 @@ export function moveWorkspaceRow(from: number, to: number): void {
   next.splice(Math.max(0, Math.min(next.length, insertAt)), 0, item);
   _workspaceOrder.set(next);
   _rowKeys = new Set(next.map(rowKey));
+  scheduleOrderPersist();
 }
 
 /**

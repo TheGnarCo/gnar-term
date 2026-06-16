@@ -21,7 +21,14 @@ import {
   type Pane,
   type SplitNode,
 } from "../types";
-import { createWorkspace } from "./workspace-service";
+import {
+  createWorkspace,
+  promoteMemberToAnchor,
+  removeMemberFromAllGroups,
+} from "./workspace-service";
+import { removeWorkspaceRow } from "../stores/workspace-order";
+import { isAnchorWorkspace, isWorkspaceMember } from "../types";
+import { schedulePersist } from "./workspace-persist";
 import { safeFocus, getCwdForSurface } from "./service-helpers";
 
 export async function splitPane(
@@ -68,12 +75,31 @@ export function removePane(ws: Workspace, pane: Pane) {
   if (ws.splitRoot.type === "pane" && ws.splitRoot.pane.id === pane.id) {
     const wsList = get(workspaces);
     const wsIdx = wsList.indexOf(ws);
-    workspaces.update((list) => list.filter((w) => w.id !== ws.id));
+    const closingId = ws.id;
+    const wasMember = isWorkspaceMember(ws);
+    // Promote-first-member back-edge: if this workspace is an anchor that
+    // still owns members, the first member becomes the new anchor and keeps
+    // the group's sidebar position. Run BEFORE removing the workspace so the
+    // promoted member's tag/order swap sees the closed anchor still present.
+    let promotedId: string | null = null;
+    if (isAnchorWorkspace(ws)) {
+      promotedId = promoteMemberToAnchor(closingId);
+    }
+    workspaces.update((list) => list.filter((w) => w.id !== closingId));
+    // The closed anchor's row was either replaced by the promoted member's
+    // row (inside promoteMemberToAnchor) or — for a memberless anchor — must
+    // be dropped here. Members never owned a row; detach from their group.
+    if (promotedId === null) {
+      removeWorkspaceRow({ kind: "workspace", id: closingId });
+    }
+    if (wasMember) removeMemberFromAllGroups(closingId);
     if (get(workspaces).length === 0) {
+      // Very-last-workspace back-edge — spawn a fresh standalone.
       createWorkspace("Workspace 1");
     } else {
       activeWorkspaceIdx.set(Math.min(wsIdx, get(workspaces).length - 1));
     }
+    schedulePersist();
     return;
   }
   const parentInfo = findParentSplit(ws.splitRoot, pane.id);

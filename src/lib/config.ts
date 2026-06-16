@@ -9,6 +9,7 @@
  */
 
 import { invoke } from "@tauri-apps/api/core";
+import { writable, type Readable } from "svelte/store";
 import {
   isTerminalSurface,
   isPreviewSurface,
@@ -91,6 +92,13 @@ export interface AppState {
   groupCollapsedById?: Record<string, boolean>;
   /** Primary sidebar expanded (true) / collapsed (false). */
   sidebarVisible?: boolean;
+  // --- Legacy keys (dev format) — read-only forward-compat. ---
+  // On load these are normalized into the canonical keys above; they are
+  // never written back. See `loadState` and TERMINOLOGY §5.
+  /** @deprecated read-only legacy alias of `workspaceOrder`. */
+  rootRowOrder?: { kind: string; id: string }[];
+  /** @deprecated read-only legacy alias of `groupCollapsedById`. */
+  bannerCollapsedById?: Record<string, boolean>;
 }
 
 export interface CommandDef {
@@ -296,6 +304,125 @@ export function workspaceDefToTemplate(def: WorkspaceDef): WorkspaceDef {
   if (def.createdAt !== undefined) tpl.createdAt = def.createdAt;
   if (def.worktree !== undefined) tpl.worktree = def.worktree;
   return tpl;
+}
+
+// --- Persisted application state (state.json) ---
+
+let _appState: AppState = {};
+const _appStateStore = writable<AppState>({});
+/** Reactive view of the persisted application state. */
+export const appStateStore: Readable<AppState> = _appStateStore;
+
+/**
+ * Set when loadState detects state.json exists but is unparseable. When true,
+ * saveState refuses to overwrite the file so the user's last good session
+ * isn't silently wiped on the next quit. Cleared by resetConfigStateForTests
+ * and on the next successful loadState.
+ */
+let _stateLoadCorrupt = false;
+
+/** Test-only — reset all module-level config + state so tests don't bleed. */
+export function resetConfigStateForTests(): void {
+  _config = {};
+  _configPath = "";
+  _appState = {};
+  _appStateStore.set({});
+  _stateLoadCorrupt = false;
+}
+
+function stateDir(home: string): string {
+  return `${home}/.config/gnar-term`;
+}
+
+/**
+ * Normalize legacy (dev-format) keys into their canonical equivalents on
+ * read. The legacy keys are never written back by `saveState` — only the
+ * canonical fields are persisted, so the file self-heals on the next save.
+ *
+ *   rootRowOrder       → workspaceOrder       (TERMINOLOGY §5)
+ *   bannerCollapsedById → groupCollapsedById   (TERMINOLOGY §5)
+ */
+function normalizeLegacyState(raw: AppState): AppState {
+  const next: AppState = { ...raw };
+  if (next.workspaceOrder === undefined && Array.isArray(raw.rootRowOrder)) {
+    next.workspaceOrder = raw.rootRowOrder;
+  }
+  if (
+    next.groupCollapsedById === undefined &&
+    raw.bannerCollapsedById &&
+    typeof raw.bannerCollapsedById === "object"
+  ) {
+    next.groupCollapsedById = raw.bannerCollapsedById;
+  }
+  delete next.rootRowOrder;
+  delete next.bannerCollapsedById;
+  return next;
+}
+
+/**
+ * Load the persisted session state from `state.json`. A missing file yields
+ * an empty state (first-run). A present-but-unparseable file is flagged so a
+ * subsequent `saveState` refuses to overwrite the user's last good session.
+ */
+export async function loadState(): Promise<AppState> {
+  const home = await getHome();
+  const path = `${stateDir(home)}/state.json`;
+
+  _stateLoadCorrupt = false;
+  let content: string | null = null;
+  try {
+    content = await invoke<string>("read_file", { path });
+  } catch {
+    content = null;
+  }
+  if (content === null) {
+    _appState = {};
+    _appStateStore.set(_appState);
+    return _appState;
+  }
+  try {
+    _appState = normalizeLegacyState(JSON.parse(content) as AppState);
+  } catch (err) {
+    _stateLoadCorrupt = true;
+    console.warn(
+      "[state] Failed to parse state.json; refusing to overwrite until it is repaired. Falling back to empty state for this session.",
+      err,
+    );
+    _appState = {};
+  }
+  _appStateStore.set(_appState);
+  return _appState;
+}
+
+/** Merge `updates` into the persisted state and write `state.json`. */
+export async function saveState(updates: Partial<AppState>): Promise<void> {
+  _appState = { ..._appState, ...updates };
+  // Legacy aliases never round-trip back to disk.
+  delete _appState.rootRowOrder;
+  delete _appState.bannerCollapsedById;
+  _appStateStore.set(_appState);
+  if (_stateLoadCorrupt) {
+    console.warn(
+      "[state] Skipping save: state.json was unparseable at load. Repair or move the file to re-enable persistence.",
+    );
+    return;
+  }
+  const home = await getHome();
+  const dir = stateDir(home);
+  const path = `${dir}/state.json`;
+  try {
+    await invoke("ensure_dir", { path: dir });
+    await invoke("write_file", {
+      path,
+      content: JSON.stringify(_appState, null, 2),
+    });
+  } catch (err) {
+    console.error("[state] Failed to save:", err);
+  }
+}
+
+export function getState(): AppState {
+  return _appState;
 }
 
 // --- Helpers ---

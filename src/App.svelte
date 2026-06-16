@@ -6,7 +6,7 @@
   import { workspaces, activeWorkspaceIdx, activeWorkspace, activePane, activeSurface } from "./lib/stores/workspace";
   import { invoke } from "@tauri-apps/api/core";
   import { getCurrentWindow } from "@tauri-apps/api/window";
-  import { loadConfig, saveConfig, getConfig, getWorkspaceCommands, type WorkspaceDef } from "./lib/config";
+  import { loadConfig, saveConfig, getConfig, getWorkspaceCommands } from "./lib/config";
   import { setupListeners, fontReady, startCwdPolling, isMac, modLabel, shiftModLabel, adjustFontSize, resetFontSize } from "./lib/terminal-service";
   import { getAllSurfaces, isTerminalSurface } from "./lib/types";
   import { refreshPreviewStyles } from "./preview/index";
@@ -14,6 +14,7 @@
 
   // Services
   import { createWorkspace, createWorkspaceFromDef, switchWorkspace, closeWorkspace, renameWorkspace, reorderWorkspaces, saveCurrentWorkspace } from "./lib/services/workspace-service";
+  import { initWorkspaces } from "./lib/services/init-workspaces";
   import { splitPane, closePane, focusPane, focusDirection, flashFocusedPane, splitFromSidebar, togglePaneZoom } from "./lib/services/pane-service";
   import { handleMenuPaste } from "./lib/services/menu-paste-router";
   import { selectSurface, closeSurfaceById, newSurface, nextSurface, prevSurface, selectSurfaceByNumber, closeActiveSurface, openPreviewInPane, newSurfaceFromSidebar } from "./lib/services/surface-service";
@@ -187,49 +188,9 @@
       theme.set(config.theme);
     }
 
-    const cliCwd = cliArgs.path || cliArgs.working_directory;
-
-    if (cliArgs.workspace) {
-      const cmd = config.commands?.find(
-        c => c.name === cliArgs.workspace && c.workspace
-      );
-      if (cmd?.workspace) {
-        await createWorkspaceFromDef(cmd.workspace);
-      } else {
-        console.warn(`[cli] Workspace "${cliArgs.workspace}" not found in config`);
-        await createWorkspace(cliArgs.title || "Workspace 1");
-      }
-    } else if (cliCwd || cliArgs.command) {
-      const wsName = cliArgs.title || cliCwd?.split("/").pop() || "Workspace 1";
-      const def: WorkspaceDef = {
-        name: wsName,
-        cwd: cliCwd || undefined,
-        layout: {
-          pane: {
-            surfaces: [{
-              type: "terminal",
-              cwd: cliCwd || undefined,
-              command: cliArgs.command || undefined,
-            }]
-          }
-        }
-      };
-      await createWorkspaceFromDef(def);
-    } else {
-      let autoloaded = false;
-      if (config.autoload && config.autoload.length > 0 && config.commands) {
-        for (const name of config.autoload) {
-          const cmd = config.commands.find(c => c.name === name && c.workspace);
-          if (cmd?.workspace) {
-            await createWorkspaceFromDef(cmd.workspace);
-            autoloaded = true;
-          }
-        }
-      }
-      if (!autoloaded) {
-        await createWorkspace("Workspace 1");
-      }
-    }
+    // Boot path: restore the persisted session (workspaces, grouping, row
+    // order, collapse, sidebar visibility) instead of always rebuilding fresh.
+    await initWorkspaces(cliArgs, config);
 
     listen<string>("menu-theme", (event) => {
       applyTheme(event.payload.replace("theme-", ""));

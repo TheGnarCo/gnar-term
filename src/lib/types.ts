@@ -51,6 +51,81 @@ export interface Workspace {
   name: string;
   splitRoot: SplitNode;
   activePaneId: string | null;
+  // --- Grouping fields (all optional; absence = flat standalone workspace) ---
+  /**
+   * Back-reference to the anchor workspace that owns this workspace's group.
+   * Presence discriminates "is a member of a group"; absence means this
+   * workspace is an anchor (its row IS its group header) or standalone.
+   * THE canonical membership tag — derive membership from this, not from any
+   * anchor's `memberWorkspaceIds`.
+   */
+  anchorWorkspaceId?: string;
+  /**
+   * Set on an anchor workspace ONLY. Ordered list of member workspace ids
+   * whose `anchorWorkspaceId` points back here. Preserves user-controlled
+   * ordering (drag/drop, insert position). Do NOT use this for membership
+   * queries — derive from `anchorWorkspaceId` instead.
+   */
+  memberWorkspaceIds?: string[];
+  /** Optional nav convenience — last member of this group the user touched. */
+  lastActiveMemberWorkspaceId?: string;
+  /** Sidebar accent color for this workspace / group. */
+  color?: string;
+  /** True when this workspace's `path` is a git repository. */
+  isGit?: boolean;
+  /** Locked workspaces resist close/delete affordances. */
+  locked?: boolean;
+  /** ISO timestamp recorded when the workspace was created. */
+  createdAt?: string;
+  /** Filesystem path this workspace is rooted at, when path-rooted. */
+  path?: string;
+  /**
+   * Git-worktree backing for this workspace. A property of any Workspace —
+   * not a separate kind. `branch`/`baseBranch` are git refs (VCS domain).
+   */
+  worktree?: {
+    path: string;
+    branch: string;
+    baseBranch?: string;
+    repoPath?: string;
+  };
+}
+
+/**
+ * A `Workspace` is an anchor (owns a group, or is standalone) iff it has no
+ * `anchorWorkspaceId`. A standalone workspace is a degenerate anchor with no
+ * members.
+ */
+export function isAnchorWorkspace(ws: Workspace): boolean {
+  return ws.anchorWorkspaceId === undefined;
+}
+
+/** A `Workspace` is a group member iff it references an anchor. */
+export function isWorkspaceMember(ws: Workspace): boolean {
+  return ws.anchorWorkspaceId !== undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Panel vocabulary
+//
+// A "Panel" is the *content* rendered inside a Surface (the tab). Surfaces
+// keep their own type names; Panel is a classification layer on top, NOT a
+// surface-union rewrite. Two panels exist: Terminal and Browser (Preview).
+// ---------------------------------------------------------------------------
+
+export interface TerminalPanel {
+  panel: "terminal";
+}
+
+export interface BrowserPanel {
+  panel: "browser";
+}
+
+export type Panel = TerminalPanel | BrowserPanel;
+
+/** Classify a surface's content as a Terminal or Browser panel. */
+export function panelOf(surface: Surface): "terminal" | "browser" {
+  return surface.kind === "terminal" ? "terminal" : "browser";
 }
 
 // Helper functions for tree traversal

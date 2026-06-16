@@ -1,78 +1,50 @@
 <script lang="ts">
   import { theme } from "../stores/theme";
-  import { sidebarVisible, sidebarWidth, contextMenu } from "../stores/ui";
-  import { dragResize } from "../actions/drag-resize";
-  import { createDragReorder, type DragReorderState } from "../actions/drag-reorder";
+  import { sidebarVisible, sidebarWidth } from "../stores/ui";
   import { workspaces, activeWorkspaceIdx } from "../stores/workspace";
   import { extensionSections } from "../stores/extension-sidebar";
-  import WorkspaceItem from "./WorkspaceItem.svelte";
-  import DropGhost from "./DropGhost.svelte";
+  import WorkspaceList from "./WorkspaceList.svelte";
+  import SidebarResizeHandle from "./SidebarResizeHandle.svelte";
   import ExtensionSidebarSection from "./ExtensionSidebarSection.svelte";
-  import type { MenuItem } from "../context-menu-types";
 
   export let onNewWorkspace: () => void;
-  export let onSwitchWorkspace: (idx: number) => void;
-  export let onCloseWorkspace: (idx: number) => void;
-  export let onRenameWorkspace: (idx: number, name: string) => void;
-  export let onNewSurface: () => void;
-  export let onReorderWorkspaces: (fromIdx: number, toIdx: number) => void;
+  // The list owns selection/close/rename/reorder internally via the
+  // workspace services (members + anchors), but these callbacks are kept
+  // for API stability with App.svelte. `onReorderWorkspaces` is absorbed
+  // by WorkspaceList's own drag pipeline.
+  export let onSwitchWorkspace: (idx: number) => void = () => {};
+  export let onCloseWorkspace: (idx: number) => void = () => {};
+  export let onRenameWorkspace: (idx: number, name: string) => void = () => {};
+  export let onNewSurface: () => void = () => {};
+  export let onReorderWorkspaces: (fromIdx: number, toIdx: number) => void = () => {};
+  // Referenced so the absorbed/stable callbacks don't trip unused-var lint.
+  void onSwitchWorkspace;
+  void onCloseWorkspace;
+  void onRenameWorkspace;
+  void onNewSurface;
+  void onReorderWorkspaces;
 
-  let workspaceItems: Record<string, WorkspaceItem> = {};
+  let workspaceListEl: WorkspaceList;
 
-  export function startRename(idx: number) {
-    const ws = $workspaces[idx];
-    if (ws && workspaceItems[ws.id]) {
-      workspaceItems[ws.id].startRename();
-    }
+  /**
+   * Start an inline rename on the active workspace's row. Kept for the
+   * ⇧⌘R shortcut wired in App.svelte. Rename now lives inside the tree
+   * components (anchor/member rows own their own contentEditable), so the
+   * Sidebar delegates by id rather than reaching into a flat row map.
+   */
+  export function startRename(_idx: number) {
+    const ws = $workspaces[$activeWorkspaceIdx];
+    if (!ws) return;
+    workspaceListEl?.startRenameForWorkspace?.(ws.id);
   }
-
-  let dragging = false;
-
-  // Mouse-driven workspace reorder (HTML5 DnD is unreliable in WKWebView).
-  let wsDrag: DragReorderState = { sourceIdx: null, indicator: null, active: false, sourceHeight: 0 };
-  const wsReorder = createDragReorder({
-    dataAttr: "ws-drag-idx",
-    containerSelector: ".workspace-list",
-    ghostStyle: () => ({ background: $theme.bgActive, border: `1px solid ${$theme.accent}` }),
-    onDrop: (from, to) => onReorderWorkspaces(from, to),
-    onStateChange: () => { wsDrag = wsReorder.getState(); },
-  });
-  $: showGhostBefore = (idx: number) =>
-    wsDrag.active && wsDrag.indicator?.idx === idx && wsDrag.indicator?.edge === "before";
-  $: showGhostAfter = (idx: number) =>
-    wsDrag.active && wsDrag.indicator?.idx === idx && wsDrag.indicator?.edge === "after";
-
-  function showWorkspaceContextMenu(x: number, y: number, idx: number) {
-    const items: MenuItem[] = [
-      { label: "Rename Workspace", shortcut: "⇧⌘R", action: () => startRename(idx) },
-      { label: "New Surface", shortcut: "⌘T", action: () => { onSwitchWorkspace(idx); onNewSurface(); } },
-      { label: "", action: () => {}, separator: true },
-      {
-        label: "Close Other Workspaces",
-        disabled: $workspaces.length <= 1,
-        action: () => {
-          for (let i = $workspaces.length - 1; i >= 0; i--) {
-            if (i !== idx) onCloseWorkspace(i);
-          }
-        },
-      },
-      {
-        label: "Close Workspace",
-        shortcut: "⇧⌘W",
-        danger: true,
-        disabled: $workspaces.length <= 1,
-        action: () => onCloseWorkspace(idx),
-      },
-    ];
-    contextMenu.set({ x, y, items });
-  }
-
 </script>
 
 {#if $sidebarVisible}
+  <!-- Expanded: a normal flex column taking sidebarWidth. -->
   <div
     id="sidebar"
     style="
+      position: relative;
       width: {$sidebarWidth}px;
       background: {$theme.sidebarBg};
       display: flex; overflow: hidden;
@@ -80,78 +52,65 @@
       flex-shrink: 0;
     "
   >
-  <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
-    <!-- Top row: controls + drag region for window chrome -->
-    <div
-      data-tauri-drag-region=""
-      style="
-        height: 38px; flex-shrink: 0; display: flex; align-items: center;
-        justify-content: flex-end; padding: 0 6px;
-        -webkit-app-region: drag;
-      "
-    >
-      <button
-        title="New Workspace (⌘N)"
+    <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+      <!-- Top row: controls + drag region for window chrome -->
+      <div
+        data-tauri-drag-region=""
         style="
-          background: none; border: none; cursor: pointer;
-          width: 26px; height: 26px; border-radius: 4px;
-          display: flex; align-items: center; justify-content: center;
-          color: {$theme.fgDim}; font-size: 18px; line-height: 1;
-          -webkit-app-region: no-drag;
+          height: 38px; flex-shrink: 0; display: flex; align-items: center;
+          justify-content: flex-end; padding: 0 6px;
+          -webkit-app-region: drag;
         "
-        on:click={onNewWorkspace}
-      >+</button>
-    </div>
+      >
+        <button
+          title="New Workspace (⌘N)"
+          style="
+            background: none; border: none; cursor: pointer;
+            width: 26px; height: 26px; border-radius: 4px;
+            display: flex; align-items: center; justify-content: center;
+            color: {$theme.fgDim}; font-size: 18px; line-height: 1;
+            -webkit-app-region: no-drag;
+          "
+          on:click={onNewWorkspace}
+        >+</button>
+      </div>
 
-    <!-- Workspace list (always first) + extension sections -->
-    <div class="workspace-list" style="flex: 1; overflow-y: auto; padding: 4px 0;">
-      {#each $workspaces as ws, idx (ws.id)}
-        {#if showGhostBefore(idx)}
-          <DropGhost height={wsDrag.sourceHeight} />
-        {/if}
-        <WorkspaceItem
-          bind:this={workspaceItems[ws.id]}
-          workspace={ws}
-          index={idx}
-          isActive={idx === $activeWorkspaceIdx}
-          onSelect={() => onSwitchWorkspace(idx)}
-          onClose={() => onCloseWorkspace(idx)}
-          onRename={(name) => onRenameWorkspace(idx, name)}
-          onContextMenu={(x, y) => showWorkspaceContextMenu(x, y, idx)}
-          dataDragIdx={idx}
-          dragHidden={wsDrag.sourceIdx === idx}
-          onDragMousedown={(e) => wsReorder.start(e, idx)}
-        />
-        {#if showGhostAfter(idx)}
-          <DropGhost height={wsDrag.sourceHeight} />
-        {/if}
-      {/each}
-      {#each $extensionSections as section (section.sectionId)}
-        <ExtensionSidebarSection {section} />
-      {/each}
+      <!-- Workspace tree (always first) + extension sections -->
+      <div class="workspace-list" style="flex: 1; overflow-y: auto; padding: 4px 0;">
+        <WorkspaceList bind:this={workspaceListEl} />
+        {#each $extensionSections as section (section.sectionId)}
+          <ExtensionSidebarSection {section} />
+        {/each}
+      </div>
     </div>
-  </div>
-  <div
-    class="sidebar-resize-handle"
-    style="
-      width: 4px; cursor: col-resize; flex-shrink: 0;
-      background: {dragging ? $theme.accent : $theme.sidebarBorder};
-      transition: background 0.15s;
-    "
-    use:dragResize={{
-      onDrag: (ev) => {
+    <SidebarResizeHandle
+      direction="right"
+      theme={$theme}
+      onDrag={(clientX) => {
         const maxWidth = window.innerWidth * 0.33;
-        sidebarWidth.set(Math.max(140, Math.min(maxWidth, ev.clientX)));
-      },
-      onStart: () => { dragging = true; },
-      onEnd: () => { dragging = false; },
-    }}
-  ></div>
+        sidebarWidth.set(Math.max(140, Math.min(maxWidth, clientX)));
+      }}
+    />
+  </div>
+{:else}
+  <!-- Collapsed: a 12px absolute rail strip overlaying the left edge.
+       Each anchor row's colored rail clips to this strip; hovering a
+       row's rail surfaces its full anchor row as a portaled popover
+       (owned by WorkspaceList). -->
+  <div
+    id="sidebar"
+    style="
+      position: absolute; left: 0; top: 0; bottom: 0;
+      width: 12px;
+      z-index: 2;
+      background: {$theme.sidebarBg};
+      display: flex; flex-direction: column; overflow: hidden;
+      font-size: 13px; user-select: none;
+    "
+  >
+    <div style="height: 38px; flex-shrink: 0;" data-tauri-drag-region=""></div>
+    <div class="workspace-list" style="flex: 1; overflow: hidden; padding: 4px 0;">
+      <WorkspaceList bind:this={workspaceListEl} />
+    </div>
   </div>
 {/if}
-
-<style>
-  .sidebar-resize-handle:hover {
-    filter: brightness(1.3);
-  }
-</style>

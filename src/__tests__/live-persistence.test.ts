@@ -4,10 +4,16 @@
  *   - mutating workspaces schedules a debounced write
  *   - the order store schedules a debounced write
  *   - sidebar-visible + group-collapsed persist on change (skip-first-emission)
- *   - legacy dev-format keys (rootRowOrder / bannerCollapsedById) are read
+ *   - legacy dev-format state keys are read and normalized (TERMINOLOGY §5)
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { get } from "svelte/store";
+
+// Foreign dev-format on-disk keys this layer must tolerate on read and never
+// write back. Kept as one labeled block so the retired terms appear exactly
+// once, as legacy-format fixtures (not gnar-term vocabulary). See config.ts.
+const LEGACY_ORDER_KEY = "rootRowOrder";
+const LEGACY_COLLAPSE_KEY = "bannerCollapsedById";
 
 const invokeMock = vi.fn();
 vi.mock("@tauri-apps/api/core", () => ({
@@ -149,13 +155,13 @@ describe("sidebar persistence", () => {
 });
 
 describe("legacy-key reads", () => {
-  it("normalizes rootRowOrder → workspaceOrder and bannerCollapsedById → groupCollapsedById", async () => {
+  it("normalizes the legacy order/collapse keys into the canonical keys", async () => {
     invokeMock.mockImplementation(async (cmd: string, arg: any) => {
       if (cmd === "get_home") return "/home/test";
       if (cmd === "read_file" && arg?.path?.endsWith("state.json")) {
         return JSON.stringify({
-          rootRowOrder: [{ kind: "workspace", id: "legacy" }],
-          bannerCollapsedById: { g1: true },
+          [LEGACY_ORDER_KEY]: [{ kind: "workspace", id: "legacy" }],
+          [LEGACY_COLLAPSE_KEY]: { g1: true },
         });
       }
       throw new Error("no file");
@@ -165,8 +171,9 @@ describe("legacy-key reads", () => {
     expect(state.workspaceOrder).toEqual([{ kind: "workspace", id: "legacy" }]);
     expect(state.groupCollapsedById).toEqual({ g1: true });
     // Legacy aliases are stripped after normalization.
-    expect(state.rootRowOrder).toBeUndefined();
-    expect(state.bannerCollapsedById).toBeUndefined();
+    const raw = state as Record<string, unknown>;
+    expect(raw[LEGACY_ORDER_KEY]).toBeUndefined();
+    expect(raw[LEGACY_COLLAPSE_KEY]).toBeUndefined();
     // The reactive store mirrors the normalized state.
     expect(get(appStateStore).workspaceOrder).toEqual([
       { kind: "workspace", id: "legacy" },
@@ -179,7 +186,7 @@ describe("legacy-key reads", () => {
       if (cmd === "read_file" && arg?.path?.endsWith("state.json")) {
         return JSON.stringify({
           workspaceOrder: [{ kind: "workspace", id: "new" }],
-          rootRowOrder: [{ kind: "workspace", id: "old" }],
+          [LEGACY_ORDER_KEY]: [{ kind: "workspace", id: "old" }],
         });
       }
       throw new Error("no file");
@@ -195,7 +202,7 @@ describe("legacy-key reads", () => {
     const written = lastWrittenState();
     expect(written).not.toBeNull();
     const json = JSON.stringify(written);
-    expect(json).not.toContain("rootRowOrder");
-    expect(json).not.toContain("bannerCollapsedById");
+    expect(json).not.toContain(LEGACY_ORDER_KEY);
+    expect(json).not.toContain(LEGACY_COLLAPSE_KEY);
   });
 });

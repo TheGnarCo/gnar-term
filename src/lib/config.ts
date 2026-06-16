@@ -92,14 +92,17 @@ export interface AppState {
   groupCollapsedById?: Record<string, boolean>;
   /** Primary sidebar expanded (true) / collapsed (false). */
   sidebarVisible?: boolean;
-  // --- Legacy keys (dev format) — read-only forward-compat. ---
-  // On load these are normalized into the canonical keys above; they are
-  // never written back. See `loadState` and TERMINOLOGY §5.
-  /** @deprecated read-only legacy alias of `workspaceOrder`. */
-  rootRowOrder?: { kind: string; id: string }[];
-  /** @deprecated read-only legacy alias of `groupCollapsedById`. */
-  bannerCollapsedById?: Record<string, boolean>;
 }
+
+// --- Legacy (dev-format) on-disk state keys ---
+//
+// These are FOREIGN-FORMAT identifiers from an older state.json schema, not
+// part of gnar-term's vocabulary. They are read once on load, normalized into
+// the canonical `AppState` keys, and never written back. The literals are
+// confined to this module so the rest of the codebase carries no retired
+// terminology. See TERMINOLOGY §5.
+const LEGACY_ORDER_KEY = "rootRowOrder";
+const LEGACY_COLLAPSE_KEY = "bannerCollapsedById";
 
 export interface CommandDef {
   name: string;
@@ -335,27 +338,30 @@ function stateDir(home: string): string {
 }
 
 /**
- * Normalize legacy (dev-format) keys into their canonical equivalents on
+ * Normalize legacy (dev-format) state keys into their canonical equivalents on
  * read. The legacy keys are never written back by `saveState` — only the
  * canonical fields are persisted, so the file self-heals on the next save.
  *
- *   rootRowOrder       → workspaceOrder       (TERMINOLOGY §5)
- *   bannerCollapsedById → groupCollapsedById   (TERMINOLOGY §5)
+ *   LEGACY_ORDER_KEY    → workspaceOrder      (TERMINOLOGY §5)
+ *   LEGACY_COLLAPSE_KEY → groupCollapsedById  (TERMINOLOGY §5)
  */
 function normalizeLegacyState(raw: AppState): AppState {
   const next: AppState = { ...raw };
-  if (next.workspaceOrder === undefined && Array.isArray(raw.rootRowOrder)) {
-    next.workspaceOrder = raw.rootRowOrder;
+  const legacy = raw as Record<string, unknown>;
+  const legacyOrder = legacy[LEGACY_ORDER_KEY];
+  if (next.workspaceOrder === undefined && Array.isArray(legacyOrder)) {
+    next.workspaceOrder = legacyOrder as AppState["workspaceOrder"];
   }
+  const legacyCollapse = legacy[LEGACY_COLLAPSE_KEY];
   if (
     next.groupCollapsedById === undefined &&
-    raw.bannerCollapsedById &&
-    typeof raw.bannerCollapsedById === "object"
+    legacyCollapse &&
+    typeof legacyCollapse === "object"
   ) {
-    next.groupCollapsedById = raw.bannerCollapsedById;
+    next.groupCollapsedById = legacyCollapse as Record<string, boolean>;
   }
-  delete next.rootRowOrder;
-  delete next.bannerCollapsedById;
+  delete (next as Record<string, unknown>)[LEGACY_ORDER_KEY];
+  delete (next as Record<string, unknown>)[LEGACY_COLLAPSE_KEY];
   return next;
 }
 
@@ -398,8 +404,8 @@ export async function loadState(): Promise<AppState> {
 export async function saveState(updates: Partial<AppState>): Promise<void> {
   _appState = { ..._appState, ...updates };
   // Legacy aliases never round-trip back to disk.
-  delete _appState.rootRowOrder;
-  delete _appState.bannerCollapsedById;
+  delete (_appState as Record<string, unknown>)[LEGACY_ORDER_KEY];
+  delete (_appState as Record<string, unknown>)[LEGACY_COLLAPSE_KEY];
   _appStateStore.set(_appState);
   if (_stateLoadCorrupt) {
     console.warn(

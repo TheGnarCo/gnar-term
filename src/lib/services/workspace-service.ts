@@ -4,7 +4,7 @@ import { workspaces, activeWorkspaceIdx, activeWorkspace, activeSurface } from "
 import { showInputPrompt } from "../stores/ui";
 import { createTerminalSurface } from "../terminal-service";
 import { openPreview } from "../../preview/index";
-import { uid, getAllPanes, getAllSurfaces, isTerminalSurface, isWorkspaceMember, findPaneInWorkspace, type Workspace, type Pane, type SplitNode } from "../types";
+import { uid, getAllPanes, getAllSurfaces, isTerminalSurface, isAnchorWorkspace, isWorkspaceMember, findPaneInWorkspace, type Workspace, type Pane, type SplitNode } from "../types";
 import { saveConfig, getConfig, type WorkspaceDef, type LayoutNode } from "../config";
 import {
   appendWorkspaceRow,
@@ -161,9 +161,20 @@ export function closeWorkspace(idx: number) {
       }
     }
   }
-  workspaces.update(list => list.filter((_, i) => i !== idx));
-  // Members never had a row; for anchors this drops their sidebar row.
-  removeWorkspaceRow({ kind: "workspace", id: ws.id });
+  // Group-safe close (mirrors the pane-service last-pane-close back-edge):
+  // closing an anchor that still owns members must not strand them. Promote
+  // the first member to anchor BEFORE removing the workspace so the tag/order
+  // swap sees the closed anchor still present. The promote handles the row
+  // swap; for a memberless anchor (or a member) we drop the row below.
+  let promotedId: string | null = null;
+  if (isAnchorWorkspace(ws)) {
+    promotedId = promoteMemberToAnchor(ws.id);
+  }
+  workspaces.update(list => list.filter((w) => w.id !== ws.id));
+  // Members never had a row; for anchors with no promote this drops the row.
+  if (promotedId === null) {
+    removeWorkspaceRow({ kind: "workspace", id: ws.id });
+  }
   // A closed member must be detached from its anchor's ordered member list.
   if (isWorkspaceMember(ws)) removeMemberFromAllGroups(ws.id);
   activeWorkspaceIdx.set(Math.min(get(activeWorkspaceIdx), get(workspaces).length - 1));

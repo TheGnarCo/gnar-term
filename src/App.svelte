@@ -4,6 +4,7 @@
   import { theme, themes, xtermTheme } from "./lib/stores/theme";
   import { sidebarVisible, commandPaletteOpen, findBarVisible, pendingAction, showInputPrompt } from "./lib/stores/ui";
   import { workspaces, activeWorkspaceIdx, activeWorkspace, activePane, activeSurface } from "./lib/stores/workspace";
+  import { workspaceOrder } from "./lib/stores/workspace-order";
   import { invoke } from "@tauri-apps/api/core";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { loadConfig, saveConfig, getConfig, getWorkspaceCommands } from "./lib/config";
@@ -18,6 +19,17 @@
   import { splitPane, closePane, focusPane, focusDirection, flashFocusedPane, splitFromSidebar, togglePaneZoom } from "./lib/services/pane-service";
   import { handleMenuPaste } from "./lib/services/menu-paste-router";
   import { selectSurface, closeSurfaceById, newSurface, nextSurface, prevSurface, selectSurfaceByNumber, closeActiveSurface, openPreviewInPane, newSurfaceFromSidebar } from "./lib/services/surface-service";
+  import {
+    switchToOrderedWorkspace,
+    switchToLastOrderedWorkspace,
+    orderedAnchorWorkspaces,
+    groupActiveWorkspace,
+    addActiveToGroup,
+    ungroupActiveWorkspace,
+    toggleActiveGroupCollapsed,
+    anchorsWithMembers,
+    groupIdOf,
+  } from "./lib/services/grouping-commands";
   import { initMcpServer } from "./lib/services/mcp-server";
   import { confirmQuit } from "./lib/services/quit-confirmation-service";
 
@@ -49,6 +61,15 @@
 
   // ---- Command palette ----
 
+  // Display-ordered anchor rows — recomputed whenever the store or row order
+  // changes so "Switch to:" / ⌘1-9 follow the sidebar, not the raw array.
+  $: orderedAnchors = ($workspaces, $workspaceOrder, orderedAnchorWorkspaces());
+  // The group (if any) the active workspace belongs to, for the
+  // collapse/expand + ungroup palette entries.
+  $: activeGroupId = $activeWorkspace ? groupIdOf($activeWorkspace) : null;
+  // Anchors that already own members — targets for "Add to Group".
+  $: groupTargets = ($workspaces, anchorsWithMembers());
+
   $: paletteCommands = [
     { name: "New Workspace", shortcut: `${shiftModLabel}N`, action: () => createWorkspace(`Workspace ${$workspaces.length + 1}`) },
     { name: "New Surface (Tab)", shortcut: `${shiftModLabel}T`, action: () => newSurfaceFromSidebar() },
@@ -61,11 +82,20 @@
     { name: "Toggle Sidebar", shortcut: `${shiftModLabel}B`, action: () => sidebarVisible.update(v => !v) },
     { name: "Toggle Find Bar", shortcut: `${shiftModLabel}F`, action: () => findBarVisible.update(v => !v) },
     { name: "Clear Scrollback", shortcut: `${shiftModLabel}K`, action: () => { const s = $activeSurface; if (s && isTerminalSurface(s)) s.terminal.clear(); } },
-    ...$workspaces.map((ws, i) => ({
+    ...orderedAnchors.map((ws, i) => ({
       name: `Switch to: ${ws.name}`,
       shortcut: i < 9 ? `${modLabel}${i + 1}` : undefined,
-      action: () => switchWorkspace(i),
+      action: () => switchToOrderedWorkspace(i),
     })),
+    { name: "Group Workspaces", action: () => groupActiveWorkspace() },
+    ...groupTargets.map((anchor) => ({
+      name: `Add to Group: ${anchor.name}`,
+      action: () => addActiveToGroup(anchor.id),
+    })),
+    ...(activeGroupId ? [
+      { name: "Ungroup", action: () => ungroupActiveWorkspace() },
+      { name: "Collapse/Expand Group", action: () => toggleActiveGroupCollapsed() },
+    ] : []),
     { name: "Save Current Workspace...", action: () => saveCurrentWorkspace() },
     { name: `Preview File...`, action: async () => {
       const path = await showInputPrompt("Path to file");
@@ -109,8 +139,8 @@
       if (e.key === "t") { e.preventDefault(); newSurfaceFromSidebar(); return; }
       if (e.key === "d") { e.preventDefault(); splitFromSidebar("horizontal"); return; }
       if (e.key === "w") { e.preventDefault(); closeActiveSurface(); return; }
-      if (e.key >= "1" && e.key <= "8") { e.preventDefault(); switchWorkspace(parseInt(e.key) - 1); return; }
-      if (e.key === "9") { e.preventDefault(); switchWorkspace($workspaces.length - 1); return; }
+      if (e.key >= "1" && e.key <= "8") { e.preventDefault(); switchToOrderedWorkspace(parseInt(e.key) - 1); return; }
+      if (e.key === "9") { e.preventDefault(); switchToLastOrderedWorkspace(); return; }
       if (e.key === "b") { e.preventDefault(); sidebarVisible.update(v => !v); return; }
       if (e.key === "k") { e.preventDefault(); const s = $activeSurface; if (s && isTerminalSurface(s)) s.terminal.clear(); return; }
       if (e.key === "p") { e.preventDefault(); commandPaletteOpen.update(v => !v); return; }

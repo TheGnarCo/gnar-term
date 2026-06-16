@@ -4,9 +4,10 @@
  * them back whenever the user toggles either.
  *
  * Backed by `AppState.sidebarVisible` and `AppState.groupCollapsedById`
- * (config.ts). Legacy dev-format keys (`bannerCollapsedById`) are
- * normalized into the canonical key by `loadState`, so this service only
- * ever reads the canonical field. Without this service the stores always
+ * (config.ts). Any legacy dev-format state keys are normalized into the
+ * canonical keys by `loadState` (see config.ts §5 legacy handling), so this
+ * service only ever reads the canonical field. Without this service the stores
+ * always
  * boot to their defaults and the user's choices are forgotten across
  * launches.
  */

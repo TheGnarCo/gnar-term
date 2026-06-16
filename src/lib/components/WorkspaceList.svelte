@@ -7,10 +7,10 @@
    * all anchor rows via `moveWorkspaceRow`. Member (nested) drags live in
    * MemberList and never bubble here.
    *
-   * Renamed + simplified from dev's WorkspaceListBlock: the
-   * pseudo-workspace branch, standalone-dashboard branch, extension
-   * renderer indirection (renders GroupRow directly), archive-zone drop,
-   * and workspace-to-pane drop are all dropped. The collapsed-mode hover
+   * Renamed + simplified from dev's list block: the out-of-scope
+   * non-workspace row kinds, the dashboard branch, the extension renderer
+   * indirection (renders GroupRow directly), the archive-zone drop, and the
+   * workspace-to-pane drop are all dropped. The collapsed-mode hover
    * popover (RESOLVED risk 4) is KEPT: a 150ms-grace popover portaled to
    * <body>, anchored at the hovered row's y, that renders the anchor row
    * at full width while the sidebar is collapsed.

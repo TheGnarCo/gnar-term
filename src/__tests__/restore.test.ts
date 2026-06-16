@@ -168,14 +168,20 @@ describe("restore round-trip", () => {
   });
 
   it("never leaks dashboard/ssh data into restored workspaces", async () => {
+    // Foreign dev-format fields planted on a persisted record; the scope cut
+    // must strip them on restore. Defined once so the retired terms read as
+    // legacy-format fixtures, not gnar-term vocabulary.
+    const droppedDevFields: Record<string, unknown> = {
+      isDashboard: true,
+      controlled: true,
+      rootWorkspaceId: "ghost",
+    };
     _stateFile = JSON.stringify({
       workspaces: [
         {
           id: "a",
           name: "A",
-          isDashboard: true,
-          controlled: true,
-          rootWorkspaceId: "ghost",
+          ...droppedDevFields,
           layout: { pane: { surfaces: [{ type: "terminal" }] } },
         },
       ],
@@ -183,8 +189,8 @@ describe("restore round-trip", () => {
     await initWorkspaces(NO_CLI, {});
     const restored = get(workspaces)[0];
     const json = JSON.stringify(restored);
-    expect(json).not.toContain("isDashboard");
-    expect(json).not.toContain("controlled");
-    expect(json).not.toContain("rootWorkspaceId");
+    for (const dropped of Object.keys(droppedDevFields)) {
+      expect(json).not.toContain(dropped);
+    }
   });
 });

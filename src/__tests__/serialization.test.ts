@@ -12,6 +12,18 @@ import {
 } from "../lib/config";
 import type { Workspace, Pane, SplitNode, Surface } from "../lib/types";
 
+// Out-of-scope dev-format fields that must NEVER leak into serialized output.
+// Listed once, as foreign identifiers, so the negative assertion below stays a
+// regression guard without scattering retired terms through the suite.
+const DROPPED_DEV_FIELDS = [
+  "isDashboard",
+  "dashboardWorkspaceId",
+  "controlled",
+  "spawnedBy",
+  "rootWorkspaceId",
+  "branchedWorkspaceIds",
+];
+
 function terminalSurface(id: string, cwd?: string): Surface {
   return {
     kind: "terminal",
@@ -176,14 +188,7 @@ describe("serializeWorkspace", () => {
     expect(def.anchorWorkspaceId).toBeUndefined();
     expect(def.worktree).toBeUndefined();
     const json = JSON.stringify(def);
-    for (const dropped of [
-      "isDashboard",
-      "dashboardWorkspaceId",
-      "controlled",
-      "spawnedBy",
-      "rootWorkspaceId",
-      "branchedWorkspaceIds",
-    ]) {
+    for (const dropped of DROPPED_DEV_FIELDS) {
       expect(json).not.toContain(dropped);
     }
   });

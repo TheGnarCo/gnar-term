@@ -9,6 +9,13 @@
  */
 
 import { invoke } from "@tauri-apps/api/core";
+import { writable, type Readable } from "svelte/store";
+import {
+  isTerminalSurface,
+  isPreviewSurface,
+  type Workspace,
+  type SplitNode,
+} from "./types";
 
 // --- Types (cmux-compatible + extensions) ---
 
@@ -36,11 +43,66 @@ export interface SplitDef {
 export type LayoutNode = { pane: PaneDef } | SplitDef;
 
 export interface WorkspaceDef {
+  /**
+   * Stable identifier. Optional on fresh creation; populated when persisting
+   * a live workspace so its `workspaceOrder` row (keyed by `{kind, id}`)
+   * survives a round-trip and preserves user-dragged sort order.
+   */
+  id?: string;
   name?: string;
   cwd?: string;
   color?: string;
   layout?: LayoutNode;
+  // --- Grouping fields (in-scope subset; dashboards/controlled/ssh dropped) ---
+  /** Anchor back-reference — presence marks this def as a group member. */
+  anchorWorkspaceId?: string;
+  /** Ordered member ids on an anchor (ordering only; membership via tag). */
+  memberWorkspaceIds?: string[];
+  /** Last member of this group the user touched (nav convenience). */
+  lastActiveMemberWorkspaceId?: string;
+  /** Filesystem path this workspace is rooted at, when path-rooted. */
+  path?: string;
+  /** True when `path` is a git repository. */
+  isGit?: boolean;
+  /** Locked workspaces resist close/delete. */
+  locked?: boolean;
+  /** ISO creation timestamp. */
+  createdAt?: string;
+  /** Git-worktree backing (a property of any workspace, not a kind). */
+  worktree?: {
+    path: string;
+    branch: string;
+    baseBranch?: string;
+    repoPath?: string;
+  };
 }
+
+/**
+ * Persisted application state (state.json). Stage 1 defines the shape (the
+ * in-scope fields only); the live load/save wiring lands in Stage 2.
+ *
+ * Out-of-scope fields (archive, dashboards, ssh) are intentionally absent.
+ */
+export interface AppState {
+  workspaces?: WorkspaceDef[];
+  activeWorkspaceId?: string;
+  /** Interleaved ordering for the Workspaces section. */
+  workspaceOrder?: { kind: string; id: string }[];
+  /** Per-group collapsed flag, keyed by anchor id. */
+  groupCollapsedById?: Record<string, boolean>;
+  /** Primary sidebar expanded (true) / collapsed (false). */
+  sidebarVisible?: boolean;
+}
+
+// --- Legacy (dev-format) on-disk state keys ---
+//
+// These are FOREIGN-FORMAT identifiers from an older state.json schema, not
+// part of gnar-term's vocabulary. They are read once on load, normalized into
+// the canonical `AppState` keys, and never written back. The literals are
+// confined to this module so the rest of the codebase carries no retired
+// terminology. See TERMINOLOGY §5.
+const LEGACY_ORDER_KEY = "rootRowOrder";
+const LEGACY_COLLAPSE_KEY = "bannerCollapsedById";
 
 export interface CommandDef {
   name: string;
@@ -159,6 +221,214 @@ export function getMcpSetting(): McpSetting {
 
 export function getWorkspaceCommands(): CommandDef[] {
   return getCommands().filter(c => c.workspace);
+}
+
+// --- Serialization ---
+
+/**
+ * Serialize a live split tree to its on-disk `LayoutNode` form. Only the two
+ * in-scope surface contents are emitted: terminal and preview (Browser panel).
+ * SSH and registry surface branches are intentionally absent.
+ */
+export function serializeLayout(node: SplitNode): LayoutNode {
+  if (node.type === "pane") {
+    const surfaces: SurfaceDef[] = node.pane.surfaces.map((s) => {
+      if (isTerminalSurface(s)) {
+        const def: SurfaceDef = { type: "terminal" };
+        if (s.title) def.name = s.title;
+        if (s.cwd) def.cwd = s.cwd;
+        if (s.startupCommand) def.command = s.startupCommand;
+        if (s.id === node.pane.activeSurfaceId) def.focus = true;
+        return def;
+      }
+      // Preview surface → Browser panel, serialized as a markdown surface.
+      const def: SurfaceDef = { type: "markdown" };
+      if (s.title) def.name = s.title;
+      if (isPreviewSurface(s)) def.path = s.filePath;
+      if (s.id === node.pane.activeSurfaceId) def.focus = true;
+      return def;
+    });
+    return { pane: { surfaces } };
+  }
+  return {
+    direction: node.direction,
+    split: node.ratio,
+    children: [serializeLayout(node.children[0]), serializeLayout(node.children[1])],
+  };
+}
+
+/**
+ * Serialize a live `Workspace` to its on-disk `WorkspaceDef`. Only in-scope
+ * fields are written; dashboard / controlled / ssh fields are never emitted.
+ */
+export function serializeWorkspace(ws: Workspace): WorkspaceDef {
+  const def: WorkspaceDef = {
+    id: ws.id,
+    name: ws.name,
+    layout: serializeLayout(ws.splitRoot),
+  };
+  if (ws.anchorWorkspaceId !== undefined)
+    def.anchorWorkspaceId = ws.anchorWorkspaceId;
+  if (ws.memberWorkspaceIds !== undefined)
+    def.memberWorkspaceIds = ws.memberWorkspaceIds;
+  if (ws.lastActiveMemberWorkspaceId !== undefined)
+    def.lastActiveMemberWorkspaceId = ws.lastActiveMemberWorkspaceId;
+  if (ws.path !== undefined) def.path = ws.path;
+  if (ws.color !== undefined) def.color = ws.color;
+  if (ws.isGit !== undefined) def.isGit = ws.isGit;
+  if (ws.locked !== undefined) def.locked = ws.locked;
+  if (ws.createdAt !== undefined) def.createdAt = ws.createdAt;
+  if (ws.worktree !== undefined) def.worktree = ws.worktree;
+  return def;
+}
+
+/**
+ * Convert an on-disk `WorkspaceDef` back into the `WorkspaceDef` template the
+ * runtime `createWorkspaceFromDef` path hydrates. In-scope fields only —
+ * dashboard / controlled / ssh copies are stripped.
+ */
+export function workspaceDefToTemplate(def: WorkspaceDef): WorkspaceDef {
+  const tpl: WorkspaceDef = {
+    id: def.id,
+    name: def.name,
+    layout: def.layout,
+  };
+  if (def.cwd !== undefined) tpl.cwd = def.cwd;
+  if (def.color !== undefined) tpl.color = def.color;
+  if (def.anchorWorkspaceId !== undefined)
+    tpl.anchorWorkspaceId = def.anchorWorkspaceId;
+  if (def.memberWorkspaceIds !== undefined)
+    tpl.memberWorkspaceIds = def.memberWorkspaceIds;
+  if (def.lastActiveMemberWorkspaceId !== undefined)
+    tpl.lastActiveMemberWorkspaceId = def.lastActiveMemberWorkspaceId;
+  if (def.path !== undefined) tpl.path = def.path;
+  if (def.isGit !== undefined) tpl.isGit = def.isGit;
+  if (def.locked !== undefined) tpl.locked = def.locked;
+  if (def.createdAt !== undefined) tpl.createdAt = def.createdAt;
+  if (def.worktree !== undefined) tpl.worktree = def.worktree;
+  return tpl;
+}
+
+// --- Persisted application state (state.json) ---
+
+let _appState: AppState = {};
+const _appStateStore = writable<AppState>({});
+/** Reactive view of the persisted application state. */
+export const appStateStore: Readable<AppState> = _appStateStore;
+
+/**
+ * Set when loadState detects state.json exists but is unparseable. When true,
+ * saveState refuses to overwrite the file so the user's last good session
+ * isn't silently wiped on the next quit. Cleared by resetConfigStateForTests
+ * and on the next successful loadState.
+ */
+let _stateLoadCorrupt = false;
+
+/** Test-only — reset all module-level config + state so tests don't bleed. */
+export function resetConfigStateForTests(): void {
+  _config = {};
+  _configPath = "";
+  _appState = {};
+  _appStateStore.set({});
+  _stateLoadCorrupt = false;
+}
+
+function stateDir(home: string): string {
+  return `${home}/.config/gnar-term`;
+}
+
+/**
+ * Normalize legacy (dev-format) state keys into their canonical equivalents on
+ * read. The legacy keys are never written back by `saveState` — only the
+ * canonical fields are persisted, so the file self-heals on the next save.
+ *
+ *   LEGACY_ORDER_KEY    → workspaceOrder      (TERMINOLOGY §5)
+ *   LEGACY_COLLAPSE_KEY → groupCollapsedById  (TERMINOLOGY §5)
+ */
+function normalizeLegacyState(raw: AppState): AppState {
+  const next: AppState = { ...raw };
+  const legacy = raw as Record<string, unknown>;
+  const legacyOrder = legacy[LEGACY_ORDER_KEY];
+  if (next.workspaceOrder === undefined && Array.isArray(legacyOrder)) {
+    next.workspaceOrder = legacyOrder as AppState["workspaceOrder"];
+  }
+  const legacyCollapse = legacy[LEGACY_COLLAPSE_KEY];
+  if (
+    next.groupCollapsedById === undefined &&
+    legacyCollapse &&
+    typeof legacyCollapse === "object"
+  ) {
+    next.groupCollapsedById = legacyCollapse as Record<string, boolean>;
+  }
+  delete (next as Record<string, unknown>)[LEGACY_ORDER_KEY];
+  delete (next as Record<string, unknown>)[LEGACY_COLLAPSE_KEY];
+  return next;
+}
+
+/**
+ * Load the persisted session state from `state.json`. A missing file yields
+ * an empty state (first-run). A present-but-unparseable file is flagged so a
+ * subsequent `saveState` refuses to overwrite the user's last good session.
+ */
+export async function loadState(): Promise<AppState> {
+  const home = await getHome();
+  const path = `${stateDir(home)}/state.json`;
+
+  _stateLoadCorrupt = false;
+  let content: string | null = null;
+  try {
+    content = await invoke<string>("read_file", { path });
+  } catch {
+    content = null;
+  }
+  if (content === null) {
+    _appState = {};
+    _appStateStore.set(_appState);
+    return _appState;
+  }
+  try {
+    _appState = normalizeLegacyState(JSON.parse(content) as AppState);
+  } catch (err) {
+    _stateLoadCorrupt = true;
+    console.warn(
+      "[state] Failed to parse state.json; refusing to overwrite until it is repaired. Falling back to empty state for this session.",
+      err,
+    );
+    _appState = {};
+  }
+  _appStateStore.set(_appState);
+  return _appState;
+}
+
+/** Merge `updates` into the persisted state and write `state.json`. */
+export async function saveState(updates: Partial<AppState>): Promise<void> {
+  _appState = { ..._appState, ...updates };
+  // Legacy aliases never round-trip back to disk.
+  delete (_appState as Record<string, unknown>)[LEGACY_ORDER_KEY];
+  delete (_appState as Record<string, unknown>)[LEGACY_COLLAPSE_KEY];
+  _appStateStore.set(_appState);
+  if (_stateLoadCorrupt) {
+    console.warn(
+      "[state] Skipping save: state.json was unparseable at load. Repair or move the file to re-enable persistence.",
+    );
+    return;
+  }
+  const home = await getHome();
+  const dir = stateDir(home);
+  const path = `${dir}/state.json`;
+  try {
+    await invoke("ensure_dir", { path: dir });
+    await invoke("write_file", {
+      path,
+      content: JSON.stringify(_appState, null, 2),
+    });
+  } catch (err) {
+    console.error("[state] Failed to save:", err);
+  }
+}
+
+export function getState(): AppState {
+  return _appState;
 }
 
 // --- Helpers ---

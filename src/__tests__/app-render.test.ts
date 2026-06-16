@@ -20,9 +20,21 @@ describe("App.svelte structure verification", () => {
   it("has proper onMount initialization", async () => {
     const fs = await import("fs");
     const source = fs.readFileSync("src/App.svelte", "utf-8");
-    // Must await fontReady before creating workspace
+    // Must await fontReady before booting the workspace session
     expect(source).toContain("await fontReady");
     expect(source).toContain("setupListeners()");
+    // Boot now routes through initWorkspaces (restore replaces the
+    // always-fresh rebuild). The auto-default "Workspace 1" fallback lives
+    // in restore-workspaces.ts.
+    expect(source).toContain("initWorkspaces(cliArgs, config)");
+  });
+
+  it("auto-default workspace fallback lives in restore-workspaces", async () => {
+    const fs = await import("fs");
+    const source = fs.readFileSync(
+      "src/lib/services/restore-workspaces.ts",
+      "utf-8",
+    );
     expect(source).toContain('createWorkspace("Workspace 1")');
   });
 
@@ -197,7 +209,11 @@ describe("Workspace from config definition", () => {
 
   it("autoloads workspaces from config on startup", async () => {
     const fs = await import("fs");
-    const source = fs.readFileSync("src/App.svelte", "utf-8");
+    // Autoload + fallback moved into the boot path (restore-workspaces.ts).
+    const source = fs.readFileSync(
+      "src/lib/services/restore-workspaces.ts",
+      "utf-8",
+    );
     expect(source).toContain("config.autoload");
     expect(source).toContain("createWorkspaceFromDef(cmd.workspace)");
     // Falls back to default workspace if nothing autoloaded

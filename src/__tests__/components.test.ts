@@ -103,7 +103,6 @@ import Tab from "../lib/components/Tab.svelte";
 import TabBar from "../lib/components/TabBar.svelte";
 import ContextMenu from "../lib/components/ContextMenu.svelte";
 import CommandPalette from "../lib/components/CommandPalette.svelte";
-import WorkspaceItem from "../lib/components/WorkspaceItem.svelte";
 import PaneView from "../lib/components/PaneView.svelte";
 import Sidebar from "../lib/components/Sidebar.svelte";
 import TerminalSurfaceComponent from "../lib/components/TerminalSurface.svelte";
@@ -116,6 +115,11 @@ import {
   contextMenu,
 } from "../lib/stores/ui";
 import { workspaces, activeWorkspaceIdx } from "../lib/stores/workspace";
+import {
+  setWorkspaceOrder,
+  cancelOrderPersist,
+} from "../lib/stores/workspace-order";
+import { groupCollapsedState } from "../lib/stores/ui";
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -193,6 +197,9 @@ beforeEach(() => {
   contextMenu.set(null);
   workspaces.set([]);
   activeWorkspaceIdx.set(-1);
+  setWorkspaceOrder([]);
+  cancelOrderPersist();
+  groupCollapsedState.set(new Map());
 });
 
 // ===========================================================================
@@ -590,172 +597,6 @@ describe("CommandPalette", () => {
 });
 
 // ===========================================================================
-// WorkspaceItem
-// ===========================================================================
-
-describe("WorkspaceItem", () => {
-  function renderWorkspaceItem(
-    wsOverrides: Partial<Workspace> = {},
-    isActive = true,
-  ) {
-    const ws = makeWorkspace("ws1", "My Workspace");
-    Object.assign(ws, wsOverrides);
-    return render(WorkspaceItem, {
-      props: {
-        workspace: ws,
-        index: 0,
-        isActive,
-        onSelect: noop,
-        onClose: noop,
-        onRename: noop,
-        onContextMenu: noop,
-        onReorder: noop,
-      },
-    });
-  }
-
-  it("renders the workspace name", () => {
-    renderWorkspaceItem();
-    expect(screen.getByText("My Workspace")).toBeTruthy();
-  });
-
-  it("renders close button with correct title", () => {
-    renderWorkspaceItem();
-    expect(screen.getByTitle("Close Workspace (⇧⌘W)")).toBeTruthy();
-  });
-
-  it("renders close button with x symbol", () => {
-    renderWorkspaceItem();
-    // The close button renders the multiplication sign
-    expect(screen.getByText("×")).toBeTruthy();
-  });
-
-  it("shows unread badge when surfaces have unread data", () => {
-    const surface = makeSurface("s1", { hasUnread: true });
-    const pane = makePane("p1", [surface]);
-    const ws = makeWorkspace("ws1", "Unread WS", pane);
-    const { container: withUnread } = render(WorkspaceItem, {
-      props: {
-        workspace: ws,
-        index: 0,
-        isActive: false,
-        onSelect: noop,
-        onClose: noop,
-        onRename: noop,
-        onContextMenu: noop,
-        onReorder: noop,
-      },
-    });
-    // Count spans with unread vs without — the unread badge adds an extra empty span
-    const spanCountWithUnread = withUnread.querySelectorAll("span").length;
-
-    cleanup();
-
-    const surfaceNoUnread = makeSurface("s2", { hasUnread: false });
-    const paneNoUnread = makePane("p2", [surfaceNoUnread]);
-    const wsNoUnread = makeWorkspace("ws2", "No Unread WS", paneNoUnread);
-    const { container: withoutUnread } = render(WorkspaceItem, {
-      props: {
-        workspace: wsNoUnread,
-        index: 0,
-        isActive: false,
-        onSelect: noop,
-        onClose: noop,
-        onRename: noop,
-        onContextMenu: noop,
-        onReorder: noop,
-      },
-    });
-    const spanCountWithoutUnread =
-      withoutUnread.querySelectorAll("span").length;
-
-    // The unread variant should have one more span (the badge)
-    expect(spanCountWithUnread).toBe(spanCountWithoutUnread + 1);
-  });
-
-  it("does not show unread badge when no surfaces have unread", () => {
-    const { container: withoutUnread } = renderWorkspaceItem();
-    const spanCountBase = withoutUnread.querySelectorAll("span").length;
-
-    cleanup();
-
-    // Render with unread to get the count with badge
-    const surface = makeSurface("s1", { hasUnread: true });
-    const pane = makePane("p1", [surface]);
-    const ws = makeWorkspace("ws1", "Unread WS", pane);
-    const { container: withUnread } = render(WorkspaceItem, {
-      props: {
-        workspace: ws,
-        index: 0,
-        isActive: false,
-        onSelect: noop,
-        onClose: noop,
-        onRename: noop,
-        onContextMenu: noop,
-        onReorder: noop,
-      },
-    });
-    const spanCountWithBadge = withUnread.querySelectorAll("span").length;
-
-    // Without unread should have fewer spans
-    expect(spanCountBase).toBeLessThan(spanCountWithBadge);
-  });
-
-  it("renders metadata when multiple surfaces exist", () => {
-    const s1 = makeSurface("s1");
-    const s2 = makeSurface("s2");
-    const pane: Pane = { id: "p1", surfaces: [s1, s2], activeSurfaceId: s1.id };
-    const ws: Workspace = {
-      id: "ws1",
-      name: "Multi Surface",
-      splitRoot: { type: "pane", pane },
-      activePaneId: pane.id,
-    };
-    render(WorkspaceItem, {
-      props: {
-        workspace: ws,
-        index: 0,
-        isActive: true,
-        onSelect: noop,
-        onClose: noop,
-        onRename: noop,
-        onContextMenu: noop,
-        onReorder: noop,
-      },
-    });
-    // Should show "2s" for 2 surfaces
-    expect(screen.getByText("2s")).toBeTruthy();
-  });
-
-  it("renders notification text when a surface has a notification", () => {
-    const surface = makeSurface("s1", { notification: "Build complete" });
-    const pane = makePane("p1", [surface]);
-    const ws = makeWorkspace("ws1", "Notified", pane);
-    render(WorkspaceItem, {
-      props: {
-        workspace: ws,
-        index: 0,
-        isActive: true,
-        onSelect: noop,
-        onClose: noop,
-        onRename: noop,
-        onContextMenu: noop,
-        onReorder: noop,
-      },
-    });
-    expect(screen.getByText("Build complete")).toBeTruthy();
-  });
-
-  it("carries the reorder data-attr for the mouse-driven drag engine", () => {
-    // HTML5 `draggable` was replaced by a mouse-event reorder engine that
-    // keys off data-ws-drag-idx (WKWebView's HTML5 DnD is unreliable).
-    const { container } = renderWorkspaceItem();
-    expect(container.querySelector("[draggable='true']")).toBeNull();
-    expect(container.querySelector("[data-ws-drag-idx]")).toBeTruthy();
-  });
-});
-
-// ===========================================================================
 // PaneView
 // ===========================================================================
 
@@ -829,16 +670,31 @@ describe("Sidebar", () => {
     onReorderWorkspaces: noop,
   };
 
+  /** Seed the workspaces store + workspaceOrder so the nested tree
+   *  renders one anchor row per standalone workspace. */
+  function seedAnchors(specs: Array<[string, string]>) {
+    const wss = specs.map(([id, name]) => makeWorkspace(id, name));
+    workspaces.set(wss);
+    setWorkspaceOrder(wss.map((w) => ({ kind: "workspace", id: w.id })));
+    cancelOrderPersist();
+  }
+
   it("renders when sidebarVisible is true", () => {
     sidebarVisible.set(true);
     const { container } = render(Sidebar, { props: sidebarProps });
     expect(container.querySelector("#sidebar")).toBeTruthy();
   });
 
-  it("does not render when sidebarVisible is false", () => {
+  it("renders a collapsed rail strip when sidebarVisible is false", () => {
+    // The flat sidebar used to vanish entirely when hidden. The nested
+    // tree keeps a 12px absolute rail strip in collapsed mode so each
+    // anchor's colored rail and the hover popover survive.
     sidebarVisible.set(false);
     const { container } = render(Sidebar, { props: sidebarProps });
-    expect(container.querySelector("#sidebar")).toBeNull();
+    const el = container.querySelector("#sidebar") as HTMLElement | null;
+    expect(el).toBeTruthy();
+    expect(el?.style.position).toBe("absolute");
+    expect(el?.style.width).toBe("12px");
   });
 
   it("renders + button in header (sidebar toggle lives in TitleBar)", () => {
@@ -848,11 +704,12 @@ describe("Sidebar", () => {
     expect(screen.queryByTitle("Toggle Sidebar (⌘B)")).toBeNull();
   });
 
-  it("renders workspace items from store", () => {
+  it("renders anchor rows from the workspace order", () => {
     sidebarVisible.set(true);
-    const ws1 = makeWorkspace("ws1", "Project Alpha");
-    const ws2 = makeWorkspace("ws2", "Project Beta");
-    workspaces.set([ws1, ws2]);
+    seedAnchors([
+      ["ws1", "Project Alpha"],
+      ["ws2", "Project Beta"],
+    ]);
     activeWorkspaceIdx.set(0);
     render(Sidebar, { props: sidebarProps });
     expect(screen.getByText("Project Alpha")).toBeTruthy();
@@ -866,17 +723,21 @@ describe("Sidebar", () => {
     expect(dragRegions.length).toBeGreaterThan(0);
   });
 
-  it("renders correct number of workspace items", () => {
+  it("renders one anchor row per workspace-order entry", () => {
     sidebarVisible.set(true);
-    const ws1 = makeWorkspace("ws1", "WS One");
-    const ws2 = makeWorkspace("ws2", "WS Two");
-    const ws3 = makeWorkspace("ws3", "WS Three");
-    workspaces.set([ws1, ws2, ws3]);
+    seedAnchors([
+      ["ws1", "WS One"],
+      ["ws2", "WS Two"],
+      ["ws3", "WS Three"],
+    ]);
     activeWorkspaceIdx.set(1);
-    render(Sidebar, { props: sidebarProps });
+    const { container } = render(Sidebar, { props: sidebarProps });
     expect(screen.getByText("WS One")).toBeTruthy();
     expect(screen.getByText("WS Two")).toBeTruthy();
     expect(screen.getByText("WS Three")).toBeTruthy();
+    expect(
+      container.querySelectorAll("[data-workspace-group]").length,
+    ).toBe(3);
   });
 });
 

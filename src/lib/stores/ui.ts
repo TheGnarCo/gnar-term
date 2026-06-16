@@ -6,6 +6,22 @@ export const sidebarWidth = writable<number>(220);
 export const commandPaletteOpen = writable<boolean>(false);
 export const findBarVisible = writable<boolean>(false);
 
+/**
+ * Per-group collapsed flag, keyed by anchor workspace id. A missing entry
+ * defaults to collapsed at the consumer; an explicit `false` keeps a group
+ * expanded. No persistence wiring yet — Stage 2 adds it.
+ */
+export const groupCollapsedState = writable<Map<string, boolean>>(new Map());
+
+/** Set the collapsed flag for a group (keyed by anchor id). */
+export function setGroupCollapsed(groupId: string, collapsed: boolean): void {
+  groupCollapsedState.update((current) => {
+    const next = new Map(current);
+    next.set(groupId, collapsed);
+    return next;
+  });
+}
+
 export interface ContextMenuState {
   x: number;
   y: number;

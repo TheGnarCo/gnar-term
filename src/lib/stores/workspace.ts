@@ -1,5 +1,5 @@
 import { writable, derived, get } from "svelte/store";
-import type { Workspace, Pane, Surface } from "../types";
+import type { Workspace } from "../types";
 import { getAllPanes, isAnchorWorkspace } from "../types";
 
 export const workspaces = writable<Workspace[]>([]);

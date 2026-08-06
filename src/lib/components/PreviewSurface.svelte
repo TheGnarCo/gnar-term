@@ -29,5 +29,7 @@
 
 <div
   bind:this={container}
-  style="flex: 1; min-height: 0; overflow-y: auto; display: {visible ? 'flex' : 'none'}; flex-direction: column;"
+  style="flex: 1; min-height: 0; overflow-y: auto; display: {visible
+    ? 'flex'
+    : 'none'}; flex-direction: column;"
 ></div>

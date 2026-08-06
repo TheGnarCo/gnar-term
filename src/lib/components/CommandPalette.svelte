@@ -18,7 +18,7 @@
   let selectedIdx = 0;
 
   $: filtered = query
-    ? commands.filter(c => c.name.toLowerCase().includes(query.toLowerCase()))
+    ? commands.filter((c) => c.name.toLowerCase().includes(query.toLowerCase()))
     : commands;
 
   $: if (filtered.length > 0 && selectedIdx >= filtered.length) {
@@ -40,10 +40,24 @@
 
   function handleKeydown(e: KeyboardEvent) {
     e.stopPropagation();
-    if (e.key === "Escape") { close(); return; }
-    if (e.key === "ArrowDown") { e.preventDefault(); selectedIdx = Math.min(selectedIdx + 1, filtered.length - 1); return; }
-    if (e.key === "ArrowUp") { e.preventDefault(); selectedIdx = Math.max(selectedIdx - 1, 0); return; }
-    if (e.key === "Enter" && filtered[selectedIdx]) { execute(filtered[selectedIdx]); return; }
+    if (e.key === "Escape") {
+      close();
+      return;
+    }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      selectedIdx = Math.min(selectedIdx + 1, filtered.length - 1);
+      return;
+    }
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      selectedIdx = Math.max(selectedIdx - 1, 0);
+      return;
+    }
+    if (e.key === "Enter" && filtered[selectedIdx]) {
+      execute(filtered[selectedIdx]);
+      return;
+    }
   }
 
   function handleOverlayClick(e: MouseEvent) {
@@ -68,18 +82,22 @@
     on:mousedown={handleOverlayClick}
     on:keydown={handleKeydown}
   >
-    <div style="
+    <div
+      style="
       width: 500px; max-height: 400px; background: {$theme.bgFloat};
       border: 1px solid {$theme.border}; border-radius: 12px;
       box-shadow: 0 12px 40px rgba(0,0,0,0.6);
       display: flex; flex-direction: column; overflow: hidden;
-    ">
+    "
+    >
       <input
         bind:this={inputEl}
         type="text"
         placeholder="Type a command..."
         bind:value={query}
-        on:input={() => { selectedIdx = 0; }}
+        on:input={() => {
+          selectedIdx = 0;
+        }}
         style="
           padding: 14px 18px; background: transparent; border: none;
           border-bottom: 1px solid {$theme.border}; color: {$theme.fg};
@@ -94,15 +112,19 @@
             style="
               padding: 8px 18px; cursor: pointer; display: flex;
               align-items: center; justify-content: space-between;
-              background: {i === selectedIdx ? $theme.bgHighlight : 'transparent'};
+              background: {i === selectedIdx
+              ? $theme.bgHighlight
+              : 'transparent'};
               color: {$theme.fg}; font-size: 13px;
             "
-            on:mouseenter={() => selectedIdx = i}
+            on:mouseenter={() => (selectedIdx = i)}
             on:click={() => execute(cmd)}
           >
             <span>{cmd.name}</span>
             {#if cmd.shortcut}
-              <span style="font-size: 11px; color: {$theme.fgDim};">{cmd.shortcut}</span>
+              <span style="font-size: 11px; color: {$theme.fgDim};"
+                >{cmd.shortcut}</span
+              >
             {/if}
           </div>
         {/each}

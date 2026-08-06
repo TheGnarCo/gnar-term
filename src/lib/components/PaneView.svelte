@@ -15,16 +15,22 @@
   export let onSplitDown: () => void;
   export let onClosePane: () => void;
   export let onFocusPane: () => void;
-  export let onReorderTab: ((fromIdx: number, toIdx: number) => void) | undefined = undefined;
+  export let onReorderTab:
+    | ((fromIdx: number, toIdx: number) => void)
+    | undefined = undefined;
 
   let paneEl: HTMLElement;
   let resizeObserver: ResizeObserver;
   let resizeTimer: ReturnType<typeof setTimeout> | null = null;
 
   function fitActiveTerminal() {
-    const active = pane.surfaces.find(s => s.id === pane.activeSurfaceId);
+    const active = pane.surfaces.find((s) => s.id === pane.activeSurfaceId);
     if (active && isTerminalSurface(active)) {
-      try { active.fitAddon.fit(); } catch (e) { console.warn("fitAddon.fit() failed on resize:", e); }
+      try {
+        active.fitAddon.fit();
+      } catch (e) {
+        console.warn("fitAddon.fit() failed on resize:", e);
+      }
     }
   }
 
@@ -68,7 +74,11 @@
 
   {#each pane.surfaces as surface (surface.id)}
     {#if isTerminalSurface(surface)}
-      <TerminalSurface {surface} visible={surface.id === pane.activeSurfaceId} cwd={surface.cwd} />
+      <TerminalSurface
+        {surface}
+        visible={surface.id === pane.activeSurfaceId}
+        cwd={surface.cwd}
+      />
     {:else if isPreviewSurface(surface)}
       <PreviewSurface {surface} visible={surface.id === pane.activeSurfaceId} />
     {/if}

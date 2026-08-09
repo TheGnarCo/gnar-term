@@ -71,6 +71,15 @@ export function isPreviewSurface(s: Surface): s is PreviewSurface {
   return s.kind === "preview";
 }
 
+/** True if `surfaceId` lives anywhere in the subtree rooted at `node`. */
+export function nodeContainsSurface(node: SplitNode, surfaceId: string): boolean {
+  if (node.type === "pane") return node.pane.surfaces.some((s) => s.id === surfaceId);
+  return (
+    nodeContainsSurface(node.children[0], surfaceId) ||
+    nodeContainsSurface(node.children[1], surfaceId)
+  );
+}
+
 /** Find the parent split node containing a pane with the given ID. */
 export function findParentSplit(node: SplitNode, paneId: string): { parent: SplitNode; index: number } | null {
   if (node.type === "pane") return null;

@@ -144,6 +144,22 @@ enum OscAction {
     Ignore,
 }
 
+/// Sanitize a notification string received from PTY output.
+///
+/// Strips C0/C1 control characters (U+0000–U+001F, U+007F, U+0080–U+009F)
+/// and caps the result at 500 characters so malicious PTY output can't
+/// inject control sequences into native system notifications.
+fn sanitize_notification(text: &str) -> String {
+    text.chars()
+        .filter(|&c| {
+            let n = c as u32;
+            // Exclude C0 (0x00–0x1F), DEL (0x7F), and C1 (0x80–0x9F)
+            !(n <= 0x1F || n == 0x7F || (0x80..=0x9F).contains(&n))
+        })
+        .take(500)
+        .collect()
+}
+
 /// Classify a raw OSC payload (the bytes between `ESC]` and `BEL`/`ST`).
 ///
 /// Returns an `OscAction` describing what the sequence means.
@@ -186,7 +202,24 @@ fn classify_osc(raw: &str) -> OscAction {
         return OscAction::Ignore;
     }
 
-    OscAction::Notification(text.to_string())
+    // OSC 777's xterm/urxvt-style notification payload is
+    // `notify;<title>;<body>` — Claude Code emits this. Parsing it here keeps
+    // the raw "notify;Claude Code;…" string out of the UI so the workspace row
+    // shows "Claude Code: <body>" instead of the literal prefix.
+    if let Some(rest) = text.strip_prefix("notify;") {
+        let (title, body) = rest.split_once(';').unwrap_or((rest, ""));
+        let title = title.trim();
+        let body = body.trim();
+        let formatted = match (title.is_empty(), body.is_empty()) {
+            (true, true) => return OscAction::Ignore,
+            (false, true) => title.to_string(),
+            (true, false) => body.to_string(),
+            (false, false) => format!("{title}: {body}"),
+        };
+        return OscAction::Notification(sanitize_notification(&formatted));
+    }
+
+    OscAction::Notification(sanitize_notification(text))
 }
 
 /// Shared pause state — uses a Condvar so the reader thread blocks efficiently
@@ -786,30 +819,72 @@ async fn resume_pty(state: tauri::State<'_, AppState>, pty_id: u32) -> Result<()
     Ok(())
 }
 
-/// Block reads to sensitive directories (SSH keys, credentials, etc.)
-fn validate_read_path(path: &str) -> Result<std::path::PathBuf, String> {
-    let canonical = std::fs::canonicalize(path)
-        .map_err(|e| format!("Invalid path {}: {}", path, e))?;
-    let path_str = canonical.to_string_lossy();
-
+/// String-prefix check for known-sensitive locations (SSH keys, credentials,
+/// shell histories, keychains, etc.). Does NOT resolve symlinks — callers that
+/// need symlink safety must also pass the canonicalized path through this check
+/// (see `validate_read_path` / `file_exists`).
+fn is_blocked_path(path_str: &str) -> bool {
     if let Ok(home) = std::env::var("HOME") {
-        let blocked = ["/.ssh", "/.gnupg", "/.aws", "/.kube", "/.config/gcloud", "/.docker"];
+        let blocked = [
+            "/.ssh",
+            "/.gnupg",
+            "/.aws",
+            "/.kube",
+            "/.config/gcloud",
+            "/.docker",
+            // Additional sensitive credential / history locations
+            "/.netrc",
+            "/.git-credentials",
+            "/.npmrc",
+            "/.pypirc",
+            "/.bash_history",
+            "/.zsh_history",
+            "/.fish/",
+            // macOS user keychains
+            "/Library/Keychains",
+        ];
         for prefix in blocked {
             if path_str.starts_with(&format!("{}{}", home, prefix)) {
-                return Err(format!("Access denied: {}", path));
+                return true;
             }
         }
     }
-    if path_str.starts_with("/etc/shadow") || path_str.starts_with("/etc/gshadow") {
+    path_str.starts_with("/etc/shadow")
+        || path_str.starts_with("/etc/gshadow")
+        // System keychains (macOS)
+        || path_str.starts_with("/Library/Keychains")
+        || path_str.starts_with("/System/Library/Keychains")
+}
+
+/// Block reads to sensitive directories (SSH keys, credentials, etc.).
+///
+/// Checks the literal path first so a non-existent but clearly-sensitive path
+/// (e.g. `~/.ssh/id_rsa` on a host without that key) fails closed, then checks
+/// the canonicalized path so symlinks into a blocked dir are also rejected.
+fn validate_read_path(path: &str) -> Result<std::path::PathBuf, String> {
+    if is_blocked_path(path) {
+        return Err(format!("Access denied: {}", path));
+    }
+    let canonical = std::fs::canonicalize(path)
+        .map_err(|e| format!("Invalid path {}: {}", path, e))?;
+    if is_blocked_path(&canonical.to_string_lossy()) {
         return Err(format!("Access denied: {}", path));
     }
     Ok(canonical)
 }
 
-/// Check if a file exists (lightweight — no read)
+/// Check if a file exists (lightweight — no read). Blocked paths report as
+/// non-existent so callers can't probe for the presence of sensitive files
+/// like `~/.ssh/id_rsa`.
 #[tauri::command]
 async fn file_exists(path: String) -> bool {
-    std::path::Path::new(&path).exists()
+    if is_blocked_path(&path) {
+        return false;
+    }
+    match std::fs::canonicalize(&path) {
+        Ok(canonical) => !is_blocked_path(&canonical.to_string_lossy()),
+        Err(_) => false,
+    }
 }
 
 /// List filenames in a directory (non-recursive, files only)
@@ -1591,6 +1666,71 @@ mod tests {
     }
 
     #[test]
+    fn validate_read_path_fails_closed_on_nonexistent_ssh_key() {
+        // A sensitive path must be denied even when it doesn't exist on this
+        // host — the literal check fires before canonicalize.
+        let home = std::env::var("HOME").unwrap();
+        let p = format!("{}/.ssh/id_rsa", home);
+        assert!(
+            validate_read_path(&p).is_err(),
+            "Should fail closed on ~/.ssh/id_rsa even if absent"
+        );
+    }
+
+    #[test]
+    fn validate_read_path_blocks_extended_credential_files() {
+        let home = std::env::var("HOME").unwrap();
+        for rel in [
+            "/.netrc",
+            "/.git-credentials",
+            "/.npmrc",
+            "/.pypirc",
+            "/.bash_history",
+            "/.zsh_history",
+            "/.fish/fish_history",
+            "/Library/Keychains/login.keychain-db",
+        ] {
+            let p = format!("{}{}", home, rel);
+            assert!(validate_read_path(&p).is_err(), "Should block {}", rel);
+        }
+    }
+
+    #[test]
+    fn is_blocked_path_flags_system_keychains() {
+        assert!(is_blocked_path("/Library/Keychains/System.keychain"));
+        assert!(is_blocked_path("/System/Library/Keychains/foo"));
+        assert!(!is_blocked_path("/Users/someone/projects/main.rs"));
+    }
+
+    #[tokio::test]
+    async fn file_exists_hides_sensitive_paths() {
+        let home = std::env::var("HOME").unwrap();
+        let ssh = format!("{}/.ssh/id_rsa", home);
+        assert!(
+            !file_exists(ssh).await,
+            "file_exists must not leak presence of ~/.ssh/id_rsa"
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn file_exists_rejects_symlink_into_blocked_dir() {
+        use std::fs;
+        let home = std::env::var("HOME").unwrap();
+        let blocked_target = format!("{}/.ssh", home);
+        // Only meaningful when the target actually exists on this host.
+        if !std::path::Path::new(&blocked_target).exists() {
+            return;
+        }
+        let tmp = std::env::temp_dir().join("gnar_file_exists_symlink_test");
+        let _ = fs::remove_file(&tmp);
+        std::os::unix::fs::symlink(&blocked_target, &tmp).expect("create test symlink");
+        let result = file_exists(tmp.to_string_lossy().to_string()).await;
+        let _ = fs::remove_file(&tmp);
+        assert!(!result, "symlinks into ~/.ssh must be rejected");
+    }
+
+    #[test]
     fn validate_write_path_allows_config_dir() {
         let home = std::env::var("HOME").unwrap();
         let config = format!("{}/.config/gnar-term/gnar-term.json", home);
@@ -2141,10 +2281,76 @@ mod tests {
     }
 
     #[test]
-    fn osc777_plain_text_is_notification() {
+    fn osc777_notify_payload_is_humanized() {
+        // OSC 777 `notify;<title>;<body>` is reformatted as "<title>: <body>"
+        // so the raw "notify;" prefix never reaches the UI.
         assert_eq!(
             classify_osc("777;notify;Title;Body text"),
-            OscAction::Notification("notify;Title;Body text".into())
+            OscAction::Notification("Title: Body text".into())
+        );
+    }
+
+    #[test]
+    fn osc777_notify_title_only() {
+        assert_eq!(
+            classify_osc("777;notify;Claude Code;"),
+            OscAction::Notification("Claude Code".into())
+        );
+    }
+
+    #[test]
+    fn osc777_notify_body_only() {
+        assert_eq!(
+            classify_osc("777;notify;;Build succeeded"),
+            OscAction::Notification("Build succeeded".into())
+        );
+    }
+
+    #[test]
+    fn osc777_notify_empty_is_ignored() {
+        assert_eq!(classify_osc("777;notify;;"), OscAction::Ignore);
+    }
+
+    #[test]
+    fn osc777_non_notify_payload_passes_through() {
+        // A non-notify OSC 777 payload keeps its raw text (still sanitized).
+        assert_eq!(
+            classify_osc("777;other;Hello"),
+            OscAction::Notification("other;Hello".into())
+        );
+    }
+
+    #[test]
+    fn sanitize_strips_c0_control_characters() {
+        let input = "hello\x00world\x07\x1b[31m";
+        assert_eq!(sanitize_notification(input), "helloworld[31m");
+    }
+
+    #[test]
+    fn sanitize_strips_del_and_c1_controls() {
+        let input = "foo\x7fbar\u{0080}\u{009f}baz";
+        assert_eq!(sanitize_notification(input), "foobarbaz");
+    }
+
+    #[test]
+    fn sanitize_truncates_to_500_chars() {
+        let long = "a".repeat(600);
+        assert_eq!(sanitize_notification(&long).chars().count(), 500);
+    }
+
+    #[test]
+    fn sanitize_preserves_normal_unicode() {
+        let input = "Build complete \u{2705}";
+        assert_eq!(sanitize_notification(input), input);
+    }
+
+    #[test]
+    fn osc_notification_is_sanitized() {
+        // The ESC control byte is stripped; the remaining printable bytes
+        // ("[0m") are preserved — sanitize only removes control characters.
+        assert_eq!(
+            classify_osc("9;done\x1b[0mok"),
+            OscAction::Notification("done[0mok".into())
         );
     }
 

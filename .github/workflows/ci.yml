@@ -3,8 +3,9 @@ name: CI
 on:
   push:
     branches: [main]
+  # Run CI on every pull request regardless of its base branch, so stacked
+  # PRs (base = a feature branch, not main) get CI too.
   pull_request:
-    branches: [main]
 
 jobs:
   check:

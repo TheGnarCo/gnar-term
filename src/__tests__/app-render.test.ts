@@ -427,8 +427,9 @@ describe("SplitNodeView has draggable dividers with ratio support", () => {
   it("uses ratio for flex sizing instead of hardcoded flex: 1", async () => {
     const fs = await import("fs");
     const source = fs.readFileSync("src/lib/components/SplitNodeView.svelte", "utf-8");
-    expect(source).toContain("flex: {node.ratio}");
-    expect(source).toContain("flex: {1 - node.ratio}");
+    // The non-zoomed branch sizes children by ratio (zoom maximizes one pane).
+    expect(source).toContain(": node.ratio}");
+    expect(source).toContain(": 1 - node.ratio}");
     // Should NOT have hardcoded flex: 1 for split children
     expect(source).not.toMatch(/style="flex: 1;[^"]*">\s*<SplitNodeView/);
   });

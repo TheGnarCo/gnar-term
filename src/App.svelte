@@ -5,17 +5,19 @@
   import { primarySidebarVisible, secondarySidebarVisible, commandPaletteOpen, findBarVisible, pendingAction, showInputPrompt } from "./lib/stores/ui";
   import { workspaces, activeWorkspaceIdx, activeWorkspace, activePane, activeSurface } from "./lib/stores/workspace";
   import { invoke } from "@tauri-apps/api/core";
+  import { getCurrentWindow } from "@tauri-apps/api/window";
   import { loadConfig, saveConfig, getConfig, getWorkspaceCommands, type WorkspaceDef } from "./lib/config";
-  import { setupListeners, fontReady, startCwdPolling, isMac, modLabel, shiftModLabel } from "./lib/terminal-service";
+  import { setupListeners, fontReady, startCwdPolling, isMac, modLabel, shiftModLabel, adjustFontSize, resetFontSize } from "./lib/terminal-service";
   import { getAllSurfaces, isTerminalSurface } from "./lib/types";
   import { refreshPreviewStyles } from "./preview/index";
   import "./preview/init";
 
   // Services
   import { createWorkspace, createWorkspaceFromDef, switchWorkspace, closeWorkspace, renameWorkspace, reorderWorkspaces, saveCurrentWorkspace } from "./lib/services/workspace-service";
-  import { splitPane, closePane, focusPane, reorderTab, focusDirection, flashFocusedPane, splitFromSidebar } from "./lib/services/pane-service";
+  import { splitPane, closePane, focusPane, reorderTab, focusDirection, flashFocusedPane, splitFromSidebar, togglePaneZoom } from "./lib/services/pane-service";
   import { selectSurface, closeSurfaceById, newSurface, nextSurface, prevSurface, selectSurfaceByNumber, closeActiveSurface, openPreviewInPane, newSurfaceFromSidebar } from "./lib/services/surface-service";
   import { initMcpServer } from "./lib/services/mcp-server";
+  import { confirmQuit } from "./lib/services/quit-confirmation-service";
 
   // Components
   import PrimarySidebar from "./lib/components/PrimarySidebar.svelte";
@@ -26,6 +28,7 @@
   import FindBar from "./lib/components/FindBar.svelte";
   import ContextMenu from "./lib/components/ContextMenu.svelte";
   import InputPrompt from "./lib/components/InputPrompt.svelte";
+  import ConfirmPrompt from "./lib/components/ConfirmPrompt.svelte";
 
   let sidebarComponent: PrimarySidebar;
   let findBarComponent: FindBar;
@@ -113,6 +116,16 @@
       if (e.key === "p") { e.preventDefault(); commandPaletteOpen.update(v => !v); return; }
       if (e.key === "f") { e.preventDefault(); findBarVisible.update(v => !v); return; }
       if (e.key === "g") { e.preventDefault(); findBarVisible.set(true); findBarComponent?.findNext(); return; }
+      if (e.key === "=" || e.key === "+") { e.preventDefault(); adjustFontSize(1); return; }
+      if (e.key === "-") { e.preventDefault(); adjustFontSize(-1); return; }
+      if (e.key === "0") { e.preventDefault(); resetFontSize(); return; }
+    }
+
+    // Linux/Windows: Ctrl+=/-/0 adjust terminal font size
+    if (!isMac && ctrl && !shift && !alt) {
+      if (e.key === "=" || e.key === "+") { e.preventDefault(); adjustFontSize(1); return; }
+      if (e.key === "-") { e.preventDefault(); adjustFontSize(-1); return; }
+      if (e.key === "0") { e.preventDefault(); resetFontSize(); return; }
     }
 
     // macOS: Ctrl+number selects surfaces
@@ -133,6 +146,7 @@
       if (k === "p") { e.preventDefault(); commandPaletteOpen.update(v => !v); return; }
       if (k === "k") { e.preventDefault(); const s = $activeSurface; if (s && isTerminalSurface(s)) s.terminal.clear(); return; }
       if (k === "f") { e.preventDefault(); findBarVisible.update(v => !v); return; }
+      if (e.key === "Enter") { e.preventDefault(); const s = $activeSurface; if (s) togglePaneZoom(s.id); return; }
       if (e.key === "]") { e.preventDefault(); nextSurface(); return; }
       if (e.key === "[") { e.preventDefault(); prevSurface(); return; }
     }
@@ -229,6 +243,16 @@
     await listen("menu-close-tab", () => {
       closeActiveSurface();
     });
+
+    // Don't tear down live PTYs silently — intercept the window close request
+    // and confirm when terminals are still running.
+    const appWindow = getCurrentWindow();
+    await appWindow.onCloseRequested(async (event) => {
+      event.preventDefault();
+      if (await confirmQuit()) {
+        await appWindow.destroy();
+      }
+    });
   });
 </script>
 
@@ -280,3 +304,4 @@
 <CommandPalette commands={paletteCommands} />
 <ContextMenu />
 <InputPrompt />
+<ConfirmPrompt />

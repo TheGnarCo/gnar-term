@@ -12,7 +12,7 @@
   import "./preview/init";
 
   // Services
-  import { createWorkspace, createWorkspaceFromDef, switchWorkspace, closeWorkspace, renameWorkspace, reorderWorkspaces, saveCurrentWorkspace } from "./lib/services/workspace-service";
+  import { createWorkspace, createWorkspaceFromDef, switchWorkspace, closeWorkspace, renameWorkspace, reorderWorkspaces, saveCurrentWorkspace, nextWorkspaceName } from "./lib/services/workspace-service";
   import { splitPane, closePane, focusPane, reorderTab, focusDirection, flashFocusedPane, splitFromSidebar } from "./lib/services/pane-service";
   import { selectSurface, closeSurfaceById, newSurface, nextSurface, prevSurface, selectSurfaceByNumber, closeActiveSurface, openPreviewInPane, newSurfaceFromSidebar } from "./lib/services/surface-service";
   import { initMcpServer } from "./lib/services/mcp-server";
@@ -46,7 +46,7 @@
   // ---- Command palette ----
 
   $: paletteCommands = [
-    { name: "New Workspace", shortcut: `${shiftModLabel}N`, action: () => createWorkspace(`Workspace ${$workspaces.length + 1}`) },
+    { name: "New Workspace", shortcut: `${shiftModLabel}N`, action: () => createWorkspace(nextWorkspaceName($workspaces)) },
     { name: "New Surface (Tab)", shortcut: `${shiftModLabel}T`, action: () => newSurfaceFromSidebar() },
     { name: "Split Right", shortcut: isMac ? `${modLabel}D` : `${shiftModLabel}D`, action: () => splitFromSidebar("horizontal") },
     { name: "Split Down", shortcut: `${shiftModLabel}D`, action: () => splitFromSidebar("vertical") },
@@ -102,7 +102,7 @@
 
     // macOS: Cmd+key (no shift) shortcuts
     if (isMac && e.metaKey && !shift && !alt) {
-      if (e.key === "n") { e.preventDefault(); createWorkspace(`Workspace ${$workspaces.length + 1}`); return; }
+      if (e.key === "n") { e.preventDefault(); createWorkspace(nextWorkspaceName($workspaces)); return; }
       if (e.key === "t") { e.preventDefault(); newSurfaceFromSidebar(); return; }
       if (e.key === "d") { e.preventDefault(); splitFromSidebar("horizontal"); return; }
       if (e.key === "w") { e.preventDefault(); closeActiveSurface(); return; }
@@ -123,7 +123,7 @@
     if (cmd && shift && !alt) {
       const k = e.key.toLowerCase();
       if (k === "t") { e.preventDefault(); newSurfaceFromSidebar(); return; }
-      if (k === "n") { e.preventDefault(); createWorkspace(`Workspace ${$workspaces.length + 1}`); return; }
+      if (k === "n") { e.preventDefault(); createWorkspace(nextWorkspaceName($workspaces)); return; }
       if (k === "d") { e.preventDefault(); splitFromSidebar("vertical"); return; }
       if (k === "w") { e.preventDefault(); closeWorkspace($activeWorkspaceIdx); return; }
       if (k === "h") { e.preventDefault(); flashFocusedPane(); return; }
@@ -237,7 +237,7 @@
 <div id="app" style="display: flex; height: 100vh; overflow: hidden;">
   <PrimarySidebar
     bind:this={sidebarComponent}
-    onNewWorkspace={() => createWorkspace(`Workspace ${$workspaces.length + 1}`)}
+    onNewWorkspace={() => createWorkspace(nextWorkspaceName($workspaces))}
     onSwitchWorkspace={switchWorkspace}
     onCloseWorkspace={closeWorkspace}
     onRenameWorkspace={renameWorkspace}

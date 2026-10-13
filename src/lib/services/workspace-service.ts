@@ -8,6 +8,21 @@ import { uid, getAllPanes, getAllSurfaces, isTerminalSurface, type Workspace, ty
 import { saveConfig, getConfig, type WorkspaceDef, type LayoutNode } from "../config";
 import { safeFocus } from "./service-helpers";
 
+const DEFAULT_WORKSPACE_NAME = /^Workspace (\d+)$/;
+
+/**
+ * Next default workspace name: one past the highest "Workspace N" in use.
+ * Counting the list length instead collides after a rename or close (#124).
+ */
+export function nextWorkspaceName(list: readonly { name: string }[]): string {
+  let max = 0;
+  for (const ws of list) {
+    const m = DEFAULT_WORKSPACE_NAME.exec(ws.name);
+    if (m) max = Math.max(max, Number(m[1]));
+  }
+  return `Workspace ${max + 1}`;
+}
+
 export async function createWorkspace(name: string) {
   const pane: Pane = { id: uid(), surfaces: [], activeSurfaceId: null };
   const ws: Workspace = {
@@ -24,7 +39,7 @@ export async function createWorkspace(name: string) {
 }
 
 export async function createWorkspaceFromDef(def: WorkspaceDef) {
-  const wsName = def.name || `Workspace ${get(workspaces).length + 1}`;
+  const wsName = def.name || nextWorkspaceName(get(workspaces));
   const rootCwd = def.cwd;
 
   async function buildTree(nodeDef: LayoutNode, inheritedCwd?: string): Promise<SplitNode> {
